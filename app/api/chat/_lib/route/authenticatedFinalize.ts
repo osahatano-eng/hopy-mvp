@@ -17,6 +17,10 @@ type ConfirmedAssistantTurn = ReturnType<typeof buildConfirmedAssistantTurn>;
 type ConfirmedMeaningPayload = ReturnType<typeof buildConfirmedMeaningPayload>;
 type MemoryWriteDebug =
   Parameters<typeof buildConfirmedMeaningPayload>[0]["memoryWrite"];
+type AuthenticatedChatPayload = ReturnType<typeof buildAuthenticatedChatPayload>;
+type ResponseConfirmedPayload = NonNullable<
+  AuthenticatedChatPayload["hopy_confirmed_payload"]
+>;
 
 export type FinalizedTurnArtifacts = {
   confirmedTurn: ConfirmedAssistantTurn;
@@ -196,7 +200,7 @@ export function buildAuthenticatedResponsePayload(
   }
 
   payload.hopy_confirmed_payload =
-    finalizedTurnArtifacts.confirmedMeaningPayload;
+    finalizedTurnArtifacts.confirmedMeaningPayload as ResponseConfirmedPayload;
 
   return payload;
 }
@@ -263,8 +267,8 @@ payload.compass と confirmedMeaningPayload の両方に載せる。
 */
 
 /* 【今回このファイルで修正したこと】
-- `MemoryWriteDebug` の型 import を削除しました。
-- `buildConfirmedMeaningPayload` の第1引数から `memoryWrite` 型を逆算して `MemoryWriteDebug` を作る形に修正しました。
-- `ConfirmedAssistantTurn` の `ReturnType<typeof buildConfirmedAssistantTurn>` はそのまま維持しました。
+- `buildAuthenticatedChatPayload(...)` の戻り値から `hopy_confirmed_payload` の期待型を `ResponseConfirmedPayload` として取り出しました。
+- `payload.hopy_confirmed_payload` 代入時だけ、その期待型へ合わせる型注釈を追加しました。
+- 実際の payload 内容や state 値の計算ロジック自体には触れていません。
 - 他の処理や状態判定、Compass 系の流れには触れていません。
 */
