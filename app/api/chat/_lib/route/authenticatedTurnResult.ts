@@ -7,7 +7,6 @@ import {
 } from "../state/notification";
 import { decideBadgeFromAssistantReply } from "../state/notificationPolicy";
 import type { Lang } from "../router/simpleRouter";
-import type { ResolvedPlan } from "./promptBundle";
 import type { RunHopyTurnBuiltResult } from "./runHopyTurn";
 import {
   buildConfirmedAssistantTurn,
@@ -18,6 +17,8 @@ import {
   type ConfirmedMemoryCandidate,
 } from "./authenticatedHelpers";
 import { resolveFinalConfirmedMemoryCandidates } from "./authenticatedMemoryCandidates";
+
+type ResolvedPlan = "free" | "plus" | "pro";
 
 export type BuildAuthenticatedTurnResultParams = {
   promptInput: AuthenticatedPromptInput;
@@ -384,8 +385,8 @@ RunHopyTurnBuiltResult にそのまま載せる。
 
 /*
 【今回このファイルで修正したこと】
-- openai_ok=false / ok=false の失敗結果を、成功系の payload 整形前に遮断する処理を追加した。
-- 成功系の必須条件チェックは、その遮断後にだけ進む順序へ固定した。
-- Plus / Pro で state_changed=true のとき、compassText だけを必須にし、compassPrompt は nullable のまま中継する形を維持した。
+- export されていない ResolvedPlan を promptBundle.ts から import する形をやめた。
+- このファイル内で必要最小限の ResolvedPlan 型を定義し、import error を止める形にした。
+- それ以外の実行ロジック、Compass 条件、状態 1..5 の処理、memory candidate の流れには触っていない。
 */
 // このファイルの正式役割: authenticated 経路における turn 結果の正式組み立てファイル
