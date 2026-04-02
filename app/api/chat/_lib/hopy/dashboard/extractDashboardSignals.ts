@@ -222,7 +222,7 @@ function buildSupportNeed(args: ExtractDashboardSignalsArgs): DashboardSignalCan
 
   return {
     signal_type: "support_need",
-    signal_value,
+    signal_value: signalValue,
     body: reply,
   };
 }
@@ -262,3 +262,13 @@ export function extractDashboardSignals(
 
   return dedupeSignals(fallbackSignals);
 }
+
+/*
+このファイルの正式役割:
+HOPY回答の確定意味から dashboard signal 候補を抽出し、正規化・重複除去して返す抽出層。
+*/
+
+/*
+【今回このファイルで修正したこと】
+buildSupportNeed の return で未定義の signal_value を参照していたため、同関数内で計算済みの signalValue を返すよう修正した。
+*/
