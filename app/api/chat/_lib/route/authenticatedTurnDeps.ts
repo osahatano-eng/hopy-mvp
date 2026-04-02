@@ -9,10 +9,7 @@ import {
   normalizeConfirmedStateLevel,
   saveAssistantLearningLogs,
   saveAssistantMessageOrError,
-  type AuthenticatedModelOutput,
-  type AuthenticatedPromptInput,
   type ConfirmedAssistantTurn,
-  type LoadedAuthenticatedContext,
 } from "./authenticatedHelpers";
 import type { Lang } from "../router/simpleRouter";
 import type { ResolvedPlan } from "./promptBundle";
@@ -25,6 +22,37 @@ type RunHopyTurnBuiltResult = {
   hopy_confirmed_payload?: unknown;
   speed_audit?: unknown;
   [key: string]: unknown;
+};
+
+type LoadedAuthenticatedContext = {
+  history: any[];
+};
+
+type AuthenticatedPromptInput = {
+  promptBundle: unknown;
+  history: any[];
+  userText: string;
+  replyLang: Lang;
+  currentPhase: number;
+  currentStateLevel: number;
+  prevPhase: number;
+  prevStateLevel: number;
+  stateChanged: boolean;
+};
+
+type AuthenticatedModelOutput = {
+  assistantText: string;
+  openai_ok: boolean | null;
+  openai_error: string | null;
+  confirmed_memory_candidates: unknown;
+  state: unknown;
+  hopy_confirmed_payload: unknown;
+  reply: string;
+  ui_effects: unknown;
+  compass: { text: string; prompt: string } | null;
+  compassText: string;
+  compassPrompt: string;
+  speed_audit?: Record<string, unknown> | null;
 };
 
 export type ConfirmedStateFallback = {
@@ -109,7 +137,9 @@ function resolveConfirmedCompass(params: {
 }): { text: string; prompt: string } | null {
   const { resolvedPlan, confirmedState, confirmedPayloadCompass } = params;
 
-  const resolvedCompassText = normalizeOptionalText(confirmedPayloadCompass?.text);
+  const resolvedCompassText = normalizeOptionalText(
+    confirmedPayloadCompass?.text,
+  );
   const resolvedCompassPrompt = normalizeOptionalText(
     confirmedPayloadCompass?.prompt,
   );
@@ -194,7 +224,9 @@ function resolveConfirmedTurnFromTurnRecord(
   const currentStateLevel = normalizeConfirmedStateLevel(
     canonicalAssistantState.state_level,
   );
-  const prevPhase = normalizeConfirmedStateLevel(canonicalAssistantState.prev_phase);
+  const prevPhase = normalizeConfirmedStateLevel(
+    canonicalAssistantState.prev_phase,
+  );
   const prevStateLevel = normalizeConfirmedStateLevel(
     canonicalAssistantState.prev_state_level,
   );
@@ -534,14 +566,8 @@ authenticated 経路の runHopyTurn 用 deps 作成ファイル。
 */
 /*
 【今回このファイルで修正したこと】
-- callModel で openai_ok!==true の失敗系 authReply を先に返し、hopy_confirmed_payload 必須チェックへ入れないように修正した。
-- 失敗系では payload なしのまま下流へ渡し、成功系だけが confirmed payload 検証へ進む順序に修正した。
-- authReply.hopy_confirmed_payload is required で失敗理由が上書きされる連鎖を止める形に修正した。
-- persistTurn で失敗系 result を検知したら保存処理を行わず、その場で return するように修正した。
-- result.hopy_confirmed_payload is required の保存系連鎖を止めるためのガードを追加した。
-- resolveConfirmedTurnFromBuiltResult の入口で turnRecord / confirmed payload の順に受け止めるように修正した。
-- failure fallback confirmedTurn の擬似生成を削除し、turnRecord と confirmed payload のどちらもない failure 系を成功形へ補完しないように修正した。
-- generateAssistantReply() が返した speed_audit を callModel の返り値へ載せるようにしました。
-- buildAuthenticatedTurnResult() の返り値に speed_audit を上書きで載せ、runHopyTurn.ts 側へ受け渡すようにしました。
+- ./authenticatedHelpers から未 export の AuthenticatedModelOutput / AuthenticatedPromptInput / LoadedAuthenticatedContext を import していたため、その import を削除しました。
+- このファイルで実際に使っている最小限の local type を定義して、型境界だけをこのファイル内で閉じました。
+- buildTurnResult / callModel / loadContext の実行ロジックや、状態 1..5、Compass、保存フロー自体は変えていません。
 */
 // このファイルの正式役割: authenticated 経路の runHopyTurn 用 deps 作成ファイル
