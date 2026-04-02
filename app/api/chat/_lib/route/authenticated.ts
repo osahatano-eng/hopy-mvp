@@ -655,7 +655,7 @@ export async function handleAuthenticatedChat(
       learningBlock: effectiveLearningBlockForDebug,
       ctxRes,
       mem_write_attempted: postTurn.memoryWrite.mem_write_attempted,
-      mem_write_allowed: postTurn.memoryWrite.mem_write_allowed,
+      mem_write_allowed: postTurn.memoryWrite.mem_write_allowed ?? false,
       mem_write_inserted: postTurn.memoryWrite.mem_write_inserted,
       mem_write_reason: postTurn.memoryWrite.mem_write_reason,
       mem_items_count: postTurn.memoryWrite.mem_items_count,
@@ -830,8 +830,8 @@ authenticated 側の中継本体である。
    正式エラーをそのまま返す。 */
 
 /* 【今回このファイルで修正したこと】
-- `auto_title_updated` を `normalizedAutoTitleUpdated = auto_title_updated ?? false` で boolean に正規化しました。
-- その正規化済み値を `finalizeAuthenticatedPostTurn(...)` と `attachDebugPayload(...)` の両方へ渡すようにしました。
-- 他の処理や状態判定、Compass 系の流れには触れていません。
+- attachDebugPayload(...) に渡す mem_write_allowed を `postTurn.memoryWrite.mem_write_allowed ?? false` に正規化しました。
+- build を止めていた boolean 型不整合だけを止血しました。
+- 他の debug 項目、状態判定、Compass 系の流れには触っていません。
 */
 // このファイルの正式役割: authenticated ユーザー用のチャット処理本体
