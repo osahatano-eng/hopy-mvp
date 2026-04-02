@@ -16,11 +16,7 @@ import { buildAuthenticatedTurnResult } from "./authenticatedTurnResult";
 
 type ResolvedPlan = "free" | "plus" | "pro";
 
-type PromptBundle = {
-  baseSystemPrompt: string;
-  requestUserPrompt: string;
-  requestMessages: { role: "system" | "user" | "assistant"; content: string }[];
-};
+type PromptBundle = Parameters<typeof generateAssistantReply>[0]["promptBundle"];
 
 type RunHopyTurnBuiltResult = {
   reply?: unknown;
@@ -585,8 +581,8 @@ authenticated 経路の runHopyTurn 用 deps 作成ファイル。
 */
 /*
 【今回このファイルで修正したこと】
-- generateAssistantReply(...) が要求する promptBundle 型に合わせるため、local PromptBundle 型を定義しました。
-- AuthenticatedPromptInput["promptBundle"] と createAuthenticatedTurnDeps(...) の promptBundle 受け口を unknown ではなく PromptBundle にそろえました。
+- local PromptBundle 型を廃止し、generateAssistantReply(...) の promptBundle 受け口型をそのまま参照する形に変更しました。
+- これにより、このファイル内の promptBundle 型と generateAssistantReply(...) 側の期待型を同一にそろえました。
 - 既存の local ResolvedPlan / ConfirmedAssistantTurn 型、buildTurnResult / callModel / persistTurn の実行ロジック、状態 1..5、Compass、保存フロー自体は変えていません。
 */
 // このファイルの正式役割: authenticated 経路の runHopyTurn 用 deps 作成ファイル
