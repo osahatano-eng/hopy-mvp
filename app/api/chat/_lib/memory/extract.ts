@@ -114,11 +114,18 @@ export async function extractMemoriesFromTurn(params: {
     // Deduplicate by normalized content (keep the highest importance)
     const map = new Map<string, MemoryItem>();
     for (const it of items) {
-      const key = normalizeKey(it.content);
+      const content = String(it.content ?? "").trim();
+      if (!content) continue;
+
+      const key = normalizeKey(content);
       if (!key) continue;
+
       const prev = map.get(key);
       if (!prev || (it.importance ?? 0) > (prev.importance ?? 0)) {
-        map.set(key, it);
+        map.set(key, {
+          ...it,
+          content,
+        });
       }
     }
 
@@ -136,5 +143,6 @@ export async function extractMemoriesFromTurn(params: {
 
 /*
 【今回このファイルで修正したこと】
-MemoryItem の import 元が ../db/memories になっていて未exportエラーになっていたため、実際の型定義元である ../db/memoriesFilters から import するよう修正した。
+重複除去ループで it.content をそのまま normalizeKey へ渡すのをやめ、String(it.content ?? "") で文字列へ正規化してから使うよう修正した。
+同時に map へ入れる値も content を必ず文字列化した形へ揃えた。
 */
