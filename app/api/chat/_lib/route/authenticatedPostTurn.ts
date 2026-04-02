@@ -25,6 +25,8 @@ import { resolveConfirmedCompassArtifacts } from "./authenticatedPostTurnCompass
 type RunHopyTurnBuiltResult = Record<string, any>;
 type ResolvedPlan = "free" | "plus" | "pro";
 type InterventionTone = Parameters<typeof insertInterventionLog>[0]["input_tone"];
+type InterventionStrategy =
+  Parameters<typeof insertInterventionLog>[0]["selected_strategy"];
 
 type CanonicalAssistantState = {
   current_phase: 1 | 2 | 3 | 4 | 5;
@@ -81,7 +83,7 @@ export type AuthenticatedPostTurnParams = {
   userMessageId: string;
   confirmedTurn: ConfirmedAssistantTurn;
   notification: NotificationState;
-  selectedStrategy: string;
+  selectedStrategy: InterventionStrategy;
   usedHeuristicConfirmedMemoryCandidates: boolean;
   memoryExtractTimeoutMs: number;
   memoryMinIntervalSec: number;
@@ -563,8 +565,8 @@ Compass を含む最終 turn artifacts 作成、
 
 /*
 【今回このファイルで修正したこと】
-- routed.tone の型を広い string のまま持たず、insertInterventionLog 側の input_tone 型へ合わせました。
-- input_tone: params.routed.tone で Tone5 不一致になっていた build error だけを対象に修正しました。
-- 実行時の値や tone の判定ロジックは変えず、このファイル内の型の受け口だけをそろえました。
+- selectedStrategy の型を広い string のまま持たず、insertInterventionLog 側の selected_strategy 型へ合わせました。
+- selected_strategy: params.selectedStrategy で Strategy4 不一致になっていた build error だけを対象に修正しました。
+- 実行時の値や strategy の判定ロジックは変えず、このファイル内の型の受け口だけをそろえました。
 - postTurn の実行ロジック、memory / Compass / payload / 状態 1..5 の流れには触っていません。
 */
