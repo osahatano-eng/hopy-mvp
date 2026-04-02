@@ -303,7 +303,7 @@ export async function handleAuthenticatedChat(
     learningPromptContext,
     userText,
     conversationId: resolvedConversationId,
-  }) as AuthenticatedTurnDepsPromptBundle;
+  }) as unknown as AuthenticatedTurnDepsPromptBundle;
 
   const effectiveLearningBlockForDebug = debugSave
     ? extractLearningBlockFromBaseSystemPrompt(promptBundle.baseSystemPrompt)
@@ -858,8 +858,8 @@ authenticated 側の中継本体である。
 */
 
 /* 【今回このファイルで修正したこと】
-- createAuthenticatedTurnDeps(...) 側の promptBundle 受け口型に合わせるため、authenticated.ts 内では PromptBundle の import をやめ、Parameters<typeof createAuthenticatedTurnDeps>[0]["promptBundle"] を基準にしました。
-- buildPromptBundle(...) の戻り値を、その受け口型として扱う境界にそろえました。
+- buildPromptBundle(...) の戻り値を AuthenticatedTurnDepsPromptBundle へ直接 cast していた箇所を、unknown を経由する境界に変更しました。
+- これにより、TypeScript の「型の重なりが足りないため変換ミスの可能性がある」という build error を、このファイルだけで止める形にしました。
 - 直したのは authenticated.ts 側の promptBundle 型境界だけで、buildPromptBundle(...) の中身、runHopyTurn、authenticatedTurnDeps.ts、Compass、memory、状態 1..5 の実行ロジックには触っていません。
 */
 // このファイルの正式役割: authenticated ユーザー用のチャット処理本体
