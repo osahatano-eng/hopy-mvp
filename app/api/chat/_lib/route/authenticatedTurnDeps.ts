@@ -11,9 +11,10 @@ import {
   saveAssistantMessageOrError,
 } from "./authenticatedHelpers";
 import type { Lang } from "../router/simpleRouter";
-import type { ResolvedPlan } from "./promptBundle";
 import type { NotificationState } from "../state/notification";
 import { buildAuthenticatedTurnResult } from "./authenticatedTurnResult";
+
+type ResolvedPlan = "free" | "plus" | "pro";
 
 type RunHopyTurnBuiltResult = {
   reply?: unknown;
@@ -319,7 +320,9 @@ export function resolveConfirmedTurnFromBuiltResult(
   };
 
   const confirmedPayloadCompass = asRecord(confirmedPayload.compass);
-  const resolvedCompassText = normalizeOptionalText(confirmedPayloadCompass?.text);
+  const resolvedCompassText = normalizeOptionalText(
+    confirmedPayloadCompass?.text,
+  );
   const resolvedCompassPrompt = normalizeOptionalText(
     confirmedPayloadCompass?.prompt,
   );
@@ -576,8 +579,8 @@ authenticated 経路の runHopyTurn 用 deps 作成ファイル。
 */
 /*
 【今回このファイルで修正したこと】
-- ./authenticatedHelpers から未 export の ConfirmedAssistantTurn を import していたため、その import を削除しました。
-- このファイル内で実際に使っている最小限の ConfirmedAssistantTurn 型を local type として定義し、このファイル単体で型境界を閉じました。
-- buildTurnResult / callModel / persistTurn の実行ロジック、状態 1..5、Compass、保存フロー自体は変えていません。
+- ./promptBundle から未 export の ResolvedPlan を import していたため、その import を削除しました。
+- このファイル内で実際に使っている最小限の ResolvedPlan 型を local type として定義し、このファイル単体で型境界を閉じました。
+- 既存の local ConfirmedAssistantTurn 型、buildTurnResult / callModel / persistTurn の実行ロジック、状態 1..5、Compass、保存フロー自体は変えていません。
 */
 // このファイルの正式役割: authenticated 経路の runHopyTurn 用 deps 作成ファイル
