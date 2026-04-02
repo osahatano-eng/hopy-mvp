@@ -7,7 +7,6 @@ import {
 } from "../state/notification";
 import { decideBadgeFromAssistantReply } from "../state/notificationPolicy";
 import type { Lang } from "../router/simpleRouter";
-import type { RunHopyTurnBuiltResult } from "./runHopyTurn";
 import {
   buildConfirmedAssistantTurn,
   normalizeConfirmedStateLevel,
@@ -19,6 +18,28 @@ import {
 import { resolveFinalConfirmedMemoryCandidates } from "./authenticatedMemoryCandidates";
 
 type ResolvedPlan = "free" | "plus" | "pro";
+
+type RunHopyTurnBuiltResult = {
+  reply: string;
+  state: ConfirmedAssistantTurn["canonicalAssistantState"];
+  notification: NotificationState;
+  threadPatch: {
+    id: string;
+    state_level: ConfirmedAssistantTurn["currentStateLevel"];
+    current_phase: ConfirmedAssistantTurn["currentPhase"];
+    state_changed: ConfirmedAssistantTurn["stateChanged"];
+    prev_phase: ConfirmedAssistantTurn["prevPhase"];
+    prev_state_level: ConfirmedAssistantTurn["prevStateLevel"];
+  };
+  turnRecord: ConfirmedAssistantTurn & {
+    compassText?: string;
+    compassPrompt?: string | null;
+  };
+  confirmed_memory_candidates: ConfirmedMemoryCandidate[];
+  compassText: string | null;
+  compassPrompt: string | null;
+  hopy_confirmed_payload: Record<string, unknown>;
+};
 
 export type BuildAuthenticatedTurnResultParams = {
   promptInput: AuthenticatedPromptInput;
@@ -385,8 +406,8 @@ RunHopyTurnBuiltResult にそのまま載せる。
 
 /*
 【今回このファイルで修正したこと】
-- export されていない ResolvedPlan を promptBundle.ts から import する形をやめた。
-- このファイル内で必要最小限の ResolvedPlan 型を定義し、import error を止める形にした。
+- export されていない RunHopyTurnBuiltResult を runHopyTurn.ts から import する形をやめた。
+- このファイル内で必要最小限の RunHopyTurnBuiltResult 型を定義し、import error を止める形にした。
 - それ以外の実行ロジック、Compass 条件、状態 1..5 の処理、memory candidate の流れには触っていない。
 */
 // このファイルの正式役割: authenticated 経路における turn 結果の正式組み立てファイル
