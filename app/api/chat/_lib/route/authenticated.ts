@@ -31,7 +31,6 @@ import {
   runAutoRename,
   saveUserMessageOrError,
   saveUserPhraseLearning,
-  type ConfirmedAssistantTurn,
   type UserPhraseLearningOutcome,
 } from "./authenticatedHelpers";
 import {
@@ -44,6 +43,7 @@ import {
 import {
   createAuthenticatedTurnDeps,
   resolveConfirmedTurnFromBuiltResult,
+  type ConfirmedAssistantTurn,
   type ConfirmedStateFallback,
 } from "./authenticatedTurnDeps";
 import { finalizeAuthenticatedPostTurn } from "./authenticatedPostTurn";
@@ -707,7 +707,7 @@ export async function handleAuthenticatedChat(
       user_phrase_learning_observation_count:
         userPhraseLearningOutcome.observationCount,
       user_phrase_learning_persistable_observation_count:
-          userPhraseLearningOutcome.persistableObservationCount,
+        userPhraseLearningOutcome.persistableObservationCount,
       user_phrase_learning_inserted_observation_count:
         userPhraseLearningOutcome.insertedObservationCount,
       user_phrase_learning_upserted_pattern_count:
@@ -856,9 +856,8 @@ authenticated 側の中継本体である。
    正式エラーをそのまま返す。 */
 
 /* 【今回このファイルで修正したこと】
-- loadRecentConversationMessages(...) の前後で context_load_ms を計測するようにしました。
-- handleAuthenticatedChat(...) の入口から最終 payload 返却直前までを total_ms として計測するようにしました。
-- runTurn.result.speed_audit がある場合は、その上に context_load_ms / total_ms を上書き追加して最終返却 payload に載せるようにしました。
-- failure payload 側でも context_load_ms / total_ms を返すようにしました。
+- `type ConfirmedAssistantTurn` の import 元を `./authenticatedHelpers` から外しました。
+- `type ConfirmedAssistantTurn` を `resolveConfirmedTurnFromBuiltResult` と同じ `./authenticatedTurnDeps` 側から受ける形にそろえました。
+- 他の処理や状態判定、Compass 系の流れには触れていません。
 */
 // このファイルの正式役割: authenticated ユーザー用のチャット処理本体
