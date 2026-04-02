@@ -47,6 +47,9 @@ import {
 } from "./authenticatedTurnDeps";
 import { finalizeAuthenticatedPostTurn } from "./authenticatedPostTurn";
 
+type RoutedTone =
+  Parameters<typeof finalizeAuthenticatedPostTurn>[0]["routed"]["tone"];
+
 type HandleAuthenticatedChatParams = {
   openai: OpenAI;
   modelName: string;
@@ -58,7 +61,7 @@ type HandleAuthenticatedChatParams = {
   uiLang: Lang;
   replyLang: Lang;
   routed: {
-    tone: string;
+    tone: RoutedTone;
     intensity: number;
     lang?: Lang | null;
   };
@@ -830,8 +833,9 @@ authenticated 側の中継本体である。
    正式エラーをそのまま返す。 */
 
 /* 【今回このファイルで修正したこと】
-- attachDebugPayload(...) に渡す mem_used_heuristic を `postTurn.memoryWrite.mem_used_heuristic ?? null` に正規化しました。
-- build を止めていた boolean | null 型不整合だけを止血しました。
-- 他の debug 項目、状態判定、Compass 系の流れには触っていません。
+- routed.tone の型を finalizeAuthenticatedPostTurn 側の routed.tone 型に合わせました。
+- finalizeAuthenticatedPostTurn(...) 呼び出し時の routed 型不一致で build が止まる症状だけを対象に修正しました。
+- 実行時の値や routed の判定ロジックは変えず、このファイル内の型の受け口だけをそろえました。
+- 状態判定、Compass 系の流れ、debug の中身には触っていません。
 */
 // このファイルの正式役割: authenticated ユーザー用のチャット処理本体
