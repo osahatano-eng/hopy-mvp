@@ -494,7 +494,7 @@ export async function handleAuthenticatedChat(
         memoryCleanLimit,
         enforceThreadOwnership,
         missingThreadReuseWindowSec,
-        openai_ok,
+        openai_ok: openai_ok ?? false,
         openai_error,
         userMessageId,
         insUserOk: true,
@@ -654,7 +654,7 @@ export async function handleAuthenticatedChat(
       memoryCleanLimit,
       enforceThreadOwnership,
       missingThreadReuseWindowSec,
-      openai_ok,
+      openai_ok: openai_ok ?? false,
       openai_error,
       userMessageId,
       insUserOk: true,
@@ -855,8 +855,8 @@ authenticated 側の中継本体である。
    正式エラーをそのまま返す。 */
 
 /* 【今回このファイルで修正したこと】
-- `type ConfirmedAssistantTurn` の import を削除しました。
-- `resolveConfirmedTurnFromBuiltResult(...)` の戻り値はこのファイル内で型注釈せず、そのまま `confirmedTurn` として扱う形に修正しました。
+- `attachDebugPayload(...)` に渡す `openai_ok` を `openai_ok ?? false` に統一しました。
+- `openai_ok` 自体の保持型は変えず、このファイルの引数受け渡し時だけ boolean へ正規化しました。
 - 他の処理や状態判定、Compass 系の流れには触れていません。
 */
 // このファイルの正式役割: authenticated ユーザー用のチャット処理本体
