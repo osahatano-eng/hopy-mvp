@@ -126,6 +126,23 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
+function hasChoicesCompletion(
+  value: unknown,
+): value is {
+  choices?: Array<{
+    message?: {
+      content?: string | null;
+    } | null;
+  }>;
+} {
+  return isRecord(value) && "choices" in value;
+}
+
+function getCompletionMessageContent(value: unknown): string {
+  if (!hasChoicesCompletion(value)) return "";
+  return String(value.choices?.[0]?.message?.content ?? "");
+}
+
 function normalizeStateValue(value: unknown): 1 | 2 | 3 | 4 | 5 | null {
   if (typeof value !== "number" || !Number.isInteger(value)) return null;
   if (value < 1 || value > 5) return null;
@@ -508,9 +525,7 @@ export async function generateAssistantReply(
     });
     speed_audit.openai_json_first_ms = elapsedMs(jsonFirstStartMs);
 
-    const firstJsonRawContent = String(
-      completion.choices?.[0]?.message?.content ?? "",
-    );
+    const firstJsonRawContent = getCompletionMessageContent(completion);
 
     const firstStateResolveStartMs = nowMs();
     const firstJsonExtracted = buildExtractedPayloadFromRawContent(
@@ -557,9 +572,7 @@ export async function generateAssistantReply(
       });
       speed_audit.openai_json_second_ms = elapsedMs(jsonSecondStartMs);
 
-      const secondJsonRawContent = String(
-        completion.choices?.[0]?.message?.content ?? "",
-      );
+      const secondJsonRawContent = getCompletionMessageContent(completion);
 
       const secondStateResolveStartMs = nowMs();
       const secondJsonExtracted = buildExtractedPayloadFromRawContent(
@@ -701,8 +714,8 @@ compassText / compassPrompt / state を抽出して返す。
 
 /*
 【今回このファイルで修正したこと】
-- createJsonForcedCompletion の呼び出し2か所に replyLang を追加しました。
-- これにより openaiExecution.ts 側で追加した言語別 empty JSON 再試行指示を、この呼び出し元から正しく渡せるようにしました。
+- createJsonForcedCompletion の返り値が stream を含む union 型でも安全に扱えるよう、choices を持つ completion だけを通す型ガードを追加しました。
+- completion.choices?.[0]?.message?.content への直接参照をやめ、getCompletionMessageContent(...) 経由に統一しました。
+- 1回目と2回目の JSON 取得箇所の両方を同じ安全な取得方法へそろえました。
 - それ以外の state 必須条件、Compass 必須条件、confirmed payload 生成、speed_audit の返却構造は触っていません。
 */
-// このファイルの正式役割: OpenAI 応答の生成・回収ファイル
