@@ -86,7 +86,8 @@ function isLearningPromptRecord(value: unknown): value is LearningPromptRecord {
     typeof row.scope === "string" &&
     typeof row.weight === "number" &&
     typeof row.evidence_count === "number" &&
-    (typeof row.source_message_id === "string" || row.source_message_id == null) &&
+    (typeof row.source_message_id === "string" ||
+      row.source_message_id == null) &&
     (typeof row.source_thread_id === "string" || row.source_thread_id == null) &&
     (typeof row.state_level === "number" || row.state_level == null) &&
     (typeof row.current_phase === "number" || row.current_phase == null) &&
@@ -278,11 +279,11 @@ async function fetchScopedLearningRecords(params: {
       );
     }
 
-    const safeRows = Array.isArray(data)
-      ? data.filter(isLearningPromptRecord)
-      : [];
-
-    rows.push(...safeRows);
+    const safeRows: unknown[] = Array.isArray(data) ? data : [];
+    for (const row of safeRows) {
+      if (!isLearningPromptRecord(row)) continue;
+      rows.push(row);
+    }
   }
 
   await runScopedQuery("user", { userScoped: true });
@@ -342,5 +343,5 @@ export default listLearningRecordsForPrompt;
 HOPY回答用プロンプトに注入する learning records を、scope・state・user 条件で取得し、整形・重複除去して返すDB読み出し層。
 
 【今回このファイルで修正したこと】
-Supabaseの戻り値を直接 LearningPromptRecord[] にキャストしていた箇所をやめ、型ガードで安全に絞り込んでから rows に追加するよう修正した。
+Supabaseの戻り値を配列のまま直接 LearningPromptRecord[] として扱うのをやめ、unknown[] として受けて型ガードで1件ずつ確認したものだけ rows に追加するよう修正した。
 */
