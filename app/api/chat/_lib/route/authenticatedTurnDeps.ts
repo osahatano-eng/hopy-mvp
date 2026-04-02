@@ -9,7 +9,6 @@ import {
   normalizeConfirmedStateLevel,
   saveAssistantLearningLogs,
   saveAssistantMessageOrError,
-  type ConfirmedAssistantTurn,
 } from "./authenticatedHelpers";
 import type { Lang } from "../router/simpleRouter";
 import type { ResolvedPlan } from "./promptBundle";
@@ -53,6 +52,17 @@ type AuthenticatedModelOutput = {
   compassText: string;
   compassPrompt: string;
   speed_audit?: Record<string, unknown> | null;
+};
+
+type ConfirmedAssistantTurn = {
+  assistantText: string;
+  currentPhase: 1 | 2 | 3 | 4 | 5;
+  currentStateLevel: 1 | 2 | 3 | 4 | 5;
+  stateChanged: boolean;
+  prevPhase: 1 | 2 | 3 | 4 | 5;
+  prevStateLevel: 1 | 2 | 3 | 4 | 5;
+  compassText?: string;
+  compassPrompt?: string;
 };
 
 export type ConfirmedStateFallback = {
@@ -566,8 +576,8 @@ authenticated 経路の runHopyTurn 用 deps 作成ファイル。
 */
 /*
 【今回このファイルで修正したこと】
-- ./authenticatedHelpers から未 export の AuthenticatedModelOutput / AuthenticatedPromptInput / LoadedAuthenticatedContext を import していたため、その import を削除しました。
-- このファイルで実際に使っている最小限の local type を定義して、型境界だけをこのファイル内で閉じました。
-- buildTurnResult / callModel / loadContext の実行ロジックや、状態 1..5、Compass、保存フロー自体は変えていません。
+- ./authenticatedHelpers から未 export の ConfirmedAssistantTurn を import していたため、その import を削除しました。
+- このファイル内で実際に使っている最小限の ConfirmedAssistantTurn 型を local type として定義し、このファイル単体で型境界を閉じました。
+- buildTurnResult / callModel / persistTurn の実行ロジック、状態 1..5、Compass、保存フロー自体は変えていません。
 */
 // このファイルの正式役割: authenticated 経路の runHopyTurn 用 deps 作成ファイル
