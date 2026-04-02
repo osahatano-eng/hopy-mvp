@@ -3,8 +3,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { loadMemoriesForPrompt } from "../memories/loadMemoriesForPrompt";
-import type { ResolvedPlan } from "./promptBundle";
 import type { Lang } from "../router/simpleRouter";
+
+type ResolvedPlan = "free" | "plus" | "pro";
 
 export type PromptMemoryLoadResult = {
   memoryBlock: string;
@@ -114,3 +115,17 @@ export async function resolvePromptMemoryLoad(params: {
     memoryInjected: false,
   };
 }
+
+/*
+このファイルの正式役割
+authenticated の plan / prompt memory 解決ファイル。
+profiles.plan を free / plus / pro に正規化し、
+plan ごとの memory 読み込み上限と learning 有効可否を返す。
+*/
+
+/*
+【今回このファイルで修正したこと】
+- ./promptBundle から export されていない ResolvedPlan の import を削除しました。
+- このファイル内で使う正式値に合わせて ResolvedPlan = "free" | "plus" | "pro" をローカル定義しました。
+- 既存の plan 判定ロジックと memory 制御ロジックには触っていません。
+*/
