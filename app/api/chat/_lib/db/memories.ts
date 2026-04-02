@@ -38,6 +38,28 @@ type InsertMemoriesReason =
   | "filtered"
   | "empty_items";
 
+function isRawMemoryRow(value: unknown): value is RawMemoryRow {
+  if (!value || typeof value !== "object") return false;
+
+  const row = value as Record<string, unknown>;
+
+  return (
+    (typeof row.id === "string" || row.id == null) &&
+    (typeof row.user_id === "string" || row.user_id == null) &&
+    (typeof row.body === "string" || row.body == null) &&
+    (typeof row.content === "string" || row.content == null) &&
+    (typeof row.source_type === "string" || row.source_type == null) &&
+    (typeof row.memory_type === "string" || row.memory_type == null) &&
+    (typeof row.status === "string" || row.status == null) &&
+    (typeof row.created_at === "string" || row.created_at == null) &&
+    (typeof row.updated_at === "string" || row.updated_at == null) &&
+    (typeof row.deleted_at === "string" || row.deleted_at == null) &&
+    (typeof row.source_message_id === "string" ||
+      row.source_message_id == null) &&
+    (typeof row.source_thread_id === "string" || row.source_thread_id == null)
+  );
+}
+
 export async function selectMemories(params: {
   supabase: SupabaseClient;
   condition: MemoryQueryCondition;
@@ -97,9 +119,15 @@ export async function selectMemories(params: {
     return { ok: false, memories: [], error };
   }
 
-  const memories = (data ?? [])
-    .map((row) => mapRowToSavedMemory((row ?? {}) as RawMemoryRow))
-    .filter(Boolean) as SavedMemory[];
+  const safeRows: unknown[] = Array.isArray(data) ? data : [];
+  const memories: SavedMemory[] = [];
+
+  for (const row of safeRows) {
+    if (!isRawMemoryRow(row)) continue;
+    const memory = mapRowToSavedMemory(row);
+    if (!memory) continue;
+    memories.push(memory);
+  }
 
   return { ok: true, memories };
 }
@@ -526,3 +554,13 @@ export async function softDeletePollutedMemories(params: {
     error: updated.error,
   };
 }
+
+/*
+このファイルの正式役割:
+memories テーブルの取得・追加・更新・prompt注入用整形・重複処理を担うDB読み出し/書き込み層。
+*/
+
+/*
+【今回このファイルで修正したこと】
+selectMemories 内で Supabase の戻り値を RawMemoryRow へ直接キャストするのをやめ、unknown[] として受けて isRawMemoryRow で型確認できた行だけ mapRowToSavedMemory へ渡すように修正した。
+*/
