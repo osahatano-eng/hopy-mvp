@@ -160,11 +160,16 @@ export function buildFinalHistory(args: {
     userText,
   });
 
-  const mergedHistory = shouldAppendLatestUserMessage({
+  const appendedUserRow: HistoryRow = {
+    role: "user",
+    content: userText,
+  };
+
+  const mergedHistory: HistoryRow[] = shouldAppendLatestUserMessage({
     history: sanitizedHistory,
     userText,
   })
-    ? [...sanitizedHistory, { role: "user", content: userText }]
+    ? [...sanitizedHistory, appendedUserRow]
     : sanitizedHistory;
 
   return trimHistoryByPlan({
@@ -172,3 +177,18 @@ export function buildFinalHistory(args: {
     resolvedPlan: args.resolvedPlan,
   });
 }
+
+/*
+このファイルの正式役割
+会話履歴を最終的に prompt 投入用の履歴へ整える専用ファイル。
+DB履歴の正規化、plan質問時の履歴除外、最新user行の追加、plan別件数制限を担当する。
+*/
+
+/*
+【今回このファイルで修正したこと】
+- 最新 user 行を appendedUserRow: HistoryRow として明示した。
+- mergedHistory を HistoryRow[] として明示した。
+- 配列結合時に role が string へ広がる型推論ずれを止めた。
+- 履歴の内容や件数制御ロジック自体は変えていない。
+*/
+// このファイルの正式役割: 会話履歴を最終的に prompt 投入用の履歴へ整える専用ファイル
