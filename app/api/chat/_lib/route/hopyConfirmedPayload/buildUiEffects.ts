@@ -1,6 +1,16 @@
 // /app/api/chat/_lib/route/hopyConfirmedPayload/buildUiEffects.ts
 
-import type { ConfirmedAssistantTurn } from "../authenticatedHelpers";
+type ConfirmedAssistantTurn = {
+  stateChanged: boolean;
+  compassText?: unknown;
+  compass_text?: unknown;
+  compassPrompt?: unknown;
+  compass_prompt?: unknown;
+  compass?: {
+    text?: unknown;
+    prompt?: unknown;
+  } | null;
+};
 
 export type HopyUiEffects = {
   show_reply_state_badge: boolean;
@@ -24,32 +34,20 @@ function normalizeCompassValue(value: unknown): string {
 function resolveConfirmedCompassText(
   confirmedTurn: ConfirmedAssistantTurn,
 ): string {
-  const source = confirmedTurn as ConfirmedAssistantTurn & {
-    compassText?: unknown;
-    compass_text?: unknown;
-    compass?: {
-      text?: unknown;
-    } | null;
-  };
-
   return normalizeCompassValue(
-    source.compassText ?? source.compass_text ?? source.compass?.text,
+    confirmedTurn.compassText ??
+      confirmedTurn.compass_text ??
+      confirmedTurn.compass?.text,
   );
 }
 
 function resolveConfirmedCompassPrompt(
   confirmedTurn: ConfirmedAssistantTurn,
 ): string | null {
-  const source = confirmedTurn as ConfirmedAssistantTurn & {
-    compassPrompt?: unknown;
-    compass_prompt?: unknown;
-    compass?: {
-      prompt?: unknown;
-    } | null;
-  };
-
   const resolved = normalizeCompassValue(
-    source.compassPrompt ?? source.compass_prompt ?? source.compass?.prompt,
+    confirmedTurn.compassPrompt ??
+      confirmedTurn.compass_prompt ??
+      confirmedTurn.compass?.prompt,
   );
 
   return resolved.length > 0 ? resolved : null;
@@ -78,12 +76,11 @@ export function buildUiEffects(params: BuildUiEffectsParams): HopyUiEffects {
 }
 
 /*
-【今回このファイルで修正したこと】
-- ui_effects.compass の独自項目 stateChanged を削除した。
-- ui_effects.compass.prompt を string 固定ではなく string | null の正式shapeに修正した。
-- stateChanged の唯一の正は confirmedTurn.stateChanged のまま使い、ui_effects.compass には Compass の正式値だけを載せる形にそろえた。
-
-このファイルの正式役割
+このファイルの正式役割:
 hopy_confirmed_payload.ui_effects の組み立てファイル
+
+【今回このファイルで修正したこと】
+authenticatedHelpers.ts から export されていない ConfirmedAssistantTurn の import を削除しました。
+このファイル内で buildUiEffects に必要な最小限の ConfirmedAssistantTurn 型を定義しました。
+ui_effects の組み立てロジック自体は変更していません。
 */
-// このファイルの正式役割: hopy_confirmed_payload.ui_effects の組み立てファイル
