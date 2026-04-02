@@ -265,7 +265,7 @@ export async function runHopyTurn(
     });
   }
 
-  if (deps.persistThreadPatch) {
+  if (deps.persistThreadPatch && result.threadPatch) {
     await deps.persistThreadPatch({
       ctx,
       threadPatch: result.threadPatch,
@@ -330,13 +330,13 @@ persistence → buildChatResponse(...) による response 化
 
 /*
 【今回このファイルで修正したこと】
-- builtResultFailure 分岐で result.speed_audit をそのまま渡さず、resolveSpeedAudit() で Record<string, unknown> | null に絞ってから buildFailedModelOutput() と buildFailedRunHopyTurnResult() に渡すように修正しました。
-- これにより、{} | null のままでは通らない RunHopyTurnSpeedAudit の型不一致をこのファイル内で止めました。
-- それ以外の runHopyTurn の実行順序、persist 呼び出し、response 組み立ては触っていません。
+- persistThreadPatch の呼び出し条件に result.threadPatch の存在確認を追加しました。
+- threadPatch がない場合は persistThreadPatch を呼ばないようにし、RunHopyTurnThreadPatch 必須引数へ undefined が入る build error をこのファイル内で止めました。
+- それ以外の runHopyTurn の実行順序、他 persist、response 組み立ては触っていません。
 */
 // このファイルの正式役割: runHopyTurn の共通実行本体
 
 /*
 【今回このファイルで修正したこと】
-builtResultFailure 分岐で speed_audit を RunHopyTurnSpeedAudit に絞ってから渡すように修正しました。
+persistThreadPatch 呼び出し前に result.threadPatch の存在確認を追加しました。
 */
