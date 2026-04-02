@@ -220,7 +220,7 @@ function normalizeAssistantStateRow(data: any): ConversationAssistantState {
   const prev_phase = normalizePhase(data.prev_phase ?? current_phase);
   const prev_state_level = normalizePhase(data.prev_state_level ?? prev_phase);
   const state_changed = !!data.state_changed;
-  const created_at = normalizeIsoString(data.created_at);
+  const created_at = normalizeIsoString(data.created_at) ?? undefined;
 
   return {
     current_phase,
@@ -361,3 +361,11 @@ export async function resolveConversationState(params: {
     normalizedStateForPayload,
   };
 }
+
+/*
+このファイルの正式役割：
+会話ごとの直近 assistant 状態を読み取り、今回の userText に対する会話状態の更新結果を正規化して返す状態決定層。
+
+【今回このファイルで修正したこと】
+normalizeAssistantStateRow 内の created_at を string | null のまま返さず、null のときは undefined に変換して返すよう修正した。
+*/
