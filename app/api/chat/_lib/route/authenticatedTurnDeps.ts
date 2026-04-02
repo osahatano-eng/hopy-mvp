@@ -4,7 +4,6 @@ import type OpenAI from "openai";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { generateAssistantReply } from "./openai";
-import type { RunHopyTurnBuiltResult } from "./runHopyTurn";
 import {
   buildConfirmedAssistantTurn,
   normalizeConfirmedStateLevel,
@@ -19,6 +18,14 @@ import type { Lang } from "../router/simpleRouter";
 import type { ResolvedPlan } from "./promptBundle";
 import type { NotificationState } from "../state/notification";
 import { buildAuthenticatedTurnResult } from "./authenticatedTurnResult";
+
+type RunHopyTurnBuiltResult = {
+  reply?: unknown;
+  turnRecord?: unknown;
+  hopy_confirmed_payload?: unknown;
+  speed_audit?: unknown;
+  [key: string]: unknown;
+};
 
 export type ConfirmedStateFallback = {
   currentPhase: number;
