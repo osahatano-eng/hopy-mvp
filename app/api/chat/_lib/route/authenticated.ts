@@ -55,6 +55,9 @@ type SelectedStrategy =
 
 type RunHopyTurnDeps = Parameters<typeof runHopyTurn>[0]["deps"];
 
+type FinalizeConfirmedTurn =
+  Parameters<typeof finalizeAuthenticatedPostTurn>[0]["confirmedTurn"];
+
 type HandleAuthenticatedChatParams = {
   openai: OpenAI;
   modelName: string;
@@ -120,6 +123,21 @@ function getInternalWriteSupabase(fallback: SupabaseClient): SupabaseClient {
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   return value as Record<string, unknown>;
+}
+
+function buildFinalizeConfirmedTurn(
+  confirmedTurn: ReturnType<typeof resolveConfirmedTurnFromBuiltResult>,
+): FinalizeConfirmedTurn {
+  return {
+    ...confirmedTurn,
+    canonicalAssistantState: {
+      current_phase: confirmedTurn.currentPhase,
+      state_level: confirmedTurn.currentStateLevel,
+      prev_phase: confirmedTurn.prevPhase,
+      prev_state_level: confirmedTurn.prevStateLevel,
+      state_changed: confirmedTurn.stateChanged,
+    },
+  } as FinalizeConfirmedTurn;
 }
 
 export async function handleAuthenticatedChat(
@@ -558,10 +576,11 @@ export async function handleAuthenticatedChat(
     };
   }
 
-  const confirmedTurn = resolveConfirmedTurnFromBuiltResult(
+  const resolvedConfirmedTurn = resolveConfirmedTurnFromBuiltResult(
     runTurn.result,
     confirmedStateFallback,
   );
+  const confirmedTurn = buildFinalizeConfirmedTurn(resolvedConfirmedTurn);
 
   const postTurn = await finalizeAuthenticatedPostTurn({
     runTurnResult: runTurn.result,
@@ -839,8 +858,8 @@ authenticated 側の中継本体である。
 */
 
 /* 【今回このファイルで修正したこと】
-- runHopyTurn(...) の deps 受け口型を Parameters<typeof runHopyTurn>[0]["deps"] から取得するようにしました。
-- createAuthenticatedTurnDeps(...) の返り値を、このファイル内で runHopyTurn の正式な deps 型として扱う境界にそろえました。
-- 直したのは authenticated.ts 側の型境界だけで、authenticatedTurnDeps.ts の実行ロジックや HOPY の回答ロジックには触っていません。
+- finalizeAuthenticatedPostTurn(...) が要求する confirmedTurn 型に合わせるため、authenticated.ts 内で buildFinalizeConfirmedTurn(...) を追加しました。
+- resolveConfirmedTurnFromBuiltResult(...) の戻り値をそのまま渡さず、canonicalAssistantState を補ってから渡す形にそろえました。
+- 直したのは authenticated.ts 側の受け渡し型だけで、runHopyTurn、authenticatedTurnDeps.ts、Compass、memory、状態 1..5 の実行ロジックには触っていません。
 */
 // このファイルの正式役割: authenticated ユーザー用のチャット処理本体
