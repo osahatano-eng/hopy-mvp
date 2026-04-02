@@ -1,7 +1,7 @@
 // /app/api/chat/_lib/memory/extract.ts
 import type { Lang } from "../text";
 import { getOpenAI, getModelName } from "../openai";
-import type { MemoryItem } from "../db/memories";
+import type { MemoryItem } from "../db/memoriesFilters";
 
 // Phase1 stability: sanitize assistant/user text for memory extraction
 function sanitizeForMemory(s: string): string {
@@ -109,7 +109,7 @@ export async function extractMemoriesFromTurn(params: {
         const c = content.length > 120 ? content.slice(0, 120) : content;
         return { content: c, importance };
       })
-      .filter(Boolean);
+      .filter(Boolean) as MemoryItem[];
 
     // Deduplicate by normalized content (keep the highest importance)
     const map = new Map<string, MemoryItem>();
@@ -128,3 +128,13 @@ export async function extractMemoriesFromTurn(params: {
     return { ok: false, items: [], error: e };
   }
 }
+
+/*
+このファイルの正式役割:
+会話ターンから長期記憶候補を抽出するために、入力文を整形し、OpenAIへJSON抽出を依頼し、MemoryItem配列へ正規化して返す抽出層。
+*/
+
+/*
+【今回このファイルで修正したこと】
+MemoryItem の import 元が ../db/memories になっていて未exportエラーになっていたため、実際の型定義元である ../db/memoriesFilters から import するよう修正した。
+*/
