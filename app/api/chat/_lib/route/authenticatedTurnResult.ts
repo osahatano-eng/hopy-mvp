@@ -10,7 +10,6 @@ import type { Lang } from "../router/simpleRouter";
 import {
   buildConfirmedAssistantTurn,
   normalizeConfirmedStateLevel,
-  type ConfirmedAssistantTurn,
   type ConfirmedMemoryCandidate,
 } from "./authenticatedHelpers";
 import { resolveFinalConfirmedMemoryCandidates } from "./authenticatedMemoryCandidates";
@@ -18,6 +17,27 @@ import { resolveFinalConfirmedMemoryCandidates } from "./authenticatedMemoryCand
 type ResolvedPlan = "free" | "plus" | "pro";
 type AuthenticatedModelOutput = Record<string, unknown>;
 type AuthenticatedPromptInput = unknown;
+type Phase5 = 1 | 2 | 3 | 4 | 5;
+
+type CanonicalAssistantState = {
+  current_phase: Phase5;
+  state_level: Phase5;
+  prev_phase: Phase5;
+  prev_state_level: Phase5;
+  state_changed: boolean;
+};
+
+type ConfirmedAssistantTurn = {
+  assistantText: string;
+  currentPhase: Phase5;
+  currentStateLevel: Phase5;
+  stateChanged: boolean;
+  prevPhase: Phase5;
+  prevStateLevel: Phase5;
+  canonicalAssistantState: CanonicalAssistantState;
+  compassText?: string;
+  compassPrompt?: string | null;
+};
 
 type RunHopyTurnBuiltResult = {
   reply: string;
@@ -31,10 +51,7 @@ type RunHopyTurnBuiltResult = {
     prev_phase: ConfirmedAssistantTurn["prevPhase"];
     prev_state_level: ConfirmedAssistantTurn["prevStateLevel"];
   };
-  turnRecord: ConfirmedAssistantTurn & {
-    compassText?: string;
-    compassPrompt?: string | null;
-  };
+  turnRecord: ConfirmedAssistantTurn;
   confirmed_memory_candidates: ConfirmedMemoryCandidate[];
   compassText: string | null;
   compassPrompt: string | null;
@@ -154,9 +171,15 @@ function resolveStateBoolean(value: unknown): boolean | null {
   return null;
 }
 
-function resolveStateLevelValue(value: unknown): number | null {
+function resolveStateLevelValue(value: unknown): Phase5 | null {
   const resolved = normalizeConfirmedStateLevel(value);
-  if (resolved !== null && resolved !== undefined) {
+  if (
+    resolved === 1 ||
+    resolved === 2 ||
+    resolved === 3 ||
+    resolved === 4 ||
+    resolved === 5
+  ) {
     return resolved;
   }
 
@@ -295,10 +318,7 @@ export async function buildAuthenticatedTurnResult(
     stateChanged: resolvedStateChanged,
     prevPhase: resolvedPrevPhase,
     prevStateLevel: resolvedPrevStateLevel,
-  }) as ConfirmedAssistantTurn & {
-    compassText?: string;
-    compassPrompt?: string | null;
-  };
+  }) as ConfirmedAssistantTurn;
 
   const decision = decideBadgeFromAssistantReply(confirmedTurn.assistantText);
 
@@ -406,10 +426,9 @@ RunHopyTurnBuiltResult にそのまま載せる。
 
 /*
 【今回このファイルで修正したこと】
-- export されていない AuthenticatedModelOutput を authenticatedHelpers.ts から import する形をやめた。
-- export されていない AuthenticatedPromptInput を authenticatedHelpers.ts から import する形もやめた。
-- このファイル内で必要最小限の AuthenticatedModelOutput 型を Record<string, unknown> として定義した。
-- このファイル内で必要最小限の AuthenticatedPromptInput 型を unknown として定義し、import error を止める形にした。
-- それ以外の実行ロジック、Compass 条件、状態 1..5 の処理、memory candidate の流れには触っていない。
+- export されていない ConfirmedAssistantTurn を authenticatedHelpers.ts から import する形をやめた。
+- このファイル内で current/prev phase・state_changed・canonicalAssistantState を含む必要最小限の ConfirmedAssistantTurn 型を定義した。
+- resolveStateLevelValue の返り値を Phase5 に絞り、1..5 の正式型へ合わせた。
+- それ以外の実行ロジック、Compass 条件、状態 1..5 の意味、memory candidate の流れには触っていない。
 */
 // このファイルの正式役割: authenticated 経路における turn 結果の正式組み立てファイル
