@@ -1,6 +1,6 @@
 // /app/api/chat/_lib/memory/heuristic.ts
 import type { Lang } from "../text";
-import type { MemoryItem } from "../db/memories";
+import type { MemoryItem } from "../db/memoriesFilters";
 
 /**
  * Deterministic heuristic extractor for durable memories.
@@ -284,3 +284,11 @@ export function extractHeuristicMemories(params: {
     maxItems: normalizedMaxItems,
   });
 }
+
+/*
+このファイルの正式役割：
+会話本文から、長期的に残す価値がある記憶候補だけを決定論的なルールで抽出する補助抽出層。
+
+【今回このファイルで修正したこと】
+MemoryItem の import 元を ../db/memories から ../db/memoriesFilters へ修正した。
+*/
