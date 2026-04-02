@@ -159,12 +159,15 @@ function hasOwnStateShape(value: unknown): value is Record<string, unknown> {
 }
 
 function pickModelState(source: Record<string, unknown>): unknown {
-  if (hasOwnStateShape(source.state)) {
-    return source.state;
+  const sourceState = source.state;
+  const assistantState = source.assistant_state;
+
+  if (hasOwnStateShape(sourceState)) {
+    return sourceState;
   }
 
-  if (hasOwnStateShape(source.assistant_state)) {
-    return source.assistant_state;
+  if (hasOwnStateShape(assistantState)) {
+    return assistantState;
   }
 
   if (hasOwnStateShape(source)) {
@@ -179,8 +182,8 @@ function pickModelState(source: Record<string, unknown>): unknown {
     };
   }
 
-  if (typeof source.state !== "undefined") {
-    return source.state;
+  if (typeof sourceState !== "undefined") {
+    return sourceState;
   }
 
   return undefined;
@@ -235,3 +238,14 @@ export function buildHopyTurnResult(
 }
 
 export default buildHopyTurnResult;
+
+/*
+このファイルの正式役割:
+HOPY回答の parsed / modelOutput を統合し、reply・state・threadPatch・memoryCandidates・dashboardSignals などを最終的な turn result として返す整形層。
+*/
+
+/*
+【今回このファイルで修正したこと】
+pickModelState 内で source.state / source.assistant_state を先にローカル変数へ受け、型絞り込み後にその変数を返す形へ変更した。
+hasOwnStateShape(source) の後に source.state を直接参照して never 扱いになる流れを避けた。
+*/
