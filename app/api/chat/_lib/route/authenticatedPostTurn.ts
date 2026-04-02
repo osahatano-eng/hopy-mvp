@@ -11,7 +11,6 @@ import { resolveThreadTitleForPayload } from "./threadTitle";
 import { handleMemoryWrite } from "./memoryWrite";
 import type { NotificationState } from "../state/notification";
 import type {
-  ConfirmedAssistantTurn,
   ConfirmedMemoryCandidate,
   MemoryWriteDebug,
 } from "./authenticatedHelpers";
@@ -28,6 +27,22 @@ import { resolveConfirmedCompassArtifacts } from "./authenticatedPostTurnCompass
 
 type RunHopyTurnBuiltResult = Record<string, any>;
 type ResolvedPlan = "free" | "plus" | "pro";
+
+type ConfirmedAssistantTurn = {
+  assistantText: string;
+  prevPhase: 1 | 2 | 3 | 4 | 5;
+  currentPhase: 1 | 2 | 3 | 4 | 5;
+  currentStateLevel: 1 | 2 | 3 | 4 | 5;
+  stateChanged: boolean;
+  compassText?: string | null;
+  compassPrompt?: string | null;
+  compass?:
+    | {
+        text: string;
+        prompt: string | null;
+      }
+    | undefined;
+};
 
 export type AuthenticatedPostTurnParams = {
   runTurnResult: RunHopyTurnBuiltResult | null | undefined;
@@ -531,9 +546,8 @@ Compass を含む最終 turn artifacts 作成、
 
 /*
 【今回このファイルで修正したこと】
-- ./runHopyTurn から export されていない RunHopyTurnBuiltResult の import を削除しました。
-- ./promptBundle から export されていない ResolvedPlan の import を削除しました。
-- このファイル内で使う最小のローカル型として RunHopyTurnBuiltResult = Record<string, any> を定義しました。
-- このファイル内で使う正式値に合わせて ResolvedPlan = "free" | "plus" | "pro" をローカル定義しました。
+- ./authenticatedHelpers から export されていない ConfirmedAssistantTurn の import を削除しました。
+- このファイル内で使う最小のローカル型として ConfirmedAssistantTurn を定義しました。
+- currentPhase / prevPhase / currentStateLevel は 1..5 の正式値で固定しました。
 - postTurn の実行ロジック、memory / Compass / payload の流れには触っていません。
 */
