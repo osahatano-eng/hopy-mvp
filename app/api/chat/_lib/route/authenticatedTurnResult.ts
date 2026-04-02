@@ -10,7 +10,6 @@ import type { Lang } from "../router/simpleRouter";
 import {
   buildConfirmedAssistantTurn,
   normalizeConfirmedStateLevel,
-  type AuthenticatedModelOutput,
   type AuthenticatedPromptInput,
   type ConfirmedAssistantTurn,
   type ConfirmedMemoryCandidate,
@@ -18,6 +17,7 @@ import {
 import { resolveFinalConfirmedMemoryCandidates } from "./authenticatedMemoryCandidates";
 
 type ResolvedPlan = "free" | "plus" | "pro";
+type AuthenticatedModelOutput = Record<string, unknown>;
 
 type RunHopyTurnBuiltResult = {
   reply: string;
@@ -406,8 +406,8 @@ RunHopyTurnBuiltResult にそのまま載せる。
 
 /*
 【今回このファイルで修正したこと】
-- export されていない RunHopyTurnBuiltResult を runHopyTurn.ts から import する形をやめた。
-- このファイル内で必要最小限の RunHopyTurnBuiltResult 型を定義し、import error を止める形にした。
+- export されていない AuthenticatedModelOutput を authenticatedHelpers.ts から import する形をやめた。
+- このファイル内で必要最小限の AuthenticatedModelOutput 型を Record<string, unknown> として定義し、import error を止める形にした。
 - それ以外の実行ロジック、Compass 条件、状態 1..5 の処理、memory candidate の流れには触っていない。
 */
 // このファイルの正式役割: authenticated 経路における turn 結果の正式組み立てファイル
