@@ -41,7 +41,7 @@ type ConfirmedAssistantTurn = {
   currentStateLevel: 1 | 2 | 3 | 4 | 5;
   stateChanged: boolean;
   canonicalAssistantState: CanonicalAssistantState;
-  compassText?: string | null;
+  compassText?: string;
   compassPrompt?: string | null;
   compass?:
     | {
@@ -498,7 +498,7 @@ export async function finalizeAuthenticatedPostTurn(
   const confirmedTurnWithCompass = {
     ...params.confirmedTurn,
     stateChanged: resolvedCompass.stateChanged,
-    compassText: resolvedCompass.compassText,
+    compassText: resolvedCompass.compassText ?? undefined,
     compassPrompt: resolvedCompass.compassPrompt,
     compass:
       resolvedCompass.compassText !== null
@@ -562,8 +562,8 @@ Compass を含む最終 turn artifacts 作成、
 
 /*
 【今回このファイルで修正したこと】
-- ./authenticatedHelpers から export されていない MemoryWriteDebug の import を削除しました。
-- このファイル内で使う最小のローカル型として MemoryWriteDebug を定義しました。
-- 既存コード内で実際に使っている mem_write_* 系の形だけを受けられるようにしました。
+- ConfirmedAssistantTurn の compassText を string | undefined にそろえました。
+- confirmedTurnWithCompass へ渡す compassText も null のまま流さず、undefined に正規化しました。
+- compassText の null / undefined 型不一致で build が止まる症状だけを対象に修正しました。
 - postTurn の実行ロジック、memory / Compass / payload の流れには触っていません。
 */
