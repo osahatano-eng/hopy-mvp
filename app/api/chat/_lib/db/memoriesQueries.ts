@@ -4,6 +4,22 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { MemorySourceType } from "../memories/types";
 import { norm, type RawMemoryRow } from "./memoriesFilters";
 
+function isRawMemoryRow(value: unknown): value is RawMemoryRow {
+  if (!value || typeof value !== "object") return false;
+
+  const row = value as Record<string, unknown>;
+
+  return (
+    (typeof row.id === "string" || row.id == null) &&
+    (typeof row.body === "string" || row.body == null) &&
+    (typeof row.content === "string" || row.content == null) &&
+    (typeof row.source_type === "string" || row.source_type == null) &&
+    (typeof row.memory_type === "string" || row.memory_type == null) &&
+    (typeof row.importance === "number" || row.importance == null) &&
+    (typeof row.created_at === "string" || row.created_at == null)
+  );
+}
+
 export async function selectPromptMemoryRows(params: {
   supabase: SupabaseClient;
   userId: string;
@@ -33,9 +49,17 @@ export async function selectPromptMemoryRows(params: {
     return { ok: false, rows: [], error };
   }
 
+  const safeRows: unknown[] = Array.isArray(data) ? data : [];
+  const rows: RawMemoryRow[] = [];
+
+  for (const row of safeRows) {
+    if (!isRawMemoryRow(row)) continue;
+    rows.push(row);
+  }
+
   return {
     ok: true,
-    rows: ((data ?? []) as RawMemoryRow[]).filter(Boolean),
+    rows,
   };
 }
 
@@ -71,14 +95,16 @@ export async function selectActiveMemoryIdsByBodies(params: {
     return { ok: false, rows: [], error };
   }
 
-  const rows = ((data ?? []) as RawMemoryRow[])
-    .map((row) => {
-      const id = norm(row.id);
-      const body = norm(row.body);
-      if (!id || !body) return null;
-      return { id, body };
-    })
-    .filter(Boolean) as Array<{ id: string; body: string }>;
+  const safeRows: unknown[] = Array.isArray(data) ? data : [];
+  const rows: Array<{ id: string; body: string }> = [];
+
+  for (const row of safeRows) {
+    if (!isRawMemoryRow(row)) continue;
+    const id = norm(row.id);
+    const body = norm(row.body);
+    if (!id || !body) continue;
+    rows.push({ id, body });
+  }
 
   return { ok: true, rows };
 }
@@ -103,9 +129,21 @@ export async function selectLatestActiveMemoryCreatedAt(params: {
     return { ok: false, created_at: null, error };
   }
 
-  const createdAt = norm((data?.[0] as RawMemoryRow | undefined)?.created_at);
+  const firstRow = Array.isArray(data) ? data[0] : null;
+  const createdAt = isRawMemoryRow(firstRow) ? norm(firstRow.created_at) : "";
   return {
     ok: true,
     created_at: createdAt || null,
   };
 }
+
+/*
+このファイルの正式役割:
+memories テーブルから prompt用メモリ行・重複確認用id/body・最新作成日時を取得して返すDB読み出し層。
+*/
+
+/*
+【今回このファイルで修正したこと】
+Supabase の戻り値を RawMemoryRow[] へ直接キャストするのをやめ、unknown[] として受けて isRawMemoryRow で型確認できた行だけ使うように修正した。
+selectPromptMemoryRows・selectActiveMemoryIdsByBodies・selectLatestActiveMemoryCreatedAt の3箇所を直接キャストなしへ統一した。
+*/
