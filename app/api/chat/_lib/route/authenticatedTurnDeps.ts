@@ -17,6 +17,7 @@ import { buildAuthenticatedTurnResult } from "./authenticatedTurnResult";
 type ResolvedPlan = "free" | "plus" | "pro";
 
 type PromptBundle = Parameters<typeof generateAssistantReply>[0]["promptBundle"];
+type Phase5 = 1 | 2 | 3 | 4 | 5;
 
 type RunHopyTurnBuiltResult = {
   reply?: unknown;
@@ -35,7 +36,7 @@ type AuthenticatedPromptInput = {
   history: any[];
   userText: string;
   replyLang: Lang;
-  currentPhase: number;
+  currentPhase: Phase5;
   currentStateLevel: number;
   prevPhase: number;
   prevStateLevel: number;
@@ -59,11 +60,11 @@ type AuthenticatedModelOutput = {
 
 type ConfirmedAssistantTurn = {
   assistantText: string;
-  currentPhase: 1 | 2 | 3 | 4 | 5;
-  currentStateLevel: 1 | 2 | 3 | 4 | 5;
+  currentPhase: Phase5;
+  currentStateLevel: Phase5;
   stateChanged: boolean;
-  prevPhase: 1 | 2 | 3 | 4 | 5;
-  prevStateLevel: 1 | 2 | 3 | 4 | 5;
+  prevPhase: Phase5;
+  prevStateLevel: Phase5;
   compassText?: string;
   compassPrompt?: string;
 };
@@ -101,7 +102,7 @@ function resolveRequiredPhaseValue(
     | "state_level"
     | "prev_phase"
     | "prev_state_level",
-): 1 | 2 | 3 | 4 | 5 {
+): Phase5 {
   const normalized = normalizeConfirmedStateLevel(value);
   if (normalized === null || normalized === undefined) {
     throw new Error(
@@ -111,13 +112,23 @@ function resolveRequiredPhaseValue(
   return normalized;
 }
 
+function resolvePromptPhase(value: number): Phase5 {
+  const normalized = normalizeConfirmedStateLevel(value);
+  if (normalized === null || normalized === undefined) {
+    throw new Error(
+      "authenticatedTurnDeps: currentPhase must be normalized to 1..5 before callModel",
+    );
+  }
+  return normalized;
+}
+
 function resolveConfirmedPayloadState(
   state: Record<string, unknown> | null,
 ): {
-  current_phase: 1 | 2 | 3 | 4 | 5;
-  state_level: 1 | 2 | 3 | 4 | 5;
-  prev_phase: 1 | 2 | 3 | 4 | 5;
-  prev_state_level: 1 | 2 | 3 | 4 | 5;
+  current_phase: Phase5;
+  state_level: Phase5;
+  prev_phase: Phase5;
+  prev_state_level: Phase5;
   state_changed: boolean;
 } {
   if (!state) {
@@ -397,7 +408,7 @@ export function createAuthenticatedTurnDeps(params: {
         history: resolvedHistory,
         userText: params.userText,
         replyLang: params.replyLang,
-        currentPhase: params.currentPhase,
+        currentPhase: resolvePromptPhase(params.currentPhase),
         currentStateLevel: params.currentStateLevel,
         prevPhase: params.prevPhase,
         prevStateLevel: params.prevStateLevel,
@@ -581,8 +592,9 @@ authenticated 経路の runHopyTurn 用 deps 作成ファイル。
 */
 /*
 【今回このファイルで修正したこと】
-- local PromptBundle 型を廃止し、generateAssistantReply(...) の promptBundle 受け口型をそのまま参照する形に変更しました。
-- これにより、このファイル内の promptBundle 型と generateAssistantReply(...) 側の期待型を同一にそろえました。
-- 既存の local ResolvedPlan / ConfirmedAssistantTurn 型、buildTurnResult / callModel / persistTurn の実行ロジック、状態 1..5、Compass、保存フロー自体は変えていません。
+- AuthenticatedPromptInput.currentPhase を 1..5 型へ寄せるため、Phase5 型と resolvePromptPhase(...) を追加しました。
+- buildPromptInput() 内で params.currentPhase を normalizeConfirmedStateLevel ベースで 1..5 に正規化してから currentPhase へ入れるようにしました。
+- これにより generateAssistantReply(...) の phaseForParams に 1..5 型の値を渡す形へそろえました。
+- PromptBundle、callModel の実行ロジック、buildTurnResult、persistTurn、Compass、状態保存フロー自体は変えていません。
 */
 // このファイルの正式役割: authenticated 経路の runHopyTurn 用 deps 作成ファイル
