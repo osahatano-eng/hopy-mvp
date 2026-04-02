@@ -10,14 +10,13 @@ import {
   buildAuthenticatedChatPayload,
   buildConfirmedAssistantTurn,
 } from "./authenticatedHelpers";
-import type {
-  ConfirmedMemoryCandidate,
-  MemoryWriteDebug,
-} from "./authenticatedHelpers";
+import type { ConfirmedMemoryCandidate } from "./authenticatedHelpers";
 import { handleMemoryClean } from "./memoryClean";
 
 type ConfirmedAssistantTurn = ReturnType<typeof buildConfirmedAssistantTurn>;
 type ConfirmedMeaningPayload = ReturnType<typeof buildConfirmedMeaningPayload>;
+type MemoryWriteDebug =
+  Parameters<typeof buildConfirmedMeaningPayload>[0]["memoryWrite"];
 
 export type FinalizedTurnArtifacts = {
   confirmedTurn: ConfirmedAssistantTurn;
@@ -264,8 +263,8 @@ payload.compass と confirmedMeaningPayload の両方に載せる。
 */
 
 /* 【今回このファイルで修正したこと】
-- `ConfirmedAssistantTurn` の型 import を削除しました。
-- `buildConfirmedAssistantTurn` を value import し、`ReturnType<typeof buildConfirmedAssistantTurn>` から `ConfirmedAssistantTurn` 型を作る形に修正しました。
-- `ConfirmedMemoryCandidate` と `MemoryWriteDebug` の既存 import は維持しました。
+- `MemoryWriteDebug` の型 import を削除しました。
+- `buildConfirmedMeaningPayload` の第1引数から `memoryWrite` 型を逆算して `MemoryWriteDebug` を作る形に修正しました。
+- `ConfirmedAssistantTurn` の `ReturnType<typeof buildConfirmedAssistantTurn>` はそのまま維持しました。
 - 他の処理や状態判定、Compass 系の流れには触れていません。
 */
