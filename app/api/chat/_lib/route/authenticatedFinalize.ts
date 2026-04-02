@@ -6,14 +6,17 @@ import {
   buildSupportFocusSignal,
 } from "./dashboardSignal";
 import { buildConfirmedMeaningPayload } from "./hopyConfirmedPayload/buildConfirmedMeaningPayload";
-import { buildAuthenticatedChatPayload } from "./authenticatedHelpers";
+import {
+  buildAuthenticatedChatPayload,
+  buildConfirmedAssistantTurn,
+} from "./authenticatedHelpers";
 import type {
-  ConfirmedAssistantTurn,
   ConfirmedMemoryCandidate,
   MemoryWriteDebug,
 } from "./authenticatedHelpers";
 import { handleMemoryClean } from "./memoryClean";
 
+type ConfirmedAssistantTurn = ReturnType<typeof buildConfirmedAssistantTurn>;
 type ConfirmedMeaningPayload = ReturnType<typeof buildConfirmedMeaningPayload>;
 
 export type FinalizedTurnArtifacts = {
@@ -258,4 +261,11 @@ payload.compass と confirmedMeaningPayload の両方に載せる。
 4. finalizedTurnArtifacts.compassText が null の場合は payload.compass を delete する。
 5. payload.hopy_confirmed_payload は常に finalizedTurnArtifacts.confirmedMeaningPayload を載せる。
 6. このファイルは Compass を消す主原因ではなく、上流で null にされた Compass をそのまま反映する場所である。
+*/
+
+/* 【今回このファイルで修正したこと】
+- `ConfirmedAssistantTurn` の型 import を削除しました。
+- `buildConfirmedAssistantTurn` を value import し、`ReturnType<typeof buildConfirmedAssistantTurn>` から `ConfirmedAssistantTurn` 型を作る形に修正しました。
+- `ConfirmedMemoryCandidate` と `MemoryWriteDebug` の既存 import は維持しました。
+- 他の処理や状態判定、Compass 系の流れには触れていません。
 */
