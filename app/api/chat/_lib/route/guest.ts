@@ -1,7 +1,10 @@
 // /app/api/chat/_lib/route/guest.ts
 import OpenAI from "openai";
 
-import { createInitialNotificationState, incrementNotification } from "../state/notification";
+import {
+  createInitialNotificationState,
+  incrementNotification,
+} from "../state/notification";
 import { decideBadgeFromAssistantReply } from "../state/notificationPolicy";
 import type { Lang } from "../router/simpleRouter";
 import type { PromptBundle } from "./promptBundle";
@@ -31,7 +34,7 @@ type HandleGuestChatResult = {
 };
 
 export async function handleGuestChat(
-  params: HandleGuestChatParams
+  params: HandleGuestChatParams,
 ): Promise<HandleGuestChatResult> {
   const {
     openai,
@@ -48,7 +51,10 @@ export async function handleGuestChat(
     memoryMinIntervalSec,
   } = params;
 
+  const resolvedPlan = "free" as const;
+
   const promptBundle: PromptBundle = buildPromptBundle({
+    resolvedPlan,
     coreSystemPrompt: systemCorePrompt,
     uiLang,
     replyLang,
@@ -106,10 +112,11 @@ export async function handleGuestChat(
       openai_ok,
       openai_error,
       userMessageId: "",
-      insUserOk: null,
+      insUserOk: false,
       assistantMessageId: "",
-      insAsstOk: null,
+      insAsstOk: false,
       replyLang,
+      resolvedPlan,
       memoryInjected: false,
       memoryBlock: "",
       ctxRes: { ok: true, items: [] },
@@ -121,8 +128,6 @@ export async function handleGuestChat(
       mem_parse_ok: null,
       mem_extract_preview: null,
       mem_used_heuristic: false,
-      mem_write_ok: null,
-      mem_write_error: null,
       st: { ok: false, guest: true },
       audit_ok: null,
       audit_error: null,
@@ -141,6 +146,10 @@ export async function handleGuestChat(
       uiLang,
       routedLang,
       userText,
+      response_generation_log_ok: null,
+      response_generation_log_error: null,
+      state_transition_signal_ok: null,
+      state_transition_signal_error: null,
     });
   }
 
@@ -148,3 +157,24 @@ export async function handleGuestChat(
     payload,
   };
 }
+
+export default handleGuestChat;
+
+/*
+このファイルの正式役割
+guest 経路のチャット処理専用ファイル。
+未ログイン時の prompt 構築、OpenAI 呼び出し、通知決定、debug payload 添付を行い、
+guest 用の最終 payload を返す。
+*/
+
+/*
+【今回このファイルで修正したこと】
+- buildPromptBundle に required の resolvedPlan を追加した。
+- guest 経路の plan を free として固定した。
+- attachDebugPayload に resolvedPlan を追加した。
+- attachDebugPayload の引数を現在の DebugPayloadArgs に合わせた。
+- guest 経路で boolean 必須の insUserOk / insAsstOk を false にそろえた。
+- 不要な mem_write_ok / mem_write_error を削除した。
+- required の response_generation_log_* / state_transition_signal_* を null で追加した。
+*/
+// このファイルの正式役割: guest 経路のチャット処理専用ファイル
