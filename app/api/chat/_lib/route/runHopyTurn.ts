@@ -125,17 +125,19 @@ function resolveResponseCompass(
     return undefined;
   }
 
-  if (result.compassText === null) {
+  const compassText = result.compassText;
+  if (typeof compassText !== "string") {
     return undefined;
   }
 
-  if (result.compassPrompt === null) {
+  const compassPrompt = result.compassPrompt;
+  if (typeof compassPrompt !== "string") {
     return undefined;
   }
 
   return {
-    text: result.compassText,
-    prompt: result.compassPrompt,
+    text: compassText,
+    prompt: compassPrompt,
   };
 }
 
@@ -325,8 +327,13 @@ persistence → buildChatResponse(...) による response 化
 
 /*
 【今回このファイルで修正したこと】
-- builtResult の normalize / finalize / validation / failed result 生成責務を runHopyTurnBuiltResult.ts へ切り出し、親ファイルから削除しました。
-- 親には runHopyTurn の実行順序、upstream failure 判定、persist 呼び出し、response 組み立てだけを残しました。
-- HOPY唯一の正である state / confirmed payload / Compass の意味生成は増やさず、親は受け取ってつなぐだけに寄せました。
+- resolveResponseCompass() 内で result.compassText / result.compassPrompt を typeof === "string" で明示確認するように修正しました。
+- state_changed=true でも Compass 値が文字列で確定していない場合は undefined を返すようにし、buildChatResponse に渡す compass.text / prompt の型を string に固定しました。
+- runHopyTurn の実行順序、persist 呼び出し、response 組み立ての流れ自体は触っていません。
 */
 // このファイルの正式役割: runHopyTurn の共通実行本体
+
+/*
+【今回このファイルで修正したこと】
+resolveResponseCompass() で compassText / compassPrompt の型を string に絞ってから返すように修正しました。
+*/
