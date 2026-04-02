@@ -58,6 +58,14 @@ type AuthenticatedModelOutput = {
   speed_audit?: Record<string, unknown> | null;
 };
 
+type CanonicalAssistantState = {
+  current_phase: Phase5;
+  state_level: Phase5;
+  prev_phase: Phase5;
+  prev_state_level: Phase5;
+  state_changed: boolean;
+};
+
 type ConfirmedAssistantTurn = {
   assistantText: string;
   currentPhase: Phase5;
@@ -65,6 +73,7 @@ type ConfirmedAssistantTurn = {
   stateChanged: boolean;
   prevPhase: Phase5;
   prevStateLevel: Phase5;
+  canonicalAssistantState: CanonicalAssistantState;
   compassText?: string;
   compassPrompt?: string;
 };
@@ -122,15 +131,25 @@ function resolvePromptPhase(value: number): Phase5 {
   return normalized;
 }
 
+function buildCanonicalAssistantState(params: {
+  currentPhase: Phase5;
+  currentStateLevel: Phase5;
+  prevPhase: Phase5;
+  prevStateLevel: Phase5;
+  stateChanged: boolean;
+}): CanonicalAssistantState {
+  return {
+    current_phase: params.currentPhase,
+    state_level: params.currentStateLevel,
+    prev_phase: params.prevPhase,
+    prev_state_level: params.prevStateLevel,
+    state_changed: params.stateChanged,
+  };
+}
+
 function resolveConfirmedPayloadState(
   state: Record<string, unknown> | null,
-): {
-  current_phase: Phase5;
-  state_level: Phase5;
-  prev_phase: Phase5;
-  prev_state_level: Phase5;
-  state_changed: boolean;
-} {
+): CanonicalAssistantState {
   if (!state) {
     throw new Error(
       "authenticatedTurnDeps: hopy_confirmed_payload.state is required",
@@ -278,6 +297,14 @@ function resolveConfirmedTurnFromTurnRecord(
     compassPrompt?: string;
   };
 
+  confirmedTurn.canonicalAssistantState = buildCanonicalAssistantState({
+    currentPhase,
+    currentStateLevel,
+    prevPhase,
+    prevStateLevel,
+    stateChanged,
+  });
+
   const compassText = normalizeOptionalText(turnRecord.compassText);
   const compassPrompt = normalizeOptionalText(turnRecord.compassPrompt);
 
@@ -331,6 +358,14 @@ export function resolveConfirmedTurnFromBuiltResult(
     compassText?: string;
     compassPrompt?: string;
   };
+
+  confirmedTurn.canonicalAssistantState = buildCanonicalAssistantState({
+    currentPhase: confirmedPayloadState.current_phase,
+    currentStateLevel: confirmedPayloadState.state_level,
+    prevPhase: confirmedPayloadState.prev_phase,
+    prevStateLevel: confirmedPayloadState.prev_state_level,
+    stateChanged: confirmedPayloadState.state_changed,
+  });
 
   const confirmedPayloadCompass = asRecord(confirmedPayload.compass);
   const resolvedCompassText = normalizeOptionalText(
@@ -592,9 +627,9 @@ authenticated 経路の runHopyTurn 用 deps 作成ファイル。
 */
 /*
 【今回このファイルで修正したこと】
-- AuthenticatedPromptInput.currentPhase を 1..5 型へ寄せるため、Phase5 型と resolvePromptPhase(...) を追加しました。
-- buildPromptInput() 内で params.currentPhase を normalizeConfirmedStateLevel ベースで 1..5 に正規化してから currentPhase へ入れるようにしました。
-- これにより generateAssistantReply(...) の phaseForParams に 1..5 型の値を渡す形へそろえました。
-- PromptBundle、callModel の実行ロジック、buildTurnResult、persistTurn、Compass、状態保存フロー自体は変えていません。
+- local ConfirmedAssistantTurn 型に canonicalAssistantState を追加しました。
+- turnRecord 経由・confirmed payload 経由の両方で confirmedTurn を作る箇所に、canonicalAssistantState を必ず入れるようにしました。
+- これにより saveAssistantMessageOrError(...) / saveAssistantLearningLogs(...) が要求する confirmedTurn 形へ、このファイル内でそろえました。
+- PromptBundle、callModel の実行ロジック、buildTurnResult、Compass、状態 1..5 の意味、保存フロー自体は変えていません。
 */
 // このファイルの正式役割: authenticated 経路の runHopyTurn 用 deps 作成ファイル
