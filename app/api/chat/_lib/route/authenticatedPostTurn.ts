@@ -25,12 +25,22 @@ import { resolveConfirmedCompassArtifacts } from "./authenticatedPostTurnCompass
 type RunHopyTurnBuiltResult = Record<string, any>;
 type ResolvedPlan = "free" | "plus" | "pro";
 
+type CanonicalAssistantState = {
+  current_phase: 1 | 2 | 3 | 4 | 5;
+  state_level: 1 | 2 | 3 | 4 | 5;
+  prev_phase: 1 | 2 | 3 | 4 | 5;
+  prev_state_level: 1 | 2 | 3 | 4 | 5;
+  state_changed: boolean;
+};
+
 type ConfirmedAssistantTurn = {
   assistantText: string;
   prevPhase: 1 | 2 | 3 | 4 | 5;
+  prevStateLevel: 1 | 2 | 3 | 4 | 5;
   currentPhase: 1 | 2 | 3 | 4 | 5;
   currentStateLevel: 1 | 2 | 3 | 4 | 5;
   stateChanged: boolean;
+  canonicalAssistantState: CanonicalAssistantState;
   compassText?: string | null;
   compassPrompt?: string | null;
   compass?:
