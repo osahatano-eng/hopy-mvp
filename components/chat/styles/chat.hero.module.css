@@ -1,0 +1,63 @@
+/* /components/chat/styles/chat.hero.css */
+
+/* logged-out */
+.hero {
+  padding: clamp(56px, 8vw, 96px) 0;
+}
+.heroInner {
+  width: 100%;
+  max-width: var(--container);
+  margin: 0 auto;
+  padding: 0 var(--gutter);
+}
+.heroTitle {
+  font-size: clamp(42px, 6vw, 72px);
+  line-height: 1.02;
+  letter-spacing: -0.04em;
+  font-weight: 700;
+  color: var(--text);
+}
+.heroSub {
+  margin-top: 14px;
+  font-size: clamp(16px, 2vw, 18px);
+  line-height: 1.7;
+  color: var(--muted);
+  max-width: 60ch;
+}
+.heroActions {
+  margin-top: 22px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* Buttons */
+.primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+
+  padding: 12px 16px;
+  border-radius: 10px;
+
+  border: 1px solid var(--hairline);
+  background: var(--panel);
+  color: var(--text);
+
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+
+  /* ✅ iOS: tap遅延/誤爆抑制 */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.primary:hover {
+  background: var(--panelHover);
+  border-color: var(--hairlineHover);
+}
+.primary:focus-visible {
+  outline: 2px solid var(--focusRing);
+  outline-offset: 2px;
+}

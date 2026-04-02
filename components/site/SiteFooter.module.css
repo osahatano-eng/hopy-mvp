@@ -1,0 +1,30 @@
+/* /components/site/SiteFooter.module.css */
+/* HOPY MASTER TOP page FOOTER 定義（HEADER準拠・最終）
+   - 固定テキストのみ：@2026 HOPY
+   - リンク・補足・アイコン・区切り線：一切なし
+   - 背景：ページ背景に溶け込ませる（塗りなし）
+   - 境界：線なし / 影なし / グラデーションなし
+   - 文字：var(--muted) 相当、強調しない
+*/
+
+.footer {
+  width: 100%;
+  background: transparent;
+  border: none;
+
+  /* ✅ セクション終端の呼吸：フッターの“上”だけ最小で足す */
+  padding-top: 18px;
+}
+
+.inner {
+  width: 100%;
+  max-width: var(--container);
+  margin: 0 auto;
+  padding: 18px var(--gutter) 22px;
+
+  text-align: center;
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}

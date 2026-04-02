@@ -1,0 +1,375 @@
+/* /app/legal/page.module.css */
+/* =========================
+   Legal page — HOPY
+   - /legal 専用スクロール面
+   - fixed header 下の安定配置
+   - 会社情報ハブ / terms / privacy / commerce 共通
+   - PC: dark / SP: light
+========================= */
+
+.page {
+  position: fixed;
+  inset: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+
+  /* ===== default = desktop dark ===== */
+  --paper: #0e0e10;
+  --text: rgba(255, 255, 255, 0.92);
+  --muted: rgba(255, 255, 255, 0.68);
+
+  --hairline: rgba(255, 255, 255, 0.1);
+  --hairlineHover: rgba(255, 255, 255, 0.18);
+  --focusRing: rgba(255, 255, 255, 0.22);
+
+  --panel: rgba(255, 255, 255, 0.04);
+  --panelHover: rgba(255, 255, 255, 0.06);
+
+  --buttonBg: rgba(255, 255, 255, 0.08);
+  --buttonBgHover: rgba(255, 255, 255, 0.12);
+
+  background: var(--paper);
+  color: var(--text);
+
+  font-family:
+    "Hiragino Sans",
+    "Yu Gothic",
+    "YuGothic",
+    "Noto Sans JP",
+    "Meiryo",
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  letter-spacing: 0.01em;
+
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+
+.page::-webkit-scrollbar {
+  width: 10px;
+}
+
+.page::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.page::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.page::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.22);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.page::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+.main {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  padding-top: calc(56px + env(safe-area-inset-top));
+}
+
+.content {
+  width: min(100%, 1120px);
+  margin: 0 auto;
+  padding: 56px 16px 88px;
+}
+
+.headerBlock {
+  max-width: 72ch;
+}
+
+.prose {
+  max-width: 72ch;
+}
+
+.narrow {
+  max-width: 68ch;
+}
+
+.title {
+  margin: 0;
+  font-size: clamp(34px, 4vw, 46px);
+  line-height: 1.08;
+  letter-spacing: -0.035em;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.lead {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.92;
+  font-size: 16px;
+}
+
+.section {
+  margin-top: 56px;
+}
+
+.sectionTitle {
+  margin: 0;
+  font-size: 21px;
+  line-height: 1.24;
+  letter-spacing: -0.024em;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.sectionBody {
+  margin: 14px 0 0;
+  color: var(--muted);
+  line-height: 1.92;
+  font-size: 15px;
+}
+
+.cardList {
+  display: grid;
+  gap: 14px;
+  margin-top: 22px;
+  max-width: 760px;
+}
+
+.cardLink {
+  display: block;
+  padding: 18px 20px;
+  border-radius: 20px;
+  border: 1px solid var(--hairline);
+  background: var(--panel);
+  text-decoration: none;
+  color: inherit;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition:
+    border-color 140ms ease,
+    background 140ms ease,
+    transform 140ms ease;
+}
+
+.cardLink:hover {
+  border-color: var(--hairlineHover);
+  background: var(--panelHover);
+  transform: translateY(-1px);
+}
+
+.cardLink:focus-visible {
+  outline: 2px solid var(--focusRing);
+  outline-offset: 2px;
+}
+
+.cardTitle {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.38;
+  letter-spacing: -0.012em;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.cardBody {
+  margin: 8px 0 0;
+  color: var(--muted);
+  line-height: 1.82;
+  font-size: 14px;
+}
+
+.ctaRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin-top: 22px;
+}
+
+.ctaButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 14px;
+  border: 1px solid var(--hairline);
+  background: var(--buttonBg);
+  color: var(--text);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  transition:
+    border-color 140ms ease,
+    background 140ms ease,
+    transform 140ms ease;
+}
+
+.ctaButton:hover {
+  border-color: var(--hairlineHover);
+  background: var(--buttonBgHover);
+  transform: translateY(-1px);
+}
+
+.ctaButton:focus-visible {
+  outline: 2px solid var(--focusRing);
+  outline-offset: 2px;
+}
+
+.dataGrid {
+  display: grid;
+  gap: 0;
+  margin-top: 16px;
+  max-width: 920px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.dataRow {
+  display: grid;
+  grid-template-columns: minmax(140px, 220px) minmax(0, 1fr);
+  gap: 12px 24px;
+  padding: 16px 0;
+  border-top: 1px solid var(--hairline);
+}
+
+.dataLabel {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+.dataValue {
+  margin: 0;
+  min-width: 0;
+  color: var(--muted);
+  line-height: 1.92;
+  font-size: 15px;
+}
+
+.list {
+  margin: 14px 0 0 1.2em;
+  padding: 0;
+  color: var(--muted);
+  line-height: 1.92;
+  font-size: 15px;
+}
+
+.list li + li {
+  margin-top: 6px;
+}
+
+.meta {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.8;
+  font-size: 14px;
+}
+
+/* ===== SP keeps current light tone ===== */
+@media (max-width: 640px) {
+  .page {
+    --paper: #f3f3f1;
+    --text: rgba(17, 17, 17, 0.92);
+    --muted: rgba(17, 17, 17, 0.68);
+
+    --hairline: rgba(0, 0, 0, 0.1);
+    --hairlineHover: rgba(0, 0, 0, 0.16);
+    --focusRing: rgba(0, 0, 0, 0.2);
+
+    --panel: rgba(255, 255, 255, 0.72);
+    --panelHover: rgba(255, 255, 255, 0.9);
+
+    --buttonBg: rgba(255, 255, 255, 0.9);
+    --buttonBgHover: #ffffff;
+
+    scrollbar-color: rgba(0, 0, 0, 0.18) transparent;
+  }
+
+  .page::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.14);
+  }
+
+  .page::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.22);
+  }
+
+  .content {
+    width: 100%;
+    padding: 28px 16px 52px;
+  }
+
+  .headerBlock,
+  .prose,
+  .narrow,
+  .cardList,
+  .dataGrid {
+    max-width: none;
+  }
+
+  .title {
+    font-size: clamp(28px, 9vw, 36px);
+    line-height: 1.1;
+  }
+
+  .lead,
+  .sectionBody,
+  .dataValue,
+  .list {
+    font-size: 15px;
+    line-height: 1.86;
+  }
+
+  .section {
+    margin-top: 38px;
+  }
+
+  .sectionTitle {
+    font-size: 18px;
+  }
+
+  .cardLink {
+    padding: 14px 14px;
+    border-radius: 16px;
+  }
+
+  .cardTitle {
+    font-size: 14px;
+  }
+
+  .cardBody {
+    font-size: 14px;
+  }
+
+  .ctaButton {
+    width: 100%;
+  }
+
+  .dataRow {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    padding: 14px 0;
+  }
+
+  .dataLabel {
+    font-size: 13px;
+  }
+}

@@ -1,0 +1,202 @@
+/* /components/chat/ui/ChatMoreMenu.module.css */
+/* ChatMoreMenu — HOPY MASTER aligned
+   - 影なし / グラデなし
+   - 区切り線なし（分離は余白のみ）
+   - 角丸なし
+   - ✅ 重要：/chat のCSS変数が届かない場合でも「必ず見える」よう固定色で担保
+*/
+
+.wrap {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 8px);
+  right: calc(env(safe-area-inset-right) + 10px);
+  z-index: 60;
+  pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.btn {
+  appearance: none;
+  border: none;
+  background: transparent;
+
+  /* ✅ PC：フォントと同じ色（確定値） */
+  color: #e6e6e6;
+  opacity: 1;
+
+  border-radius: 0;
+  padding: 6px 8px;
+  cursor: pointer;
+  line-height: 1;
+  font-size: 18px;
+
+  transition: background 120ms ease, opacity 120ms ease;
+}
+
+.btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.btn:focus-visible {
+  outline: 2px solid rgba(230, 230, 230, 0.28);
+  outline-offset: 2px;
+}
+
+.menu {
+  position: absolute;
+  right: 0;
+  margin-top: 8px;
+
+  min-width: 220px;
+
+  /* ✅ PC：読める面を固定（影なし） */
+  background: rgba(0, 0, 0, 0.52);
+  border: 1px solid rgba(230, 230, 230, 0.14);
+  border-radius: 0;
+
+  padding: 10px;
+
+  transform-origin: top right;
+  animation: hopyMenuIn 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform, opacity;
+}
+
+.menu:focus-within {
+  outline: 2px solid rgba(230, 230, 230, 0.22);
+  outline-offset: 0;
+}
+
+@keyframes hopyMenuIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ===== 構造ブロック ===== */
+
+.accountBlock {
+  padding-bottom: 10px;
+}
+
+.primaryActions {
+  display: block;
+  padding-top: 6px;
+}
+
+.secondaryActions {
+  display: block;
+  padding-top: 10px;
+}
+
+/* ===== 既存UI ===== */
+
+.section {
+  padding: 8px 14px 6px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: rgba(230, 230, 230, 0.68);
+}
+
+.account {
+  padding: 6px 14px 12px;
+}
+
+.accountLabel {
+  font-size: 12px;
+  color: rgba(230, 230, 230, 0.68);
+}
+
+.accountEmail {
+  margin-top: 2px;
+  font-size: 12px;
+  color: #e6e6e6;
+  overflow-wrap: anywhere;
+}
+
+.divider {
+  display: none;
+}
+
+.item {
+  display: block;
+  width: 100%;
+  padding: 10px 14px;
+  font-size: 14px;
+
+  /* ✅ PC：フォントと同じ色 */
+  color: #e6e6e6;
+  text-decoration: none;
+
+  background: transparent;
+  border: none;
+  border-radius: 0;
+
+  text-align: left;
+  cursor: pointer;
+
+  transition: background 120ms ease;
+}
+
+.item:hover {
+  background: rgba(0, 0, 0, 0.42);
+}
+
+.item:focus-visible {
+  outline: 2px solid rgba(230, 230, 230, 0.28);
+  outline-offset: -2px;
+}
+
+.itemBtn {
+  font: inherit;
+}
+
+.danger {
+  /* ✅ 赤にしない（色で語らない）。強調は太さだけ。 */
+  color: #e6e6e6;
+  font-weight: 600;
+}
+
+/* ===== Mobile (light) =====
+   - ✅ スマホ：スマホのフォント色と同じ (#111111)
+*/
+@media (max-width: 640px) {
+  .btn {
+    color: #111111;
+  }
+
+  .btn:hover {
+    background: rgba(0, 0, 0, 0.03);
+  }
+
+  .menu {
+    background: #ffffff;
+    border: 1px solid rgba(0, 0, 0, 0.12);
+  }
+
+  .menu:focus-within {
+    outline: 2px solid rgba(0, 0, 0, 0.14);
+  }
+
+  .section {
+    color: rgba(17, 17, 17, 0.58);
+  }
+
+  .accountLabel {
+    color: rgba(17, 17, 17, 0.58);
+  }
+
+  .accountEmail,
+  .item,
+  .danger {
+    color: #111111;
+  }
+
+  .item:hover {
+    background: rgba(0, 0, 0, 0.03);
+  }
+}

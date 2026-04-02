@@ -1,0 +1,133 @@
+.hero {
+  min-height: calc(100vh - 76px - 86px);
+  display: grid;
+  place-items: center;
+  padding: 6vh 0 10vh;
+}
+
+.heroInner {
+  width: 100%;
+  max-width: 720px;
+  text-align: center;
+  padding: 0 var(--pad);
+}
+
+.heroTitle {
+  font-size: clamp(46px, 6vw, 70px);
+  font-weight: 680;
+  letter-spacing: -0.04em;
+  line-height: 1.02;
+}
+
+.heroSub {
+  margin-top: 16px;
+  font-size: 15px;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.heroMeta {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--muted);
+  opacity: 0.9;
+  line-height: 1.7;
+}
+
+.actions {
+  margin-top: 28px;
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+}
+
+.primary {
+  height: 44px;
+  padding: 0 18px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  transition: transform 140ms ease, border-color 140ms ease, opacity 140ms ease;
+}
+
+.primary:hover {
+  transform: translateY(-1px);
+  border-color: var(--focus);
+}
+
+.primary:active {
+  transform: translateY(0px);
+  opacity: 0.88;
+}
+
+.micro {
+  font-size: 12px;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+
+.loading {
+  min-height: calc(100vh - 76px - 86px);
+  display: grid;
+  place-items: center;
+  text-align: center;
+  padding: 0 var(--pad);
+}
+
+.loadingTitle {
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.loadingSub {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.7;
+}
+/* ===== PATCH: layout stability (rail/composer overlap) ===== */
+
+/* だいたいのヘッダー高さ（Rail） */
+:root {
+  --railH: 64px;
+}
+
+/* Railが被さっても本文が潜らないようにする */
+.root {
+  min-height: 100vh;
+  padding-top: var(--railH);
+}
+
+/* Railは常に最前面、幅100% */
+.rail {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--railH);
+  z-index: 50;
+}
+
+/* チャット本文の上を確保（念押し） */
+.shell {
+  padding-top: 12px; /* root側で確保してるので軽く */
+}
+
+/* 入力欄は最前面＆下固定 */
+.composer {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 60;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* composerの下に潜らないように本文に余白（JSでもやってるけどCSSでも保険） */
+.streamInner {
+  padding-bottom: calc(var(--composerH, 120px) + var(--vvBottom, 0px) + 28px);
+}

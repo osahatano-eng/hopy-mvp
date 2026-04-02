@@ -1,0 +1,132 @@
+/* /app/contact/page.module.css */
+.page {
+  position: fixed;
+  inset: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+
+  background: #ffffff;
+  color: #0f172a;
+  font-family:
+    "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo",
+    sans-serif;
+}
+
+.inner {
+  width: 100%;
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 96px 24px 88px;
+  box-sizing: border-box;
+  flex: 1 0 auto;
+}
+
+.header {
+  margin-bottom: 40px;
+}
+
+.title {
+  margin: 0;
+  font-size: 32px;
+  line-height: 1.25;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.lead {
+  margin: 16px 0 0;
+  font-size: 16px;
+  line-height: 1.9;
+  color: #526173;
+}
+
+.faqSection {
+  display: grid;
+  gap: 16px;
+}
+
+.sectionTitle {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.4;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.card {
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.question {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.7;
+  font-weight: 600;
+}
+
+.answer {
+  margin: 10px 0 0;
+  font-size: 15px;
+  line-height: 1.9;
+  color: #526173;
+}
+
+.nextSection {
+  margin-top: 40px;
+  padding-top: 24px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.ctaWrap {
+  margin-top: 20px;
+}
+
+.ctaLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: 9999px;
+  border: 1px solid #d0d7de;
+  text-decoration: none;
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.ctaLink:hover {
+  background: #f8fafc;
+}
+
+.ctaLink:focus-visible {
+  outline: 2px solid #0f172a;
+  outline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  .inner {
+    padding: 80px 20px 72px;
+  }
+
+  .title {
+    font-size: 28px;
+  }
+
+  .sectionTitle {
+    font-size: 20px;
+  }
+
+  .card {
+    padding: 0;
+  }
+}

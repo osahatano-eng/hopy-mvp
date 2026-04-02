@@ -1,0 +1,242 @@
+/* /components/site/Home.module.css */
+/* HOPY MASTER — Top page body
+   - 影なし / グラデなし / 線なし
+   - 分離は余白のみ
+   - HOPY 色定義（最新版）に追従
+*/
+
+.page {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+
+  /* defaults = PC dark */
+  --bg: #1a1a1a;
+  --fg: #e6e6e6;
+  --muted: rgba(230, 230, 230, 0.68);
+
+  --hairline: rgba(230, 230, 230, 0.14);
+  --hairlineHover: rgba(230, 230, 230, 0.22);
+  --focusRing: rgba(230, 230, 230, 0.28);
+
+  --panel: rgba(0, 0, 0, 0.34);
+  --panelHover: rgba(0, 0, 0, 0.42);
+
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.main {
+  flex: 1;
+  width: 100%;
+}
+
+/* ✅ 強制的に左右余白を確保するコンテナ */
+.inner {
+  width: 100%;
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 0 var(--pad, var(--gutter));
+}
+
+.hero {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  /* headerH は既存設計を尊重（なければ 64px 想定） */
+  min-height: calc(100dvh - var(--headerH, 64px));
+  padding: 80px 0 56px;
+}
+
+.kicker {
+  margin: 0 0 14px;
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+  opacity: 0.92;
+}
+
+.title {
+  margin: 0 0 14px;
+  font-size: clamp(46px, 8vw, 86px);
+  line-height: 0.98;
+  letter-spacing: -0.03em;
+  font-weight: 620;
+}
+
+.lead {
+  margin: 0 0 26px;
+  font-size: clamp(16px, 1.8vw, 20px);
+  line-height: 1.55;
+  color: color-mix(in srgb, var(--fg) 72%, transparent);
+  max-width: 56ch;
+}
+
+.ctas {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: 0 0 14px;
+}
+
+/* CTA（影なし・グラデなし・変化最小） */
+.primary {
+  height: 44px;
+  padding: 0 18px;
+  border-radius: 10px;
+
+  border: 1px solid var(--hairline);
+  background: var(--panel);
+  color: var(--fg);
+
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+
+  text-decoration: none;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.primary:hover {
+  background: var(--panelHover);
+  border-color: var(--hairlineHover);
+}
+
+.primary:focus-visible {
+  outline: 2px solid var(--focusRing);
+  outline-offset: 2px;
+}
+
+.secondary {
+  height: 44px;
+  padding: 0 18px;
+  border-radius: 10px;
+
+  border: 1px solid var(--hairline);
+  background: transparent;
+  color: color-mix(in srgb, var(--fg) 78%, transparent);
+
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.secondary:hover {
+  background: var(--panel);
+  border-color: var(--hairlineHover);
+  color: var(--fg);
+}
+
+.secondary:focus-visible {
+  outline: 2px solid var(--focusRing);
+  outline-offset: 2px;
+}
+
+/* 固定: .sub（プロジェクト基準を厳守） */
+.sub {
+  margin: 0;
+  font-size: clamp(14px, 1.4vw, 16px);
+  line-height: 1.2;
+  color: var(--muted);
+  max-width: 56ch;
+}
+
+/* below fold */
+.philosophy {
+  padding: 60px 0 64px;
+}
+
+.h2 {
+  margin: 0 0 10px;
+  font-size: clamp(20px, 2.8vw, 34px);
+  line-height: 1.18;
+  letter-spacing: -0.02em;
+  font-weight: 620;
+}
+
+.p {
+  margin: 0 0 18px;
+  max-width: 70ch;
+  color: color-mix(in srgb, var(--fg) 66%, transparent);
+  line-height: 1.7;
+}
+
+/* “ピル”感を出さず、静かなテキスト群として扱う */
+.pillRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.pill {
+  height: auto;
+  padding: 0;
+
+  border: none;
+  background: transparent;
+
+  display: inline-flex;
+  align-items: center;
+
+  font-size: 12px;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--fg) 78%, transparent);
+}
+
+/* ✅ Mobile：light */
+@media (max-width: 640px) {
+  .page {
+    --bg: #dddddd;
+    --fg: #111111;
+    --muted: rgba(17, 17, 17, 0.58);
+
+    --hairline: rgba(0, 0, 0, 0.12);
+    --hairlineHover: rgba(0, 0, 0, 0.18);
+    --focusRing: rgba(0, 0, 0, 0.22);
+
+    --panel: rgba(0, 0, 0, 0.02);
+    --panelHover: rgba(0, 0, 0, 0.03);
+  }
+
+  .hero {
+    min-height: calc(100dvh - var(--headerH, 64px));
+    padding: 64px 0 40px;
+  }
+
+  .lead {
+    margin-bottom: 22px;
+  }
+
+  .ctas {
+    gap: 10px;
+  }
+
+  .primary,
+  .secondary {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* モバイルでは下の哲学セクションを最小化（離脱防止） */
+  .philosophy {
+    padding: 34px 0 44px;
+  }
+
+  .p {
+    display: none;
+  }
+}

@@ -1,0 +1,61 @@
+/* /components/chat/ui/EmptyState.module.css */
+/* =========================
+   EmptyState — HOPY editorial
+   - Header/Footer準拠
+   - 影なし / グラデなし / 枠なし
+   - 分離は余白のみ
+   - 白黒運用
+========================= */
+
+.empty {
+  max-width: 860px;
+  margin: 120px auto 80px;
+  padding: 0 var(--gutter);
+
+  display: grid;
+  gap: 14px;
+
+  text-align: center;
+}
+
+/* メインメッセージ */
+.emptyT {
+  font-size: clamp(28px, 4vw, 40px);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  font-weight: 700;
+
+  color: var(--text, rgba(0, 0, 0, 0.92));
+}
+
+/* サブメッセージ */
+.emptyS {
+  font-size: clamp(15px, 1.8vw, 17px);
+  line-height: 1.7;
+
+  color: var(--muted, rgba(0, 0, 0, 0.55));
+
+  max-width: 52ch;
+  margin: 0 auto;
+}
+
+@media (max-width: 960px) {
+  .empty {
+    max-width: 760px;
+  }
+}
+
+@media (max-width: 640px) {
+  .empty {
+    max-width: 100%;
+    margin: 96px auto 64px;
+  }
+
+  .emptyT {
+    font-size: 28px;
+  }
+
+  .emptyS {
+    font-size: 15px;
+  }
+}

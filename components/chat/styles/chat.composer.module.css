@@ -1,0 +1,351 @@
+/* /components/chat/styles/chat.composer.module.css */
+
+/* composer（基本：mobile用のfixed） */
+.composer {
+  position: fixed;
+  left: 0;
+  right: 0;
+
+  /* ✅ 下端制御の唯一の正は ChatClient.module.css 側に寄せる */
+  bottom: 0;
+
+  padding-bottom: env(safe-area-inset-bottom);
+
+  /* ✅ “面”で分離（線/影なし） */
+  background: var(--composerBg);
+
+  border-top: 0;
+
+  /* ✅ ルール：TopHeader(50)より下、本文より上
+     - SPでは ChatClient.module.css で 55 に上書きされる想定 */
+  z-index: 49;
+
+  transform: none;
+  box-sizing: border-box;
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+/* loading時：入力欄は“静かに”薄く */
+.composer[data-loading="1"] .field {
+  opacity: 0.7;
+}
+
+/* ✅ 再送TopRow */
+.composerTopRow {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  margin: 0 auto;
+  padding: 8px 0 0;
+
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+
+  gap: 10px;
+  box-sizing: border-box;
+}
+
+/* ボタン共通 */
+.memBtn {
+  justify-self: start;
+  font: inherit;
+
+  border: 1px solid var(--hairline);
+  background: var(--panel);
+  color: var(--text);
+
+  border-radius: 12px;
+  padding: 8px 12px;
+  line-height: 1;
+
+  cursor: pointer;
+
+  /* ✅ “押せる”統一 */
+  transition: background 120ms ease, border-color 120ms ease, transform 120ms ease;
+
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.memBtn:hover {
+  background: var(--panelHover);
+  border-color: var(--hairlineHover);
+}
+.memBtn:active {
+  background: var(--tapActive, rgba(0, 0, 0, 0.05));
+  transform: translateY(0.5px);
+}
+.memBtn:focus-visible {
+  outline: 2px solid var(--focusRing);
+  outline-offset: 2px;
+}
+.memBtn:disabled,
+.memBtn[aria-disabled="true"] {
+  opacity: 0.6;
+  cursor: default;
+  transform: none;
+}
+.memBtn:disabled:hover,
+.memBtn:disabled:active,
+.memBtn[aria-disabled="true"]:hover,
+.memBtn[aria-disabled="true"]:active {
+  background: var(--panel);
+  border-color: var(--hairline);
+  transform: none;
+}
+
+.retryBtn {
+  justify-self: end;
+}
+
+/* composer inner */
+.composerInner {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  margin: 0 auto;
+  /*padding: 10px 0 0;*/
+
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  align-items: end;
+  box-sizing: border-box;
+}
+
+.fieldWrap {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.field {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+
+  overflow: hidden;
+  overflow-y: hidden;
+
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+
+  resize: none;
+
+  /* ✅ 少し上品に（角丸の一貫性） */
+  border-radius: 12px;
+
+  border: 1px solid var(--hairline);
+
+  background: var(--fieldBg);
+
+  color: var(--text);
+  caret-color: var(--text);
+
+  min-height: 56px;
+
+  /* ✅ 触った瞬間に“良いUI”と分かる余白 */
+  padding: 14px 56px 14px 12px;
+
+  line-height: 1.55;
+
+  /* ✅ iOS Safari 自動ズーム抑止（最重要） */
+  font-size: 16px;
+
+  outline: none;
+
+  /* ✅ “押せる/入力できる”の反応を上品に */
+  transition: background 120ms ease, border-color 120ms ease;
+  box-sizing: border-box;
+}
+
+/* WebKit scrollbar hide */
+.field::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.field::placeholder {
+  color: var(--muted);
+}
+
+/* ✅ focus は「薄い面 + きれいな枠」 */
+.field:focus {
+  background: var(--fieldBgFocus);
+  border-color: var(--hairlineHover);
+}
+
+/* ✅ 外側の囲みは出さない */
+.field:focus-visible {
+  outline: none;
+}
+
+/* send button inside field — ✅ 下に留める（改行でも動かない） */
+.sendInField {
+  position: absolute;
+  right: 10px;
+
+  /* ✅ 中央追従をやめる */
+  top: auto;
+  transform: none;
+
+  /* ✅ 常に下側に固定（padding-bottomと同じ思想） */
+  bottom: 16px;
+
+  width: 34px;
+  height: 34px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  border: none;
+
+  border-radius: 9999px !important;
+
+  background: var(--sendFill);
+  color: var(--sendGlyph);
+
+  cursor: pointer;
+
+  box-shadow: none;
+
+  /* ✅ “押せる”統一（控えめ） */
+  transition: opacity 120ms ease, transform 120ms ease, background 120ms ease, color 120ms ease;
+
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.sendInField::before {
+  content: "";
+  display: block;
+
+  width: 9px;
+  height: 9px;
+
+  border: solid currentColor;
+  border-width: 0 2px 2px 0;
+
+  transform: translateY(1px) rotate(-135deg);
+}
+
+.sendInField:hover {
+  opacity: 0.92;
+}
+
+.sendInField:active {
+  transform: translateY(1px);
+}
+
+.sendInField:focus-visible {
+  outline: 2px solid var(--focusRing);
+  outline-offset: 2px;
+}
+
+/* ✅ chatGPT仕様：disabled のときは「灰」で、hover/activeもしない */
+/* disabled */
+.sendInField:disabled,
+.sendInField[aria-disabled="true"] {
+  background: var(--sendDisabledFill);
+  color: var(--sendDisabledGlyph);
+  opacity: 1;
+  cursor: not-allowed;
+  transform: none;
+}
+.sendInField:disabled:hover,
+.sendInField:disabled:active,
+.sendInField[aria-disabled="true"]:hover,
+.sendInField[aria-disabled="true"]:active {
+  opacity: 1;
+  transform: none;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* hint row */
+.composerHintRow {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  margin: 0 auto;
+  padding: 0;
+
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-sizing: border-box;
+}
+
+.hintSep {
+  opacity: 0.45;
+  font-size: 10px;
+  line-height: 1;
+  flex: 0 0 auto;
+}
+
+/* 固定: .sub */
+.sub {
+  margin: 0;
+  font-size: clamp(14px, 1.4vw, 16px);
+  line-height: 1.2;
+  color: var(--muted);
+  max-width: 56ch;
+}
+
+/* 極小ヒント */
+.hintTiny {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.2;
+  color: var(--muted);
+  max-width: 56ch;
+
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* =========================================================
+   SP only (<= 640px)
+   - SPでは補助文言を一切表示しない
+========================================================= */
+@media (max-width: 640px) {
+  .composerHintRow,
+  .sub,
+  .hintTiny,
+  .hintSep {
+    display: none;
+  }
+}
+
+/*
+このファイルの正式役割:
+composer 内部の見た目・入力欄・送信ボタン・補助行の表示責務を持ち、ChatClient 側の外枠位置制御を邪魔しないための内側専用 CSS
+
+【今回このファイルで修正したこと】
+composer 自身の bottom を var(--kb, var(--vvBottom, 0px)) から 0 に戻し、下端位置の唯一の正を ChatClient.module.css 側へ寄せました。
+これにより、SPで外側と内側の両方が下端位置を動かしていた二重制御を止め、入力窓の縦揺れを起こしにくくしました。
+それ以外の入力欄サイズ、送信ボタン位置、補助文言の表示ルールは触っていません。
+*/

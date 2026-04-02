@@ -1,0 +1,453 @@
+/* /components/chat/ui/MemoryModal.module.css */
+/* =========================
+   MemoryModal — HOPY minimal (project color definition)
+   - PC: dark (#1a1a1a / #000 / text #e6e6e6)
+   - Mobile: light (#dddddd / #fff / text #111)
+   - no shadow / no gradient
+   - no separators (spacing only)
+========================= */
+
+.memOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+
+  /* =========================
+     HOPY color vars (scoped)
+  ========================= */
+  --paper: #1a1a1a; /* page */
+  --panel: #000000; /* panel base */
+  --panel2: #1a1a1a; /* inner surfaces */
+  --text: #e6e6e6;
+  --muted: rgba(230, 230, 230, 0.68);
+  --hairline: rgba(230, 230, 230, 0.14);
+  --hairlineHover: rgba(230, 230, 230, 0.22);
+  --fieldBg: rgba(0, 0, 0, 0.18);
+  --fieldBgHover: rgba(0, 0, 0, 0.26);
+
+  /* overlay: subtle, no “dramatic” curtain */
+  background: rgba(0, 0, 0, 0.56);
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.memPanel {
+  position: relative;
+  width: min(980px, 100%);
+  max-height: min(82vh, 760px);
+  min-height: 520px;
+
+  background: var(--panel);
+  color: var(--text);
+
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  box-shadow: none;
+
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  outline: none;
+}
+
+/* =========================
+   Header
+========================= */
+
+.memHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+
+  padding: 18px 18px 10px;
+  border-bottom: none; /* separators forbidden */
+}
+
+.memTitle {
+  font-size: 18px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+.memSub {
+  margin-top: 6px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+  max-width: 70ch;
+}
+
+.memHeaderActions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+/* =========================
+   Buttons (monochrome)
+========================= */
+
+.memClose,
+.memGhost,
+.memPrimary,
+.memDanger {
+  font: inherit;
+  border-radius: 10px;
+  padding: 8px 12px;
+  cursor: pointer;
+
+  border: 1px solid var(--hairline);
+  background: transparent;
+  color: var(--text);
+
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.memClose:hover,
+.memGhost:hover,
+.memPrimary:hover,
+.memDanger:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--hairlineHover);
+}
+
+.memClose:disabled,
+.memGhost:disabled,
+.memPrimary:disabled,
+.memDanger:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.memPrimary {
+  font-weight: 600;
+}
+
+.memDanger {
+  /* red forbidden — monochrome */
+  font-weight: 600;
+}
+
+/* =========================
+   Tabs (no pills)
+========================= */
+
+.memTabs {
+  display: flex;
+  gap: 14px;
+  padding: 10px 18px 0;
+  margin: 0;
+}
+
+.memTab {
+  font: inherit;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 6px 0;
+}
+
+.memTabActive {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.memTab:focus-visible {
+  outline: 2px solid var(--hairlineHover);
+  outline-offset: 2px;
+}
+
+.memBadge {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* =========================
+   Policy / Add / Tools
+========================= */
+
+.memPolicy,
+.memAdd,
+.memTools {
+  padding: 12px 18px 0;
+  border: none;
+  background: transparent;
+}
+
+.memPolicyTitle {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
+.memPolicyLine {
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+/* Add block */
+.memAddTop {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.memAddTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.memAddHint {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.memAddField,
+.memEdit,
+.memSearch {
+  width: 100%;
+  font: inherit;
+
+  border: 1px solid var(--hairline);
+  background: var(--fieldBg);
+  color: var(--text);
+
+  border-radius: 10px;
+  padding: 10px 12px;
+  outline: none;
+}
+
+.memAddField::placeholder,
+.memEdit::placeholder,
+.memSearch::placeholder {
+  color: var(--muted);
+}
+
+.memAddField:focus,
+.memEdit:focus,
+.memSearch:focus {
+  border-color: var(--hairlineHover);
+  background: var(--fieldBgHover);
+}
+
+.memAddActions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+
+/* error text */
+.memError,
+.memRowError {
+  margin-top: 10px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+/* =========================
+   List
+========================= */
+
+.memList {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+
+  padding: 14px 18px 18px;
+}
+
+.memLoading,
+.memEmpty {
+  padding: 18px 0;
+  color: var(--muted);
+}
+
+.memItem {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  gap: 14px;
+  padding: 14px 0;
+
+  border: none;
+  background: transparent;
+  border-radius: 0;
+}
+
+.memItem + .memItem {
+  margin-top: 14px;
+}
+
+.memBody {
+  display: block;
+  min-width: 0;
+}
+
+.memText {
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.memMeta {
+  margin-top: 8px;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.memActions {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+/* =========================
+   Toast (minimal)
+========================= */
+
+.toastWrap {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 18px;
+  display: flex;
+  justify-content: center;
+  padding: 0 14px;
+}
+
+.toast {
+  width: min(720px, 100%);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+
+  border: 1px solid var(--hairline);
+  background: var(--panel2);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+
+.toastDanger {
+  /* no red; just slightly stronger frame */
+  border-color: var(--hairlineHover);
+}
+
+.toastMsg {
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--text);
+}
+
+.toastActions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.toastBtn,
+.toastBtnSecondary,
+.toastBtnGhost {
+  font: inherit;
+  cursor: pointer;
+  border-radius: 10px;
+  border: 1px solid var(--hairline);
+  background: transparent;
+  color: var(--text);
+  padding: 6px 10px;
+}
+
+.toastBtn:hover,
+.toastBtnSecondary:hover,
+.toastBtnGhost:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--hairlineHover);
+}
+
+/* =========================
+   Importance (no color layers)
+========================= */
+
+.memImp5,
+.memImp4,
+.memImp3 {
+  border-left: 2px solid var(--hairline);
+  background: transparent;
+}
+
+/* =========================
+   Responsive / Mobile = light
+========================= */
+
+@media (max-width: 760px) {
+  .memOverlay {
+    --paper: #dddddd;
+    --panel: #ffffff;
+    --panel2: #ffffff;
+    --text: #111111;
+    --muted: rgba(0, 0, 0, 0.56);
+    --hairline: rgba(0, 0, 0, 0.12);
+    --hairlineHover: rgba(0, 0, 0, 0.18);
+    --fieldBg: rgba(0, 0, 0, 0.04);
+    --fieldBgHover: rgba(0, 0, 0, 0.06);
+
+    background: rgba(255, 255, 255, 0.78);
+    align-items: center;
+    padding-top: max(72px, calc(env(safe-area-inset-top) + 16px));
+    padding-right: 14px;
+    padding-bottom: max(14px, env(safe-area-inset-bottom));
+    padding-left: 14px;
+  }
+
+  .memPanel {
+    width: 100%;
+    max-height: calc(100dvh - 86px);
+    min-height: 0;
+    border-radius: 12px;
+  }
+
+  .memHeader {
+    padding: 16px 16px 8px;
+  }
+
+  .memTabs,
+  .memPolicy,
+  .memAdd,
+  .memTools {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .memList {
+    padding: 14px 16px 16px;
+  }
+
+  .memItem {
+    grid-template-columns: 1fr;
+  }
+
+  .memActions {
+    justify-content: flex-start;
+  }
+}

@@ -1,0 +1,144 @@
+/* /components/chat/styles/chat.responsive.module.css */
+/* =========================
+   Chat Responsive — HOPY
+   - Mobile: layout only (colors are defined in variables.module.css)
+   - PC: variables.module.css の dark を維持
+========================= */
+
+@media (max-width: 960px) {
+  .streamInner {
+    max-width: 760px;
+  }
+
+  .layout {
+    grid-template-columns: 240px minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .root {
+    --railW: 240px;
+    --railGap: 12px;
+  }
+}
+
+@media (max-width: 640px) {
+  .layout {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  .railCol {
+    display: none;
+  }
+
+  .streamInner {
+    width: 100%;
+    max-width: 100%;
+    /* ✅ 上余白は ChatClient.module.css 側に統一（重複定義でブレないように） */
+    /* padding-top: 12px; */
+  }
+
+  .composerInner {
+    max-width: 100%;
+    padding: 10px var(--gutter) 10px;
+  }
+
+  .composerHintRow {
+    max-width: 100%;
+    padding: 0 var(--gutter) 12px;
+  }
+
+  .field {
+    font-size: 15px;
+    min-height: 58px;
+  }
+
+  .composerTopRow {
+    max-width: 100%;
+    padding: 8px var(--gutter) 0;
+  }
+
+  .memBtn {
+    justify-self: start;
+  }
+
+  .retryBtn {
+    justify-self: start;
+  }
+
+  /* ✅ jump のX基準は ChatClient.module.css 側を唯一の正にする */
+  .jump {
+    left: auto;
+    right: auto;
+    transform: translateX(-50%);
+  }
+
+  /* ✅ モバイルでの固定UI用（色は variables 側で統一） */
+  .root {
+    --composerOffset: 290px;
+    --rightColWidth: 100%;
+
+    /* =========================
+       SP rules (fixed)
+       - 背景は白
+       - gutter: ヘッダー内側(14px)に揃える
+       - 横はみ出し禁止
+    ========================= */
+    --gutter: 14px;
+
+    background: #fff;
+    color: #111;
+
+    /* 予防線（横揺れ・1pxはみ出し対策） */
+    overflow-x: hidden;
+  }
+
+  /* ヘッダーもSPは白に追従させる（header側がvar(--headerBg)参照） */
+  .root {
+    --headerBg: #fff;
+  }
+}
+
+/* ✅ PCでは composer を右カラム内に */
+@media (min-width: 641px) {
+  .composer {
+    position: sticky;
+    left: auto;
+    right: auto;
+    bottom: 0;
+
+    width: var(--rightColWidth);
+    max-width: 860px;
+    margin: 10px auto 0;
+
+    padding-bottom: env(safe-area-inset-bottom);
+
+    transform: none;
+  }
+
+  .composerTopRow,
+  .composerInner,
+  .composerHintRow {
+    max-width: none;
+    margin: 0;
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .composerInner {
+    padding: 10px 0 10px;
+  }
+
+  .composerHintRow {
+    padding: 0 0 12px;
+  }
+
+  .composerTopRow {
+    padding: 8px 0 0;
+  }
+
+  .fieldWrap {
+    max-width: none;
+    margin: 0;
+  }
+}

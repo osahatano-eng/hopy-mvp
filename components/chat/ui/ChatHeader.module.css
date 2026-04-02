@@ -1,0 +1,224 @@
+/* /components/chat/ui/ChatHeader.module.css */
+/* HOPY Chat Header (always-on on mobile, no shadow, no gradient, no bubble) */
+
+.header {
+  /* ✅ PCは sticky（今まで通り） */
+  position: -webkit-sticky;
+  position: sticky;
+  top: 0;
+
+  height: 44px;
+  padding-top: 0;
+
+  background: transparent;
+  color: var(--text);
+
+  z-index: 60;
+  box-shadow: none;
+  width: 100%;
+}
+
+/* ✅ PhaseA: iOS Safari keyboard / viewport 対策
+   - SP判定(max-width)より強い “iOS判定” で固定を強制
+   - 背景は var(--headerBg) に統一（SP白は variables/responsive 側で決まる） */
+@supports (-webkit-touch-callout: none) {
+  .header {
+    position: fixed !important;
+    left: 0;
+    right: 0;
+    top: 0;
+
+    /* ✅ safe-area込み（iPhoneノッチ対応） */
+    height: calc(44px + env(safe-area-inset-top));
+    padding-top: env(safe-area-inset-top);
+
+    background: var(--headerBg);
+    color: var(--text);
+
+    z-index: 70;
+  }
+}
+
+/* =========================================================
+   2ヘッダー構造（見た目）
+========================================================= */
+.inner {
+  height: 44px;
+  display: grid;
+
+  grid-template-columns: var(--railW, 240px) 44px minmax(0, 1fr) 44px;
+
+  align-items: center;
+  padding: 0 var(--gutter);
+
+  position: relative;
+}
+
+.inner::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+
+  left: 0;
+  width: var(--railW, 240px);
+
+  background: transparent;
+  pointer-events: none;
+}
+
+.inner::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+
+  left: var(--railW, 240px);
+  right: 0;
+
+  background: var(--headerBg);
+  pointer-events: none;
+}
+
+.leftGroup {
+  display: contents;
+}
+
+.iconBtn {
+  grid-column: 2;
+
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+
+  width: 44px;
+  height: 44px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+
+  position: relative;
+  z-index: 1;
+}
+
+.iconBtn:focus-visible {
+  outline: 2px solid var(--focusRing);
+  outline-offset: 2px;
+}
+
+.back {
+  opacity: 0.78;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.brand {
+  grid-column: 3;
+  justify-self: start;
+
+  margin-left: 0;
+
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  font-size: 16px;
+
+  color: inherit;
+  text-decoration: none;
+
+  opacity: 0.95;
+
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  position: relative;
+  z-index: 1;
+}
+
+.rightWrap {
+  grid-column: 4;
+  justify-self: end;
+  min-width: 44px;
+
+  position: relative;
+  z-index: 1;
+}
+
+.right {
+  justify-self: end;
+}
+
+.dots {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.78;
+}
+
+.dots span {
+  width: 4px;
+  height: 4px;
+  border-radius: 9999px;
+  background: currentColor;
+  display: block;
+}
+
+/* =========================================================
+   SP only (<= 640px)
+   - ✅ SPは fixed 常駐（入力中も消えない）
+   ※ iOSは上の @supports で“さらに強制”される
+========================================================= */
+@media (max-width: 640px) {
+  .header {
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: 0;
+
+    /* ✅ safe-area込み */
+    height: calc(44px + env(safe-area-inset-top));
+    padding-top: env(safe-area-inset-top);
+
+    color: #111;
+    z-index: 70;
+  }
+
+  .inner {
+    height: 44px;
+
+    padding-left: 5vw;
+    padding-right: 5vw;
+
+    grid-template-columns: 44px minmax(0, 1fr) 44px;
+  }
+
+  .inner::before {
+    display: none;
+  }
+
+  .inner::after {
+    left: 0;
+    right: 0;
+    background: #fff;
+  }
+
+  .iconBtn {
+    grid-column: 1;
+  }
+
+  .brand {
+    grid-column: 2;
+  }
+
+  .rightWrap {
+    grid-column: 3;
+  }
+}

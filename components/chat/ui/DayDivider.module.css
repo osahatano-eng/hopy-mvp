@@ -1,0 +1,62 @@
+/* /components/chat/ui/DayDivider.module.css */
+/* =========================
+   DayDivider (HOPY editorial)
+   - Header/Footer準拠
+   - 区切り線なし（分離は余白のみ）
+   - 影なし / グラデなし / ピルなし
+   - 白黒：labelはmuted（/chat変数に追従）
+========================= */
+
+.wrap {
+  display: grid;
+  grid-template-columns: 1fr;
+  align-items: center;
+
+  /* MessageRow/streamと同じ“幅感”で中央に置く */
+  max-width: 860px;
+
+  /* ✅ Phase3: 呼吸をMessageRowに合わせて静かに */
+  margin: 26px auto 14px;
+
+  /* ✅ テキストだけで成立させる（余計な左右揺れを消す） */
+  padding: 0;
+
+  /* 余白だけで区切る（線は使わない） */
+  gap: 0;
+}
+
+/* ✅ 線は禁止：非表示 */
+.line {
+  display: none;
+}
+
+/* ✅ ピルは禁止：背景/枠/丸を消して“静かなテキスト”だけ */
+.label {
+  justify-self: center;
+
+  /* ✅ Phase3: “補助情報”として一段静かに */
+  font-size: 11px;
+  letter-spacing: 0.08em;
+
+  /* ✅ /chat の muted に完全追従（ダーク/ライト両対応） */
+  color: var(--muted);
+
+  padding: 0;
+  border-radius: 0;
+
+  background: transparent;
+  border: none;
+}
+
+@media (max-width: 960px) {
+  .wrap {
+    max-width: 760px;
+  }
+}
+
+@media (max-width: 640px) {
+  .wrap {
+    max-width: 100%;
+    margin: 22px auto 12px;
+  }
+}

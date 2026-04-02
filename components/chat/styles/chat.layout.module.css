@@ -1,0 +1,77 @@
+/* /components/chat/styles/chat.layout.module.css */
+/* =========================
+   Chat layout — HOPY Constitution (1-column)
+   - PC/SP: same structure (space by gutter + max-width)
+   - Header height: 64px (TopHeader)
+   - No shadow / no border / no dividers
+   - LeftRail is a layer (fixed) handled elsewhere
+========================= */
+
+.shell {
+  position: relative;
+
+  width: 100%;
+  max-width: none;
+  margin: 0;
+
+  /* ✅ TopHeader(64px) 分だけ下げる（潜り防止） */
+  padding-top: calc(env(safe-area-inset-top) + 64px);
+
+  min-height: 100vh;
+
+  background: var(--paper);
+  overflow-x: hidden;
+}
+
+/* 旧2カラムの名残は“無害化”して互換だけ残す */
+.layout {
+  display: block;
+
+  width: 100%;
+  max-width: none;
+
+  /* shell と同一背景（余った領域の事故防止） */
+  background: transparent;
+
+  /* 2カラム由来の min-height 計算を無効化（壊れ防止） */
+  min-height: auto;
+}
+
+.railCol {
+  display: none;
+}
+
+.chatCol {
+  display: block;
+  min-width: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.railOpenBtn {
+  display: none;
+}
+.railOpenChev {
+  display: none;
+}
+
+/* SPも同一構造：ここは“安全策”だけ */
+@media (max-width: 640px) {
+  .shell {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .layout {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: hidden;
+  }
+
+  .chatCol {
+    min-width: 0;
+    max-width: 100%;
+  }
+}

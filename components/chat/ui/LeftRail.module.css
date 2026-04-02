@@ -1,0 +1,756 @@
+/* /components/chat/ui/LeftRail.module.css */
+/* =========================
+   LeftRail — HOPY UI Constitution (Layer)
+   - PC/SP: same structure (no “black rail” split)
+   - No shadow / no gradient / no dividers
+   - Hierarchy by spacing + type only
+   - Safe scrolling (no horizontal overflow)
+========================= */
+
+.rail {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  flex: 0 0 auto;
+
+  /* ✅ fixed aside の top/bottom で高さが決まるため、dvh固定は競合しやすいので撤去 */
+  /* height: 100dvh; */
+  /* min-height: 100dvh; */
+
+  /* ✅ 親が flex の場合、内側スクロールを成立させるための前提 */
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+
+  /* ✅ 思考の空間：紙に同化（境界ゼロ） */
+  background: var(--paper, #ffffff);
+  color: var(--text, #111111);
+
+  /* ✅ スクロールは inner に一本化（ここで殺さない） */
+  overscroll-behavior: contain;
+
+  /* ✅ 横はみ出し封じ */
+  overflow-x: hidden;
+
+  /* ✅ タイポの品（SP含む） */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+
+  /* ✅ 左揃えの基準（アイコン枠） */
+  --railIconW: 16px;
+
+  box-sizing: border-box;
+}
+
+.inner {
+  /* ✅ スクロールコンテナ（TSX inline でも付けているが、CSS側でも確定させる） */
+  flex: 1 1 auto;
+  min-height: 0;
+
+  display: flex;
+  flex-direction: column;
+
+  /* ✅ 左カラム最上部にしっかり大きめの呼吸を作る */
+  padding: 32px 12px 0;
+  gap: 8px;
+
+  /* ✅ “スクロールできない”典型原因：overflow設定の不足/競合をCSSでも潰す */
+  overflow-y: auto;
+  overflow-x: hidden;
+
+  /* ✅ iOS/PWAの慣性スクロール */
+  -webkit-overflow-scrolling: touch;
+
+  /* ✅ スクロール連鎖で「止まったように見える」を減らす */
+  overscroll-behavior: contain;
+
+  /* ✅ ボタン上でのドラッグでも縦スクロールを許可（特にモバイル） */
+  touch-action: pan-y;
+
+  /* ✅ スクロールバー幅ぶんを安定確保 */
+  scrollbar-gutter: stable;
+
+  /* ✅ Firefox */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.38) transparent;
+
+  box-sizing: border-box;
+}
+
+.topRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+
+  padding: 2px 2px 6px;
+  min-width: 0;
+}
+
+/* ✅ 先頭ブランド行がSPで幅を押し広げないようにする */
+.topRow > :first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.brand {
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  font-size: 14px;
+  line-height: 1;
+  opacity: 0.92;
+  user-select: none;
+
+  /* ✅ HOPY○ / ○HOPY でも先頭行が横幅を押さない */
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toggle {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: currentColor;
+
+  width: 40px;
+  height: 40px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+
+  cursor: pointer;
+
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+
+  border-radius: 12px;
+
+  transition: background 120ms ease, transform 120ms ease;
+}
+
+.toggle:hover {
+  background: var(--tapHover, rgba(0, 0, 0, 0.03));
+}
+
+.toggle:active {
+  background: var(--tapActive, rgba(0, 0, 0, 0.05));
+  transform: translateY(0.5px);
+}
+
+.toggle:focus-visible {
+  outline: 2px solid var(--focusRing, rgba(0, 0, 0, 0.22));
+  outline-offset: 2px;
+}
+
+.chev {
+  width: 10px;
+  height: 10px;
+  border: solid currentColor;
+  border-width: 0 2px 2px 0;
+  opacity: 0.75;
+}
+
+.chevLeft {
+  transform: rotate(135deg);
+}
+
+/* blocks */
+.block {
+  display: flex;
+  flex-direction: column;
+
+  /* ✅ セクション単位のまとまりを静かに分離 */
+  gap: 4px;
+
+  padding: 0 2px;
+}
+
+.label {
+  font-size: 14px;
+  font-weight: 760;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: var(--text, #111111);
+  margin-top: 0;
+  line-height: 1.35;
+  opacity: 0.94;
+  min-width: 0;
+}
+
+.recoverLabel {
+  opacity: 0.84;
+}
+
+/* items */
+.item {
+  appearance: none;
+  border: none;
+  background: transparent;
+
+  width: 100%;
+  text-align: left;
+
+  /* ✅ 押しやすさを保ちつつ縦の間延びを抑える */
+  min-height: 36px;
+
+  /* ✅ Threads / Memories / Account の格を揃える */
+  padding: 5px 9px;
+
+  border-radius: 14px;
+
+  color: var(--text, #111111);
+  font: inherit;
+  text-decoration: none;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  /* ✅ 親アイコンとテキストの間を少し詰める */
+  gap: 6px;
+
+  cursor: pointer;
+
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+
+  /* ✅ hover は背景変化だけに限定 */
+  transition: background 120ms ease, opacity 120ms ease;
+}
+
+.item:hover {
+  background: var(--tapHover, rgba(0, 0, 0, 0.018));
+}
+
+.item:active {
+  background: var(--tapActive, rgba(0, 0, 0, 0.038));
+}
+
+.item:focus-visible {
+  outline: 2px solid var(--focusRing, rgba(0, 0, 0, 0.20));
+  outline-offset: 2px;
+}
+
+/* ✅ 左揃えの基準：TSXの左アイコンspanに合わせて固定幅にする */
+.item > span:first-child {
+  flex: 0 0 var(--railIconW);
+  width: var(--railIconW);
+  opacity: 0.44;
+  transition: opacity 120ms ease;
+}
+
+.itemText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  /* ✅ 文章の“締まり” */
+  line-height: 1.25;
+  letter-spacing: 0.01em;
+}
+
+/* ✅ 右側（› / badge）が暴れない */
+.item > span:last-child,
+.badge {
+  flex: 0 0 auto;
+}
+
+.item > span:last-child {
+  opacity: 0.16;
+  transition: opacity 120ms ease;
+}
+
+.item:hover > span:first-child,
+.item:focus-visible > span:first-child,
+.itemActive > span:first-child {
+  opacity: 0.62;
+}
+
+.item:hover > span:last-child,
+.item:focus-visible > span:last-child,
+.itemActive > span:last-child {
+  opacity: 0.34;
+}
+
+.badge {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+
+  /* ✅ ダークでも見えるようトークンへ */
+  color: var(--muted, rgba(0, 0, 0, 0.55));
+
+  padding: 4px 8px;
+  border-radius: 9999px;
+
+  background: var(--tapHover, rgba(0, 0, 0, 0.04));
+}
+
+.itemDisabled {
+  opacity: 0.52;
+  cursor: default;
+  transform: none;
+}
+
+.itemDisabled:hover {
+  background: transparent;
+}
+
+.itemDisabled:active {
+  background: transparent;
+  transform: none;
+}
+
+/* ✅ 追加（軽量化：inline style 排除用） */
+.itemActive {
+  position: relative;
+  font-weight: 400;
+
+  /* ✅ スレッド一覧の選択背景を消し、縦線で静かに示す */
+  background: transparent;
+}
+
+.itemActive::before {
+  content: "";
+  position: absolute;
+  left: -4px;
+  top: 50%;
+  width: 2px;
+  height: 15px;
+  border-radius: 999px;
+  background: var(--text, #111111);
+  opacity: 0.42;
+  transform: translateY(-50%);
+}
+
+.itemActive:hover {
+  background: transparent;
+}
+
+.itemMuted {
+  opacity: 0.48;
+}
+
+/* ✅ 選択中チャット
+   - タイトルを1段目
+   - ○状態を2段目
+   - 三点は右上に静かに添える
+*/
+.activeRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: 8px;
+  row-gap: 3px;
+
+  min-width: 0;
+  min-height: 36px;
+  padding: 5px 9px 6px;
+  border-radius: 14px;
+  background: var(--tapHover, rgba(0, 0, 0, 0.028));
+}
+
+.activeTitleInline {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  /* タイトルは主役、でも騒がせない */
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.4;
+  letter-spacing: 0.008em;
+
+  color: var(--text, #111111);
+}
+
+.activeMenuBtn {
+  width: 28px;
+  height: 28px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+
+  border: 1px solid var(--hairline, rgba(0, 0, 0, 0.08));
+  background: transparent;
+
+  /* 上品：丸は“丸すぎない” */
+  border-radius: 999px;
+
+  color: var(--muted, rgba(0, 0, 0, 0.46));
+
+  padding: 0;
+  cursor: pointer;
+
+  transition: background 120ms ease, transform 120ms ease, color 120ms ease;
+}
+
+.activeMenuBtn:hover {
+  background: var(--tapHover, rgba(0, 0, 0, 0.026));
+  color: var(--text, rgba(0, 0, 0, 0.68));
+}
+
+.activeMenuBtn:active {
+  background: var(--tapActive, rgba(0, 0, 0, 0.05));
+  transform: translateY(0.5px);
+}
+
+.activeMenuBtn:focus-visible {
+  outline: 2px solid var(--focusRing, rgba(0, 0, 0, 0.18));
+  outline-offset: 2px;
+}
+
+.activeActions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.activeTitle {
+  font-size: 13px;
+  opacity: 0.88;
+  padding: 0 12px;
+
+  word-break: break-word;
+  line-height: 1.35;
+
+  /* 連続操作領域の見た目を整える */
+  letter-spacing: 0.01em;
+}
+
+.activeBtnRow {
+  display: flex;
+  gap: 8px;
+  padding: 0 12px;
+}
+
+.activeBtn {
+  flex: 1 1 auto;
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+.activeDelete {
+  opacity: 0.95;
+}
+
+/* state wrap */
+.stateWrap {
+  /* StateBadge の “外側の器” だけ整える（中身はStateBadge側で） */
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  flex: 0 0 auto;
+
+  min-width: 0;
+  padding: 0;
+  margin-top: 2px;
+}
+
+/* expand placeholder */
+.expand {
+  height: 16px;
+  border-radius: 10px;
+  background: var(--tapHover, rgba(0, 0, 0, 0.03));
+  opacity: 0.6;
+}
+
+/* guest rail */
+.leftRail {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--paper, #ffffff);
+  color: var(--text, #111111);
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+.leftRailInner {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 32px 14px 12px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+
+  /* ✅ Firefox */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.38) transparent;
+}
+
+.brandBlock {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  align-items: center;
+  column-gap: 12px;
+  padding: 4px 2px 2px;
+}
+
+.brandMark {
+  width: 40px;
+  height: 40px;
+  border-radius: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--tapHover, rgba(0, 0, 0, 0.04));
+  color: var(--text, #111111);
+  font-size: 16px;
+  font-weight: 760;
+  letter-spacing: 0.04em;
+  user-select: none;
+}
+
+.brandTexts {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.brandTitle {
+  font-size: 17px;
+  font-weight: 760;
+  line-height: 1.15;
+  letter-spacing: 0.02em;
+  color: var(--text, #111111);
+}
+
+.brandSubtle {
+  font-size: 12px;
+  line-height: 1.35;
+  letter-spacing: 0.08em;
+  color: var(--muted, rgba(0, 0, 0, 0.55));
+}
+
+.menu {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.menuSection {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px 11px;
+  border-radius: 16px;
+  background: var(--tapHover, rgba(0, 0, 0, 0.025));
+}
+
+.menuLabel {
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: 0.08em;
+  color: var(--text, #111111);
+}
+
+.empty {
+  font-size: 13px;
+  line-height: 1.9;
+  letter-spacing: 0.01em;
+  color: var(--muted, rgba(0, 0, 0, 0.72));
+  word-break: break-word;
+}
+
+/* ✅ 認証済み左カラムの最下部アカウント導線
+   - 一番下へ接続
+   - スクロール中も常に視界へ残す
+   - 状態ロジックには触れず、見た目だけ固定
+*/
+.inner > .block:last-of-type {
+  margin-top: auto;
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  padding-top: 10px;
+  padding-bottom: 0;
+  background: var(--paper, #ffffff);
+}
+
+.inner > .block:last-of-type::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  top: 0;
+  height: 12px;
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0),
+    var(--paper, #ffffff)
+  );
+  pointer-events: none;
+}
+
+@media (min-width: 641px) {
+  .inner {
+    padding-top: 36px;
+  }
+
+  .leftRailInner {
+    padding-top: 36px;
+  }
+}
+
+@media (max-width: 640px) {
+  .inner {
+    padding-top: 36px;
+  }
+
+  .leftRailInner {
+    padding-top: 36px;
+  }
+}
+
+@media (max-width: 768px) {
+  .inner {
+    padding-top: 36px;
+  }
+
+  .leftRailInner {
+    gap: 8px;
+    padding-top: 36px;
+    padding-right: 12px;
+    padding-bottom: 12px;
+    padding-left: 12px;
+  }
+
+  .brandBlock {
+    grid-template-columns: 36px minmax(0, 1fr);
+    column-gap: 11px;
+  }
+
+  .brandMark {
+    width: 36px;
+    height: 36px;
+    border-radius: 13px;
+    font-size: 15px;
+  }
+
+  .brandTitle {
+    font-size: 16px;
+  }
+
+  .menu {
+    gap: 8px;
+  }
+
+  .menuSection {
+    gap: 7px;
+    padding: 9px 12px 10px;
+    border-radius: 14px;
+  }
+
+  .empty {
+    font-size: 12.5px;
+    line-height: 1.85;
+  }
+
+  .inner > .block:last-of-type {
+    padding-bottom: 0;
+  }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .item:hover {
+    background: transparent;
+  }
+
+  .item:active {
+    background: transparent;
+  }
+
+  .itemActive:hover {
+    background: transparent;
+  }
+
+  .toggle:hover {
+    background: transparent;
+  }
+
+  .toggle:active {
+    background: transparent;
+    transform: none;
+  }
+
+  .activeMenuBtn:hover {
+    background: transparent;
+    color: var(--muted, rgba(0, 0, 0, 0.46));
+  }
+
+  .activeMenuBtn:active {
+    background: transparent;
+    transform: none;
+  }
+}
+
+/* ✅ PC scrollbar */
+@media (min-width: 769px) {
+  .inner::-webkit-scrollbar,
+  .leftRailInner::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  .inner::-webkit-scrollbar-track,
+  .leftRailInner::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .inner::-webkit-scrollbar-thumb,
+  .leftRailInner::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.38);
+    border-radius: 999px;
+  }
+
+  .inner::-webkit-scrollbar-thumb:hover,
+  .leftRailInner::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.48);
+  }
+}
+
+/* sr-only */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/*
+このファイルの正式役割
+LeftRail の見た目だけを担当し、左カラムを1つの静かな面として整えるCSS。
+状態の唯一の正は作らず、表示された Current Chat / Threads / Memories / アカウント情報を視覚的に整えるだけに限定する。
+*/
+
+/*
+【今回このファイルで修正したこと】
+1. .inner の padding-bottom を 0 に変更し、最下部に残っていた親コンテナ由来の隙間を消しました。
+2. 最下部固定 block の padding-bottom 0 はそのまま維持しました。
+3. 状態の唯一の正に関わるロジックや表示判定には触れていません。
+*/

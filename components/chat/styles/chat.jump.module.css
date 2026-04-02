@@ -1,0 +1,59 @@
+/* /components/chat/styles/chat.jump.module.css */
+
+/* jump — 中心基準は ChatClient.module.css の --jumpCenterX を唯一の正にする */
+.jump {
+  position: fixed;
+
+  /* ✅ 既定の中心は ChatClient.module.css 側の変数を使う */
+  left: var(--jumpCenterX, 50vw);
+  right: auto;
+  transform: translateX(-50%);
+
+  bottom: calc(
+    var(--composerOffset, 220px) +
+    env(safe-area-inset-bottom) +
+    30px
+  );
+
+  width: 44px;
+  height: 44px;
+
+  border-radius: 9999px;
+
+  border: 1px solid var(--hairline);
+  background: var(--panel);
+  color: var(--text);
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+
+  z-index: 40;
+
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.jump:hover {
+  background: var(--panelHover);
+  border-color: var(--hairlineHover);
+}
+
+.jump:disabled,
+.jump[aria-disabled="true"] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.jump:focus-visible {
+  outline: 2px solid var(--focusRing);
+  outline-offset: 2px;
+}
+
+.jumpIcon {
+  display: block;
+  opacity: 0.95;
+}

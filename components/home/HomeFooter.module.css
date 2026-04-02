@@ -1,0 +1,127 @@
+/* /components/home/HomeFooter.module.css */
+.footer {
+  width: 100%;
+  background: #ffffff;
+  border-top: 1px solid rgba(15, 23, 42, 0.08);
+  font-family:
+    "Hiragino Sans",
+    "Hiragino Kaku Gothic ProN",
+    "Yu Gothic",
+    "Meiryo",
+    sans-serif;
+}
+
+.inner {
+  width: 100%;
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 32px 24px 36px;
+  box-sizing: border-box;
+}
+
+.topRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  font-size: 12px;
+  line-height: 1;
+  color: #0f172a;
+  flex: 0 0 auto;
+}
+
+.brandText {
+  font-size: 14px;
+  line-height: 1.2;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: #0f172a;
+  white-space: nowrap;
+}
+
+.links {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px 20px;
+}
+
+.link {
+  font-size: 14px;
+  line-height: 1.5;
+  color: #526173;
+  text-decoration: none;
+  transition: color 0.16s ease, text-decoration-color 0.16s ease;
+}
+
+.link:hover {
+  color: #0f172a;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.bottomRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 18px;
+}
+
+.copy {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #7a8794;
+}
+
+.trailing {
+  min-height: 18px;
+}
+
+@media (max-width: 767px) {
+  .inner {
+    padding: 28px 20px 32px;
+  }
+
+  .topRow {
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+    text-align: center;
+  }
+
+  .links {
+    justify-content: center;
+    gap: 10px 18px;
+  }
+
+  .bottomRow {
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 16px;
+    text-align: center;
+  }
+
+  .trailing {
+    min-height: 0;
+  }
+}

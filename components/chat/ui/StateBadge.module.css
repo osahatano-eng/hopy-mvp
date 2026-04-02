@@ -1,0 +1,180 @@
+/* /components/chat/ui/StateBadge.module.css */
+/* =========================
+   HOPY State Badge
+   - "こころを安定させる色"
+   - no "?" fallback
+   - HOPY MASTER: 影なし / グラデなし / 区切り線は増やさない（必要最小のborderのみ）
+   - 角丸：控えめ（バブル禁止）
+========================= */
+
+.badge {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+
+  /* ✅ “○ + ラベル” を一体として見せる */
+  gap: 8px;
+
+  padding: 7px 11px;
+
+  /* ✅ HOPY MASTER: バブル感を消す（丸すぎ禁止） */
+  border-radius: 0;
+
+  line-height: 1.1;
+
+  /* ✅ Phase3: レール内でも幅が親に追従するように（省略の安定） */
+  width: 100%;
+  max-width: 100%;
+
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+
+  cursor: help;
+  outline: none;
+  user-select: none;
+
+  /* ✅ 背景は使わない（ドットが唯一の色） */
+  background: transparent;
+
+  /* ✅ 必要最小の境界（背景が無いので“押せる要素”の輪郭だけ残す） */
+  border: 1px solid var(--hairline, rgba(216, 222, 230, 0.12));
+
+  /* Windows等での"?"化対策（フォントフォールバックを強化） */
+  font-family: var(--font-geist-sans), system-ui, -apple-system, "Segoe UI", "Noto Sans JP",
+    "Hiragino Kaku Gothic ProN", Meiryo, sans-serif;
+}
+
+.badge:focus-visible {
+  outline: 2px solid var(--focusRing, rgba(216, 222, 230, 0.22));
+  outline-offset: 2px;
+}
+
+/* ✅ compact（選択中チャット横など“補助情報”用）
+   - 小さく・静かに・一行で収める
+   - “高さ”と“文字圧”を落として、タイトルを主役にする
+*/
+.compact {
+  padding: 2px 7px;
+  gap: 5px;
+
+  width: max-content;
+  max-width: 100%;
+  min-width: 0;
+
+  line-height: 1;
+  cursor: help;
+}
+
+/* ラベル */
+.label {
+  font-size: 13px;
+  font-weight: 780;
+  letter-spacing: 0.01em;
+
+  /* ✅ ダーク/ライト両対応：全体トークンへ */
+  color: var(--text, rgba(216, 222, 230, 0.94));
+
+  /* ✅ 省略の安定（inline-flex内で効かないケース対策） */
+  min-width: 0;
+
+  /* ✅ 省略を確実に効かせる（横並びで崩れない） */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* compactのラベルは一段落とす（主役を邪魔しない） */
+.compact .label {
+  font-size: 11px;
+  font-weight: 720;
+  letter-spacing: 0.02em;
+}
+
+/* ✅ 背景は全撤去：状態は「ドット色」で表す（StateBadge.tsx側） */
+.pending {
+  background: transparent;
+  border-color: var(--hairline, rgba(216, 222, 230, 0.12));
+  opacity: 0.88;
+}
+
+/* ✅ 5状態対応：borderは“押せる要素”の輪郭として最小限だけ変える */
+.phase0 {
+  background: transparent;
+  border-color: var(--hairline, rgba(216, 222, 230, 0.12));
+}
+
+.phase1 {
+  background: transparent;
+  border-color: var(--hairline, rgba(216, 222, 230, 0.15));
+}
+
+.phase2 {
+  background: transparent;
+  border-color: var(--hairline, rgba(216, 222, 230, 0.18));
+}
+
+.phase3 {
+  background: transparent;
+  border-color: var(--hairline, rgba(216, 222, 230, 0.21));
+}
+
+.phase4 {
+  background: transparent;
+  border-color: var(--hairline, rgba(216, 222, 230, 0.24));
+}
+
+/* tooltip */
+.tip {
+  position: absolute;
+
+  /* ✅ Phase3: レール内で右端固定だと窮屈になりがちなので左寄せで安定 */
+  left: 0;
+  right: auto;
+
+  bottom: calc(100% + 10px);
+
+  /* 親幅に追従しつつ、広い画面では上限を守る */
+  width: max-content;
+  max-width: min(560px, 88vw);
+
+  padding: 10px 12px;
+
+  /* ✅ HOPY MASTER: 角丸は控えめ（丸すぎ禁止） */
+  border-radius: 6px;
+
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.45;
+  white-space: normal;
+
+  background: rgba(15, 23, 42, 0.92);
+  color: rgba(216, 222, 230, 0.94); /* #D8DEE6 */
+  border: 1px solid rgba(255, 255, 255, 0.14);
+
+  /* ✅ HOPY MASTER: 影禁止 → 完全撤去 */
+  box-shadow: none;
+
+  z-index: 50;
+}
+
+/* compact時はtooltipの横幅上限を少し控える（横並びUIでの圧迫を防ぐ） */
+.compact .tip {
+  max-width: min(480px, 88vw);
+}
+
+.tipTitle {
+  font-weight: 850;
+  margin-bottom: 6px;
+}
+
+.tipGrid {
+  display: grid;
+  gap: 4px;
+}
+
+.tipLine {
+  opacity: 0.92;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}

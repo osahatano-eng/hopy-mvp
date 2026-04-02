@@ -1,0 +1,234 @@
+/* /components/chat/styles/chat.variables.module.css */
+/* =========================
+   Chat Variables — HOPY
+   - PC: dark (black-ish)
+   - SP: #FFFFFF 統一
+   - no bubble / no shadow / no gradient
+   Rule:
+   - SPは「ヘッダー/背景/レール/入力」を同一白トーンに統一（溶け込ませる）
+========================= */
+
+.root {
+  /* ✅ variables層は “変数と見た目” に責務を限定
+     - 実スクロールは ChatClient.module.css の .streamWrap に一本化
+     - ここで overflow-y:auto を持つと二重スクロールの火種になる */
+  flex: 1;
+  min-height: 0;
+  overflow-y: visible;
+
+  width: 100%;
+  padding-top: 0;
+
+  /* 1px露出 / 横はみ出し対策 */
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
+
+  /* ✅ 縦スクロールの伝播（背景へ連鎖）を止める */
+  overscroll-behavior-y: none;
+
+  /* ✅ ChatGPT風：細く控えめなスクロールバー（このrootだけ）
+     ※ rootがスクロールしない設計でも害はない（見た目のみ） */
+  scrollbar-width: thin; /* Firefox */
+  scrollbar-color: rgba(255, 255, 255, 0.22) transparent; /* Firefox */
+
+  /* =========================
+     Default = PC (dark)
+  ========================= */
+  --paper: #1a1a1a;
+  --text: #e6e6e6;
+  --muted: rgba(230, 230, 230, 0.68);
+
+  /* Header / LeftRail / overlay panel の地（PCは黒） */
+  --railBg: #000000;
+
+  /* ✅ “溶け込み”用：ヘッダー/ページ/チャットの基調を同一トークンで扱う */
+  --appBg: var(--paper);
+  --headerBg: var(--appBg);
+  --chatBg: var(--appBg);
+
+  /* rail width/gap */
+  --railW: 260px;
+  --railGap: 14px;
+
+  /* right column */
+  --rightColWidth: 70%;
+
+  /* focus / hairline（線は最小運用。focusは必要） */
+  --hairline: rgba(230, 230, 230, 0.14);
+  --hairlineHover: rgba(230, 230, 230, 0.22);
+  --focusRing: rgba(230, 230, 230, 0.28);
+
+  /* ✅ “押せる”共通土台（上品・控えめ） */
+  --tapHover: rgba(255, 255, 255, 0.06);
+  --tapActive: rgba(255, 255, 255, 0.09);
+
+  /* =========================
+     HOPY State Color Tokens
+     意味固定:
+     Noise = 未整理 / 保留 / 観察
+     Explore = 探索 / 拡張 / 試行
+     Organize = 整理 / 構造化 / 平衡
+     Converge = 収束 / 統合 / 要点化
+     Decide = 決断 / 選択 / 実行
+     - 現状: dot（点）だけ利用想定
+     - 将来: text/border/bg/soft-bg を利用する可能性があるため定義を保持
+  ========================= */
+
+  /* Noise */
+  --state-noise-text: #334155;
+  --state-noise-border: #94a3b8;
+  --state-noise-bg: #f1f5f9;
+  --state-noise-soft-bg: #f8fafc;
+  --state-noise-dot: #64748b;
+
+  /* Explore */
+  --state-explore-text: #1d4ed8;
+  --state-explore-border: #93c5fd;
+  --state-explore-bg: #eff6ff;
+  --state-explore-soft-bg: #f8fbff;
+  --state-explore-dot: #3b82f6;
+
+  /* Organize */
+  --state-organize-text: #0f766e;
+  --state-organize-border: #99f6e4;
+  --state-organize-bg: #f0fdfa;
+  --state-organize-soft-bg: #f7fffd;
+  --state-organize-dot: #14b8a6;
+
+  /* Converge */
+  --state-converge-text: #7c3aed;
+  --state-converge-border: #c4b5fd;
+  --state-converge-bg: #f5f3ff;
+  --state-converge-soft-bg: #faf7ff;
+  --state-converge-dot: #8b5cf6;
+
+  /* Decide */
+  --state-decide-text: #b45309;
+  --state-decide-border: #fcd34d;
+  --state-decide-bg: #fffbeb;
+  --state-decide-soft-bg: #fffdf5;
+  --state-decide-dot: #f59e0b;
+
+  /* ✅ 表示側共通トークン
+     ChatStream.tsx / stateBadge.ts から参照する phase色をここで一本化 */
+  --hopy-state-phase1: var(--state-noise-dot);
+  --hopy-state-phase2: var(--state-explore-dot);
+  --hopy-state-phase3: var(--state-organize-dot);
+  --hopy-state-phase4: var(--state-converge-dot);
+  --hopy-state-phase5: var(--state-decide-dot);
+
+  /* surfaces */
+  --panel: rgba(0, 0, 0, 0.34);
+  --panelHover: rgba(0, 0, 0, 0.42);
+
+  /* input field (opaque) */
+  --fieldBg: #0f0f0f;
+  --fieldBgFocus: #141414;
+
+  /* borders not used */
+  --fieldBorder: transparent;
+  --fieldBorderFocus: transparent;
+
+  /* composer base */
+  --composerBg: var(--paper);
+
+  /* send button */
+  --sendFill: var(--text);
+  --sendGlyph: var(--paper);
+
+  /* disabled(send) — chatGPT仕様（押せない時は灰） */
+  --sendDisabledFill: rgba(230, 230, 230, 0.28);
+  --sendDisabledGlyph: rgba(230, 230, 230, 0.55);
+
+  background: var(--chatBg);
+  color: var(--text);
+
+  --composerOffset: 220px;
+}
+
+/* ✅ WebKit（Chrome/Safari）用：ChatGPT風スクロールバー */
+.root::-webkit-scrollbar {
+  width: 10px;
+}
+.root::-webkit-scrollbar-track {
+  background: transparent;
+}
+.root::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+.root::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.28);
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+/* =========================
+   SP override (<=640px = white)
+========================= */
+@media (max-width: 640px) {
+  .root {
+    /* ✅ SPは #FFFFFF で固定 */
+    --paper: #ffffff;
+
+    --text: #111111;
+    --muted: rgba(0, 0, 0, 0.6);
+
+    --railBg: #ffffff;
+
+    --appBg: #ffffff;
+    --headerBg: #ffffff;
+    --chatBg: #ffffff;
+
+    --composerBg: #ffffff;
+
+    --fieldBg: #ffffff;
+    --fieldBgFocus: #ffffff;
+
+    --hairline: rgba(0, 0, 0, 0.08);
+    --hairlineHover: rgba(0, 0, 0, 0.14);
+    --focusRing: rgba(0, 0, 0, 0.18);
+
+    /* ✅ “押せる”共通土台（SPは黒系） */
+    --tapHover: rgba(0, 0, 0, 0.03);
+    --tapActive: rgba(0, 0, 0, 0.05);
+
+    --panel: rgba(0, 0, 0, 0.04);
+    --panelHover: rgba(0, 0, 0, 0.08);
+
+    --sendFill: #111111;
+    --sendGlyph: #ffffff;
+
+    --sendDisabledFill: rgba(0, 0, 0, 0.2);
+    --sendDisabledGlyph: rgba(0, 0, 0, 0.4);
+
+    background: var(--chatBg);
+    color: var(--text);
+
+    /* ✅ SPのスクロールバーは“ほぼ見えない”寄せ */
+    scrollbar-color: rgba(0, 0, 0, 0.18) transparent;
+
+    /* =====================================================
+       ✅ iOS Safari/PWA 対策:
+       - 内側スクロール(overflow-y:auto) + sticky は
+         キーボード表示時にヘッダーが消える/飛ぶ原因になる
+       - SPは body スクロールに戻す
+    ===================================================== */
+    /*overflow-y: visible;*/
+    /*min-height: auto;*/
+    /*overscroll-behavior-y: auto;*/
+  }
+
+  .root::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.16);
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+  .root::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.26);
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+}

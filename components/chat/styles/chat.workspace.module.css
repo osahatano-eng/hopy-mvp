@@ -1,0 +1,229 @@
+/* /components/chat/styles/chat.workspace.module.css */
+/* Workspace only
+   - shell
+   - streamWrap / streamInner / streamArea
+   - workspace hero placement
+   - recover / stuck helper text
+   まだ composer / rail / legacy layout は持たせない
+*/
+
+/* ===== workspace shell ===== */
+.shell {
+  width: 100%;
+  max-width: 100%;
+  margin: 0 auto;
+
+  padding-left: var(--gutter, clamp(12px, 4vw, 16px));
+  padding-right: var(--gutter, clamp(12px, 4vw, 16px));
+
+  background: transparent;
+
+  min-width: 0;
+
+  flex: 1;
+  min-height: 0;
+
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+@media (min-width: 1024px) {
+  .shell {
+    width: 100%;
+    max-width: 100%;
+    margin: 0 auto;
+    padding-left: 0;
+    padding-right: 0;
+  }
+}
+
+/* ===== workspace hero ===== */
+/* ワークスペース内ヒーローは中央寄せせず、安全に上から開始 */
+.shell .hero {
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding-bottom: calc(var(--composerOffset, 0px) + env(safe-area-inset-bottom) + 18px);
+  box-sizing: border-box;
+}
+
+.shell .heroInner {
+  width: 100%;
+  max-width: min(100%, 760px);
+  margin: 0 auto;
+  padding-top: clamp(40px, 8vh, 88px);
+  box-sizing: border-box;
+}
+
+.shell .heroTitle {
+  scroll-margin-top: calc(var(--pinTop) + 16px);
+}
+
+/* ===== stream ===== */
+.streamWrap {
+  composes: streamWrap from "./chat.stream.module.css";
+
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+
+  flex: 1;
+  min-height: 0;
+
+  overflow-y: auto;
+  overflow-x: hidden;
+
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+
+  /* 実スクロール責務のみ持つ。先頭の実見え位置は inner 側で固定する */
+  padding-top: 0;
+  padding-bottom: calc(var(--composerOffset, 0px) + var(--kb, 0px) + env(safe-area-inset-bottom) + 18px);
+
+  scroll-padding-top: 54px;
+  scroll-padding-bottom: calc(var(--composerOffset, 0px) + var(--kb, 0px) + env(safe-area-inset-bottom) + 18px);
+
+  scrollbar-width: thin;
+  scrollbar-color: #000 transparent;
+  scrollbar-gutter: stable both-edges;
+
+  box-sizing: border-box;
+}
+
+.streamWrap::-webkit-scrollbar {
+  width: 8px;
+}
+
+.streamWrap::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.streamWrap::-webkit-scrollbar-thumb {
+  background: #000;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.streamWrap::-webkit-scrollbar-thumb:hover {
+  background: #000;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+@media (min-width: 1024px) {
+  .streamWrap {
+    width: 100%;
+    max-width: 100%;
+    margin-left: 0;
+    margin-right: 0;
+    padding-right: 0;
+  }
+}
+
+.streamInner {
+  composes: streamInner from "./chat.stream.module.css";
+  composes: streamInner from "./chat.responsive.module.css";
+
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+
+  /* ここで先頭の実開始位置を固定する */
+  padding-top: 54px;
+  padding-left: 0;
+  padding-right: 0;
+
+  scroll-margin-top: 54px;
+
+  overflow: visible;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+
+  box-sizing: border-box;
+}
+
+@media (min-width: 1024px) {
+  .streamInner {
+    width: 100%;
+    max-width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+    padding-top: 54px;
+    padding-left: 0;
+    padding-right: 0;
+  }
+}
+
+/* workspace内の未選択案内専用領域 */
+.streamArea {
+  width: 100%;
+  max-width: 100%;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding-top: 54px;
+  padding-left: clamp(8px, 2vw, 12px);
+  padding-right: clamp(8px, 2vw, 12px);
+  padding-bottom: calc(var(--composerOffset, 0px) + env(safe-area-inset-bottom) + 18px);
+
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+@media (min-width: 1024px) {
+  .streamArea {
+    padding-top: 54px;
+    padding-right: calc(clamp(8px, 2vw, 12px) + var(--pcRailScrollbarGap));
+  }
+}
+
+/* SPのときだけ上に少しだけ余白 */
+@media (max-width: 640px) {
+  .streamWrap {
+    padding-top: 0;
+    padding-bottom: calc(var(--composerOffset, 0px) + var(--kb, 0px) + env(safe-area-inset-bottom) + 18px);
+    scroll-padding-top: 54px;
+    scroll-padding-bottom: calc(var(--composerOffset, 0px) + var(--kb, 0px) + env(safe-area-inset-bottom) + 18px);
+  }
+
+  .streamInner {
+    padding-top: 54px;
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .shell .heroInner {
+    padding-top: calc(var(--pinTop) + 18px);
+  }
+
+  .shell .heroTitle {
+    line-height: 1.04;
+    padding-top: 0.08em;
+  }
+
+  .streamArea {
+    padding-top: 54px;
+    padding-left: 2px;
+    padding-right: 2px;
+    padding-bottom: calc(var(--composerOffset, 0px) + env(safe-area-inset-bottom) + 18px);
+  }
+}
+
+/* ===== recover / stuck helper ===== */
+.recoverTitle { margin-bottom: 10px; }
+.recoverSubHint { margin-bottom: 12px; opacity: 0.75; }
+.recoverReloadBtn { margin-bottom: 10px; }
+.recoverReason { margin-top: 10px; opacity: 0.7; }
+
+.stuckTitle { margin-bottom: 10px; }
+.stuckReloadBtn { margin-bottom: 10px; }

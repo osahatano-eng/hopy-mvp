@@ -1,0 +1,56 @@
+/* /components/chat/ui/LangToggle.module.css */
+/* LangToggle — HOPY MASTER aligned
+   - 白黒運用
+   - ピル禁止
+   - 区切り線禁止
+   - 角丸なし
+   - 主張しない
+*/
+
+.wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  overflow: visible;
+}
+
+/* language button */
+.btn {
+  appearance: none;
+  border: none;
+  background: transparent;
+
+  color: var(--muted, rgba(0, 0, 0, 0.55));
+  padding: 4px 6px;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+
+  cursor: pointer;
+
+  transition: color 120ms ease, background 120ms ease;
+}
+
+.btn:hover {
+  background: rgba(0, 0, 0, 0.03);
+  color: var(--text, rgba(0, 0, 0, 0.92));
+}
+
+.btn:focus-visible {
+  outline: 2px solid rgba(0, 0, 0, 0.22);
+  outline-offset: 2px;
+}
+
+/* active state */
+.on {
+  color: var(--text, rgba(0, 0, 0, 0.92));
+  font-weight: 600;
+}
+
+/* separatorは禁止：余白で分離 */
+.sep {
+  display: none;
+}

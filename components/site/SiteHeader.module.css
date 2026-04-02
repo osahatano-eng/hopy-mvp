@@ -1,0 +1,185 @@
+/* /components/site/SiteHeader.module.css */
+/* =========================
+   SiteHeader — HOPY MASTER aligned (Ultra Clean)
+   - 背景：完全白
+   - 影：なし
+   - 区切り線：なし（分離は余白のみ）
+   - 角丸：なし
+   - スクロールしても動かない（見た目の変化なし）
+========================= */
+
+.wrap {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+
+  background: #ffffff;
+}
+
+/* ✅ ヘアラインは禁止：表示しない */
+.hairline {
+  display: none;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+
+  padding: 12px 0;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+.word {
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-size: 15px;
+  color: var(--text, rgba(0, 0, 0, 0.88));
+}
+
+/* 右側 */
+.right {
+  display: flex;
+  align-items: center;
+  position: relative; /* dropdown基準 */
+}
+
+/* =========================
+   Menu Button（主張しすぎないが分かる）
+========================= */
+
+.menuBtn {
+  appearance: none;
+  border: none;
+  background: transparent;
+
+  color: var(--muted, rgba(0, 0, 0, 0.52));
+
+  font-size: 18px;
+  padding: 6px 8px;
+
+  cursor: pointer;
+
+  transition: color 120ms ease, background 120ms ease;
+}
+
+.menuBtn:hover {
+  background: rgba(0, 0, 0, 0.03);
+  color: var(--text, rgba(0, 0, 0, 0.88));
+}
+
+.menuBtn:focus-visible {
+  outline: 2px solid rgba(0, 0, 0, 0.22);
+  outline-offset: 2px;
+}
+
+.burger {
+  font-size: 18px;
+}
+
+.kebab {
+  font-size: 20px;
+  letter-spacing: 2px;
+}
+
+/* =========================
+   Dropdown Menu（白・線なし・影なし）
+========================= */
+
+.menu {
+  position: absolute;
+  right: 0;
+  top: 100%;
+
+  margin-top: 8px;
+  min-width: 200px;
+
+  background: rgba(255, 255, 255, 0.98);
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+
+  padding: 10px 0;
+
+  animation: hopyFadeIn 120ms ease-out;
+}
+
+@keyframes hopyFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ✅ Dividerは禁止：余白で分離 */
+.divider {
+  display: none;
+}
+
+.section {
+  display: none;
+}
+
+/* Menu item */
+.item {
+  display: block;
+  width: 100%;
+
+  padding: 10px 16px;
+  font-size: 14px;
+  text-decoration: none;
+
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  text-align: left;
+
+  color: var(--text, rgba(0, 0, 0, 0.88));
+  cursor: pointer;
+
+  transition: background 120ms ease;
+}
+
+.item:hover {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.item:focus-visible {
+  outline: 2px solid rgba(0, 0, 0, 0.22);
+  outline-offset: -2px;
+}
+
+/* Button variation */
+.itemBtn {
+  font: inherit;
+}
+
+/* Danger (Logout) — 赤は禁止。白黒で静かに“重さ” */
+.danger {
+  color: var(--text, rgba(0, 0, 0, 0.88));
+  font-weight: 600;
+}
+
+/* =========================
+   Language styles (将来用 / appでは未使用)
+========================= */
+
+.menuLang {
+  display: none;
+}
+
+.menuSelect {
+  display: none;
+}
+
+.menuChevron {
+  display: none;
+}

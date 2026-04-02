@@ -1,0 +1,52 @@
+/* /app/chat/chat.layout.module.css */
+
+.chatTheme {
+  --paper: #0e0e10;
+  --text: rgba(255, 255, 255, 0.92);
+  --muted: rgba(255, 255, 255, 0.55);
+  --panel: rgba(255, 255, 255, 0.06);
+  --panelHover: rgba(255, 255, 255, 0.08);
+  --hairline: rgba(255, 255, 255, 0.08);
+  --hairlineHover: rgba(255, 255, 255, 0.16);
+
+  background: var(--paper);
+
+  /* ✅ /chat は viewport をこのラッパーに固定して運用する */
+  position: fixed;
+  inset: 0;
+
+  display: flex;
+  flex-direction: column;
+
+  /* ✅ このコンテナ自体はスクロールしない */
+  overflow: hidden;
+
+  /* ✅ バウンス/連鎖スクロール抑止 */
+  overscroll-behavior: none;
+
+  min-height: 0;
+}
+
+/* ✅ /chat ルートのときだけ html/body を“完全ロック”
+   - これが無いと、他CSS（globals等）で body がわずかに伸びて外側スクロールが復活する
+*/
+:global(html),
+:global(body) {
+  height: 100%;
+  overflow: hidden;
+}
+
+/* ✅ 横はみ出しの最終保険（/chat限定） */
+:global(body) {
+  overflow-x: hidden;
+}
+
+@media (max-width: 640px) {
+  .chatTheme {
+    --paper: #ffffff;
+    --text: #111111;
+    --muted: rgba(0, 0, 0, 0.55);
+
+    background: #ffffff;
+  }
+}

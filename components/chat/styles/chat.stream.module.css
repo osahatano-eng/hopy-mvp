@@ -1,0 +1,157 @@
+/* /components/chat/styles/chat.stream.module.css */
+
+/* stream */
+.streamWrap {
+  position: relative;
+  /* ✅ スクロール責務は ChatClient.module.css に一本化（ここで上書きしない） */
+  /* overflow: visible; */
+  /* height: auto; */
+}
+
+/* ✅ 本文幅の再定義をやめ、外側の唯一の正に従う */
+.streamInner {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  margin: 0 auto;
+  box-sizing: border-box;
+
+  padding-top: 0;
+  padding-left: 0;
+  padding-right: 0;
+
+  /* ✅ 上余白は他層へ持たせない */
+  /* padding-top: 16px; */
+
+  /* ✅ 下余白は ChatClient.module.css の .streamInner に一本化（composerOffset 連動の安定） */
+  /* padding-bottom: calc(var(--composerOffset, 220px) + env(safe-area-inset-bottom) + 18px); */
+}
+
+/* ✅ stream 側では上余白を持たない */
+@media (min-width: 641px) {
+  .streamInner {
+    padding-top: 0;
+  }
+}
+
+/* ✅ SP only: ヘッダー内側（☰ と ・・・ の内側）に本文幅を揃える */
+@media (max-width: 640px) {
+  .streamInner {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    margin: 0;
+    padding-left: 0;
+    padding-right: 0;
+    box-sizing: border-box;
+  }
+}
+
+/* More */
+.moreWrap {
+  display: flex;
+  justify-content: center;
+  margin: 6px 0 14px;
+}
+
+.moreBtn {
+  border: 1px solid var(--hairline);
+  background: var(--panel);
+  color: var(--text);
+
+  padding: 10px 14px;
+  border-radius: 10px;
+
+  cursor: pointer;
+
+  /* ✅ “押せる”の統一（上品） */
+  transition: background 120ms ease, border-color 120ms ease, transform 120ms ease;
+
+  font-size: 13px;
+
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.moreBtn:hover {
+  background: var(--panelHover);
+  border-color: var(--hairlineHover);
+}
+
+.moreBtn:active {
+  transform: translateY(0.5px);
+}
+
+.moreBtn:focus-visible {
+  outline: 2px solid var(--focusRing);
+  outline-offset: 2px;
+}
+
+/* thinking */
+.thinking {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  /* ✅ 間延び解消 */
+  gap: 6px;
+  margin: 12px 0 0;
+
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.thinkingLabel {
+  letter-spacing: 0.02em;
+}
+
+/* ✅ 上品な3点（間延びしない幅） */
+.dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.dots span {
+  display: inline-block;
+
+  /* 8px固定 + text-align は間延びの原因 → “点”として扱う */
+  width: 4px;
+  height: 4px;
+  border-radius: 9999px;
+
+  background: currentColor;
+  opacity: 0.35;
+
+  /* ✅ ほんの少しだけ“生きてる” */
+  animation: hopyDots 900ms ease-in-out infinite;
+}
+
+.dots span:nth-child(2) {
+  animation-delay: 120ms;
+}
+
+.dots span:nth-child(3) {
+  animation-delay: 240ms;
+}
+
+@keyframes hopyDots {
+  0%,
+  100% {
+    opacity: 0.28;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 0.62;
+    transform: translateY(-2px);
+  }
+}
+
+/* ✅ 動きが苦手な人には止める */
+@media (prefers-reduced-motion: reduce) {
+  .dots span {
+    animation: none;
+    opacity: 0.45;
+    transform: none;
+  }
+}

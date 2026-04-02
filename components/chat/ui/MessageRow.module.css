@@ -1,0 +1,281 @@
+/* /components/chat/ui/MessageRow.module.css */
+/* MessageRow — HOPY editorial, calm, no-bubble, no-shadow, no-gradient
+   - YOU: 右寄せ / 短文=縮む / 長文=最大70%
+   - HOPY: 親コンテナ幅に追従（入力欄幅=右カラム本文幅）
+   - YOUラベルは本文の“先頭の真上”に配置（blockで同期）
+*/
+
+.row {
+  /* ✅ 行全体は“左右寄せ”のために flex にする */
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+
+  padding: 12px 0;
+  margin: 0 auto 10px;
+
+  border-radius: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
+
+/* ✅ cap + txt を同じ幅の箱に入れる */
+.block {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+/* =========================
+   Alignment (YOU / HOPY)
+========================= */
+
+/* YOU: 右寄せ */
+.user {
+  justify-content: flex-end;
+}
+
+/* ✅ YOU: 短文は縮む / 長文は最大70% */
+.user .block {
+  width: fit-content;
+  max-width: min(70%, 70ch);
+
+  /* ✅ YOUだけ “ラベルと本文の間” を詰める（ここで差を消す） */
+  gap: 2px;
+}
+
+/* HOPY: 左寄せ */
+.asst {
+  justify-content: flex-start;
+}
+
+/* ✅ HOPY: 幅責務は親コンテナに従わせる */
+.asst .block {
+  width: 100%;
+  max-width: 100%;
+
+  /* HOPYはそのままの呼吸 */
+  gap: 6px;
+}
+
+/* =========================
+   Labels / Text
+========================= */
+
+.cap {
+  font-size: 11px;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+
+  color: var(--muted);
+  user-select: none;
+  opacity: 0.92;
+
+  /* ✅ block 内で“本文の左端”に揃う */
+  text-align: left;
+
+  line-height: 1.1;
+  font-weight: 650;
+
+  /* ✅ HOPY + ○ の並びを安定化 */
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0;
+  width: fit-content;
+  max-width: 100%;
+  white-space: nowrap;
+  vertical-align: top;
+}
+
+/* ✅ assistant側はラベル行を本文幅いっぱいに広げない */
+.asst .cap {
+  width: fit-content;
+  max-width: 100%;
+}
+
+.txt {
+  font-size: clamp(14px, 1.35vw, 16px);
+  line-height: 1.68;
+
+  color: var(--text);
+
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+
+  /* ✅ SPで“にじみ/ダサさ”の原因になりやすい負の字詰めは撤去 */
+  letter-spacing: 0.005em;
+
+  /* block の幅に追従 */
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* ✅ assistant本文は常に block の安全幅内に収める */
+.asst .txt {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* Paragraph rhythm (editorial) */
+.txt :global(p) {
+  margin: 0;
+}
+.txt :global(p + p) {
+  margin-top: 0.92em;
+}
+
+/* Lists */
+.txt :global(ul),
+.txt :global(ol) {
+  margin: 0.82em 0 0.82em 1.25em;
+  padding: 0;
+}
+.txt :global(li) {
+  margin: 0;
+}
+.txt :global(li + li) {
+  margin-top: 0.45em;
+}
+
+/* Quotes / pre (主張しない) */
+.txt :global(blockquote) {
+  margin: 0.9em 0;
+  padding: 0;
+  border: none;
+  color: var(--muted);
+}
+.txt :global(pre) {
+  margin: 0.9em 0 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  overflow: auto;
+}
+
+/* row間の分離：線は禁止。余白のみで区切る */
+.row + .row {
+  margin-top: 8px;
+  padding-top: 0;
+  border-top: none;
+}
+
+/* HOPYの回答の下だけ余白を増やす */
+.asst {
+  margin-bottom: 20px; /* いまの約2倍 */
+}
+
+@media (max-width: 960px) {
+  .user .block {
+    max-width: min(72%, 70ch);
+  }
+}
+
+@media (max-width: 640px) {
+  .row {
+    padding: 12px 0;
+    margin: 0 auto 10px;
+  }
+
+  /*
+    ✅ PCと同じ表示にするための核心：
+    - HOPYは親コンテナ幅に追従
+    - YOUは “fit-content” を維持して右寄せが効くようにする
+  */
+  .asst .block {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .user .block {
+    width: fit-content;
+    max-width: min(72%, 70ch);
+  }
+
+  .cap {
+    max-width: 100%;
+  }
+
+  .txt {
+    font-size: 15px;
+    line-height: 1.66;
+    letter-spacing: 0.005em;
+  }
+
+  .asst .txt {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .txt :global(ul),
+  .txt :global(ol) {
+    margin-left: 1.1em;
+  }
+}
+
+/* =========================
+   Tone markers (Calm / Growth)
+========================= */
+
+/* ✅ data-tone でも受ける（将来の上品調整の逃げ道） */
+.asstCalm,
+.row[data-tone="calm"] .txt {
+  border-left: none;
+  padding-left: 0;
+}
+
+.asstGrowth,
+.row[data-tone="growth"] .txt {
+  border-left: none;
+  padding-left: 0;
+}
+
+/* =========================
+   Pending (UX only)
+========================= */
+
+/* pending 行は通常回答と同じ密度にしない */
+.pending,
+.row[data-pending="1"] {
+  margin-bottom: 10px;
+}
+
+.pending .block,
+.row[data-pending="1"] .block {
+  width: fit-content;
+  max-width: 100%;
+  gap: 3px;
+}
+
+/* pending の HOPY ラベルは少しだけ控えめ */
+.pending .cap,
+.row[data-pending="1"] .cap {
+  opacity: 0.66;
+  letter-spacing: 0.08em;
+}
+
+/* pending 本文は静かに見せる */
+.pending .txt,
+.row[data-pending="1"] .txt {
+  width: fit-content;
+  max-width: 100%;
+  color: var(--text);
+  opacity: 0.58;
+  font-style: normal;
+  letter-spacing: 0.02em;
+  line-height: 1.6;
+}
+
+/* pending の本文は1行想定なので余計な段落呼吸を消す */
+.pending .txt :global(p),
+.row[data-pending="1"] .txt :global(p) {
+  margin: 0;
+}

@@ -1,0 +1,194 @@
+/* /components/home/HomeHeader.module.css */
+.header {
+  position: sticky;
+  top: 0;
+  inset-inline: 0;
+  z-index: 20;
+  flex: 0 0 auto;
+  height: 56px;
+  background: rgba(255, 255, 255, 0.9);
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.inner {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 1200px;
+  height: 100%;
+  margin: 0 auto;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: #0f172a;
+  font-size: 15px;
+  font-weight: 700;
+  font-family:
+    Arial,
+    "Helvetica Neue",
+    Helvetica,
+    "Noto Sans JP",
+    "Hiragino Sans",
+    "Yu Gothic UI",
+    "Yu Gothic",
+    Meiryo,
+    sans-serif;
+  letter-spacing: 0.06em;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.brandText {
+  display: inline-block;
+  transform: translateY(0.5px);
+}
+
+.brandIcon {
+  display: block;
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+}
+
+.actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16px;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.language {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  color: #64748b;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  font-family:
+    var(--font-geist-sans),
+    -apple-system,
+    BlinkMacSystemFont,
+    "Hiragino Sans",
+    "Hiragino Kaku Gothic ProN",
+    "Yu Gothic",
+    Meiryo,
+    sans-serif;
+}
+
+.langButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: #94a3b8;
+  font: inherit;
+  font-family:
+    var(--font-geist-sans),
+    -apple-system,
+    BlinkMacSystemFont,
+    "Hiragino Sans",
+    "Hiragino Kaku Gothic ProN",
+    "Yu Gothic",
+    Meiryo,
+    sans-serif;
+  cursor: pointer;
+  text-transform: none;
+}
+
+.langActive {
+  color: #0f172a;
+  font-weight: 600;
+}
+
+.langSeparator {
+  padding: 0 4px;
+  color: #cbd5e1;
+}
+
+.signIn {
+  display: inline-flex;
+  flex: 0 0 auto;
+  min-height: 36px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.88);
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 500;
+  font-family:
+    Arial,
+    "Helvetica Neue",
+    Helvetica,
+    "Noto Sans JP",
+    "Hiragino Sans",
+    "Yu Gothic UI",
+    "Yu Gothic",
+    Meiryo,
+    sans-serif;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease;
+}
+
+.signIn:hover {
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.signIn:focus-visible,
+.langButton:focus-visible {
+  outline: 2px solid #cbd5e1;
+  outline-offset: 2px;
+}
+
+@media (min-width: 768px) {
+  .header {
+    height: 64px;
+  }
+
+  .inner {
+    padding: 0 24px;
+  }
+
+  .brand {
+    font-size: 16px;
+    font-weight: 600;
+  }
+
+  .brandIcon {
+    width: 20px;
+    height: 20px;
+  }
+
+  .language {
+    font-size: 13px;
+  }
+
+  .signIn {
+    font-size: 14px;
+  }
+}

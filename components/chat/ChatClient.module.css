@@ -1,0 +1,777 @@
+/* /components/chat/ChatClient.module.css */
+/* Entry point: CSS Modules "composes" (stable, no @import)
+   ✅ 1-column constitution:
+   - PC/SP 同一構造（余白だけが変化）
+   - 2カラム前提の配線はここで切る（崩れの根を断つ）
+*/
+
+/* ===== root / variables ===== */
+.root {
+  composes: root from "./styles/chat.variables.module.css";
+  composes: root from "./styles/chat.responsive.module.css";
+
+  background: var(--chatBg);
+
+  --pinTop: 44px;
+  --topHeaderH: var(--pinTop);
+  --pcRailWidth: 288px;
+  --pcRailScrollbarGap: 0px;
+  --pcRailReserve: 0px;
+
+  /* ✅ jump の中心基準（本文・入力欄を内包している中心） */
+  --jumpCenterX: 50vw;
+
+  /* ✅ PC本文幅の唯一の正 */
+  --pcContentMax: 760px;
+  --pcFramePad: clamp(20px, 2.8vw, 36px);
+  --pcFrameMax: calc(var(--pcContentMax) + (var(--pcFramePad) * 2));
+
+  /* ✅ SP外枠余白の唯一の正 */
+  --spFramePad: 18px;
+
+  /* ✅ “押せる”の共通土台（上品・控えめ） */
+  --tapHover: rgba(0, 0, 0, 0.03);
+  --tapActive: rgba(0, 0, 0, 0.05);
+  --focusRing: rgba(0, 0, 0, 0.22);
+
+  /* ✅ タイポを上品に統一（SP含む） */
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+    "Noto Sans JP", "Hiragino Kaku Gothic ProN", Meiryo, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  letter-spacing: 0.005em;
+  line-height: 1.45;
+
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+
+  /* ✅ SPの縦揺れを避けるため、基準は stable viewport を優先 */
+  min-height: 100svh;
+
+  overflow: hidden;
+  overflow-x: clip;
+
+  /* ✅ ルートのオーバースクロール伝播を抑止（overlay時の安定性向上、見た目副作用なし） */
+  overscroll-behavior: none;
+
+  display: flex;
+  flex-direction: column;
+
+  box-sizing: border-box;
+
+  /* ✅ ブラウザ既定UIをライト基準に（PCダークは下で上書き） */
+  color-scheme: light;
+}
+
+@supports (min-height: 100dvh) {
+  .root {
+    min-height: 100svh;
+  }
+}
+
+@media (min-width: 641px) {
+  .root {
+    --paper: #0e0e10;
+    --text: rgba(255, 255, 255, 0.92);
+    --muted: rgba(255, 255, 255, 0.55);
+    --panel: rgba(255, 255, 255, 0.06);
+    --panelHover: rgba(255, 255, 255, 0.08);
+    --hairline: rgba(255, 255, 255, 0.08);
+    --hairlineHover: rgba(255, 255, 255, 0.16);
+
+    --appBg: var(--paper);
+    --headerBg: var(--appBg);
+    --chatBg: var(--appBg);
+
+    background: var(--chatBg);
+    color: var(--text);
+
+    /* ✅ ダークでのフォーム等の見え方を安定化 */
+    color-scheme: dark;
+
+    /* ✅ ダーク時の“押せる”共通土台 */
+    --tapHover: rgba(255, 255, 255, 0.06);
+    --tapActive: rgba(255, 255, 255, 0.09);
+    --focusRing: rgba(255, 255, 255, 0.22);
+  }
+}
+
+/* ===== logged-out / hero ===== */
+.hero {
+  composes: hero from "./styles/chat.hero.module.css";
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow: visible;
+  box-sizing: border-box;
+}
+
+.heroInner {
+  composes: heroInner from "./styles/chat.hero.module.css";
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow: visible;
+  box-sizing: border-box;
+}
+
+.heroTitle {
+  composes: heroTitle from "./styles/chat.hero.module.css";
+  line-height: 1.08;
+  margin-top: 0;
+  padding-top: 0.06em;
+  overflow: visible;
+}
+
+.heroSub {
+  composes: heroSub from "./styles/chat.hero.module.css";
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.heroActions { composes: heroActions from "./styles/chat.hero.module.css"; }
+.primary { composes: primary from "./styles/chat.hero.module.css"; }
+
+/* ✅ 未ログイン /chat は “中央の核 → 入力欄 → 補助導線” の順に見せる */
+.hero[aria-label="logged-out"] {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding-bottom: clamp(18px, 4vh, 36px);
+  box-sizing: border-box;
+}
+
+.hero[aria-label="logged-out"] .heroInner {
+  width: 100%;
+  max-width: min(100%, 680px);
+  margin: 0 auto;
+  padding-top: clamp(36px, 9vh, 92px);
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.hero[aria-label="logged-out"] .heroTitle {
+  letter-spacing: 0.01em;
+}
+
+.hero[aria-label="logged-out"] .heroSub {
+  max-width: 34ch;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* ✅ ワークスペース内ヒーローは「中央寄せ」ではなく安全に上から始める */
+.shell .hero {
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding-bottom: calc(var(--composerOffset, 0px) + env(safe-area-inset-bottom) + 18px);
+  box-sizing: border-box;
+}
+
+.shell .heroInner {
+  width: 100%;
+  max-width: min(100%, 760px);
+  margin: 0 auto;
+  padding-top: clamp(40px, 8vh, 88px);
+  box-sizing: border-box;
+}
+
+.shell .heroTitle {
+  scroll-margin-top: calc(var(--pinTop) + 16px);
+}
+
+/* ✅ ChatClientView の inline style を CSS 化（login stuck / reconnect） */
+.loginStuckWrap { margin-top: 18px; opacity: 0.9; }
+.loginStuckTitle { font-size: 14px; font-weight: 600; }
+.loginStuckBody { font-size: 13px; margin-top: 6px; line-height: 1.5; }
+.loginStuckActions { margin-top: 10px; }
+
+.reconnectBar { padding: 10px 14px; opacity: 0.9; font-size: 13px; line-height: 1.4; }
+.reconnectBtnWrap { margin-left: 10px; }
+
+/* ===== workspace ===== */
+.shell {
+  composes: shell from "./styles/chat.workspace.module.css";
+  overflow-x: clip;
+}
+
+.streamWrap {
+  composes: streamWrap from "./styles/chat.workspace.module.css";
+
+  /* ✅ HOPY正式定義: 唯一の縦スクロール親 */
+  overflow-y: auto;
+  overflow-x: clip;
+  overscroll-behavior-y: contain;
+  min-height: 0;
+  box-sizing: border-box;
+
+  /* ✅ 実際の先頭位置をヘッダー下へ逃がす */
+  padding-top: 54px;
+
+  /* ✅ 下端は実余白で確保 */
+  padding-bottom: calc(var(--composerOffset, 0px) + env(safe-area-inset-bottom) + 16px);
+
+  /* ✅ ジャンプ時の見え位置だけ補助 */
+  scroll-padding-top: calc(var(--pinTop) + 10px);
+  scroll-padding-bottom: calc(var(--composerOffset, 0px) + env(safe-area-inset-bottom) + 16px);
+}
+
+.streamInner {
+  composes: streamInner from "./styles/chat.workspace.module.css";
+
+  /* ✅ HOPY正式定義: 本文幅だけ担当 */
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow: visible;
+  height: auto;
+  max-height: none;
+  padding-bottom: 0;
+}
+
+.streamArea {
+  composes: streamArea from "./styles/chat.workspace.module.css";
+}
+
+.recoverTitle {
+  composes: recoverTitle from "./styles/chat.workspace.module.css";
+}
+
+.recoverSubHint {
+  composes: recoverSubHint from "./styles/chat.workspace.module.css";
+}
+
+.recoverReloadBtn {
+  composes: recoverReloadBtn from "./styles/chat.workspace.module.css";
+}
+
+.recoverReason {
+  composes: recoverReason from "./styles/chat.workspace.module.css";
+}
+
+.stuckTitle {
+  composes: stuckTitle from "./styles/chat.workspace.module.css";
+}
+
+.stuckReloadBtn {
+  composes: stuckReloadBtn from "./styles/chat.workspace.module.css";
+}
+
+/* ===== compass ===== */
+.compassCard {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  margin-top: 10px;
+  margin-bottom: 18px;
+  padding: 12px 14px;
+  box-sizing: border-box;
+  border-radius: 16px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(0, 0, 0, 0.025);
+  overflow: hidden;
+}
+
+.compassHeader {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  margin: 0 0 8px;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.compassTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.compassIcon {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  line-height: 1;
+  opacity: 0.78;
+}
+
+.compassTitle {
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.3;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  opacity: 0.82;
+}
+
+.compassBody {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.compassText {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  font-size: 13px;
+  line-height: 1.7;
+  letter-spacing: 0.005em;
+  opacity: 0.96;
+}
+
+@media (min-width: 641px) {
+  .compassCard {
+    border-color: rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  .compassIcon {
+    opacity: 0.82;
+  }
+
+  .compassTitle {
+    opacity: 0.84;
+  }
+
+  .compassText {
+    opacity: 0.94;
+  }
+}
+
+/* ✅ PCは本文・composerを同じcontent幅基準へ統一し、jump もその中心を見る */
+@media (min-width: 1024px) {
+  .root {
+    /* ✅ 左カラム開閉で動く本文中心へ合わせる */
+    --jumpCenterX: calc(50vw + (var(--pcRailWidth, 0px) / 2));
+  }
+
+  .shell {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    margin-left: 0;
+    margin-right: 0;
+    padding-left: 0;
+    padding-right: 0;
+    box-sizing: border-box;
+  }
+
+  .streamWrap {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    margin-left: 0;
+    margin-right: 0;
+    box-sizing: border-box;
+  }
+
+  .streamInner {
+    width: 100%;
+    max-width: var(--pcContentMax);
+    min-width: 0;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 0;
+    padding-right: 0;
+    padding-bottom: 0;
+    box-sizing: border-box;
+  }
+
+  .composerInner,
+  .composerTopRow,
+  .composerHintRow {
+    width: 100%;
+    max-width: var(--pcContentMax);
+    min-width: 0;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 0;
+    padding-right: 0;
+    box-sizing: border-box;
+  }
+
+  .shell .heroInner {
+    width: 100%;
+    max-width: var(--pcFrameMax);
+    min-width: 0;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: var(--pcFramePad);
+    padding-right: var(--pcFramePad);
+    box-sizing: border-box;
+  }
+}
+
+/* ✅ SPのときだけスクロールバー見た目を軽くする */
+@media (max-width: 640px) {
+  .root :global(*) {
+    scrollbar-color: rgba(0, 0, 0, 0.16) transparent;
+  }
+
+  .root :global(*::-webkit-scrollbar-thumb) {
+    background: rgba(0, 0, 0, 0.16);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+
+  .root :global(*::-webkit-scrollbar-thumb:hover) {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+}
+
+.moreWrap { composes: moreWrap from "./styles/chat.stream.module.css"; }
+.moreBtn { composes: moreBtn from "./styles/chat.stream.module.css"; }
+.thinking { composes: thinking from "./styles/chat.stream.module.css"; }
+.thinkingLabel {
+  composes: thinkingLabel from "./styles/chat.stream.module.css";
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.dots { composes: dots from "./styles/chat.stream.module.css"; }
+
+/* ===== jump ===== */
+.jump {
+  composes: jump from "./styles/chat.jump.module.css";
+  composes: jump from "./styles/chat.responsive.module.css";
+
+  left: var(--jumpCenterX);
+  right: auto;
+
+  transform-origin: center center;
+  backface-visibility: hidden;
+  will-change: transform, opacity;
+  transform: translateX(-50%) translateY(0) scale(1);
+  animation: jumpAppear 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition:
+    transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.jump:hover {
+  background-color: var(--tapHover);
+  border-color: var(--hairlineHover, rgba(255, 255, 255, 0.16));
+}
+
+.jump:active {
+  transform: translateX(-50%) translateY(1px) scale(0.97);
+}
+
+.jump:focus-visible {
+  outline: 2px solid var(--focusRing);
+  outline-offset: 2px;
+}
+
+.jumpIcon {
+  composes: jumpIcon from "./styles/chat.jump.module.css";
+  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1), opacity 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.jump:hover .jumpIcon {
+  transform: translateY(1px);
+}
+
+@keyframes jumpAppear {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(8px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .jump,
+  .jumpIcon {
+    animation: none;
+    transition: none;
+  }
+}
+
+/* ===== composer ===== */
+.composer {
+  composes: composer from "./styles/chat.composer.module.css";
+  composes: composer from "./styles/chat.responsive.module.css";
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow-x: clip;
+}
+
+@media (min-width: 1024px) {
+  .composer {
+    left: auto !important;
+    right: auto !important;
+    transform: none !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 0;
+    padding-right: 0;
+  }
+}
+
+.composerTopRow {
+  composes: composerTopRow from "./styles/chat.composer.module.css";
+  composes: composerTopRow from "./styles/chat.responsive.module.css";
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.memBtn { composes: memBtn from "./styles/chat.composer.module.css"; composes: memBtn from "./styles/chat.responsive.module.css"; }
+.retryBtn { composes: retryBtn from "./styles/chat.composer.module.css"; composes: retryBtn from "./styles/chat.responsive.module.css"; }
+.composerInner {
+  composes: composerInner from "./styles/chat.composer.module.css";
+  composes: composerInner from "./styles/chat.responsive.module.css";
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.fieldWrap {
+  composes: fieldWrap from "./styles/chat.composer.module.css";
+  composes: fieldWrap from "./styles/chat.responsive.module.css";
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.field {
+  composes: field from "./styles/chat.composer.module.css";
+  composes: field from "./styles/chat.responsive.module.css";
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.sendInField { composes: sendInField from "./styles/chat.composer.module.css"; }
+.srOnly { composes: srOnly from "./styles/chat.composer.module.css"; }
+.composerHintRow { composes: composerHintRow from "./styles/chat.composer.module.css"; composes: composerHintRow from "./styles/chat.responsive.module.css"; }
+.hintSep { composes: hintSep from "./styles/chat.composer.module.css"; }
+.sub { composes: sub from "./styles/chat.composer.module.css"; }
+.hintTiny { composes: hintTiny from "./styles/chat.composer.module.css"; }
+
+/* ✅ 未ログイン時の補助導線を、主役の入力欄より一段弱く静かに見せる */
+.composerTopRow .memBtn:not(.retryBtn) {
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  opacity: 0.92;
+}
+
+.composerTopRow .memBtn:not(.retryBtn):hover {
+  opacity: 1;
+}
+
+@media (max-width: 640px) {
+  .root {
+    --pinTop: calc(48px + env(safe-area-inset-top));
+    --topHeaderH: var(--pinTop);
+    --jumpCenterX: 50vw;
+    --spFramePad: 18px;
+  }
+
+  .shell {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    margin: 0;
+    padding-left: 0;
+    padding-right: 0;
+    box-sizing: border-box;
+    overflow-x: clip;
+  }
+
+  .streamWrap {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    overflow-x: clip;
+
+    /* ✅ SPも先頭実余白を維持 */
+    padding-top: 54px;
+    padding-left: var(--spFramePad);
+    padding-right: var(--spFramePad);
+
+    /* ✅ 実際の終端余白を持たせて、最後の本文がfixed composer下へ潜らないようにする */
+    padding-bottom: calc(var(--composerOffset, 0px) + env(safe-area-inset-bottom) + 8px);
+
+    /* ✅ 到達時の視認位置も維持 */
+    scroll-padding-top: calc(var(--pinTop) + 10px);
+    scroll-padding-bottom: calc(var(--composerOffset, 0px) + env(safe-area-inset-bottom) + 8px);
+  }
+
+  .streamInner {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    margin-left: 0;
+    margin-right: 0;
+    padding-left: 0;
+    padding-right: 0;
+    padding-bottom: 0;
+    box-sizing: border-box;
+  }
+
+  .composer {
+    position: fixed;
+    left: 0;
+    right: 0;
+
+    /* ✅ ここが本命：キーボード分だけ上に逃がす（transformで持ち上げない） */
+    bottom: var(--kb, 0px);
+
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    margin: 0;
+    transform: none;
+
+    padding-left: var(--spFramePad);
+    padding-right: var(--spFramePad);
+    padding-bottom: env(safe-area-inset-bottom);
+
+    z-index: 55;
+    box-sizing: border-box;
+    overflow-x: clip;
+
+    will-change: auto;
+  }
+
+  .composerInner,
+  .composerTopRow,
+  .composerHintRow,
+  .shell .heroInner {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    margin-left: 0;
+    margin-right: 0;
+    padding-left: 0;
+    padding-right: 0;
+    box-sizing: border-box;
+  }
+
+  .shell .heroInner {
+    padding-top: calc(var(--pinTop) + 18px);
+  }
+
+  .shell .heroTitle {
+    line-height: 1.04;
+    padding-top: 0.08em;
+  }
+
+  .hero[aria-label="logged-out"] .heroInner {
+    padding-top: calc(var(--pinTop) + 28px);
+  }
+
+  .hero[aria-label="logged-out"] .heroSub {
+    max-width: 26ch;
+  }
+
+  .composerTopRow .memBtn:not(.retryBtn) {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .compassCard {
+    margin-top: 8px;
+    margin-bottom: 16px;
+    padding: 11px 12px;
+    border-radius: 14px;
+  }
+
+  .compassText {
+    font-size: 13px;
+    line-height: 1.65;
+  }
+}
+
+/* ===== layout / rail ===== */
+.layout {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.railCol {
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.chatCol {
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.railOpenBtn { display: none; }
+.railOpenChev { display: none; }
+.railOverlay { display: none; }
+.railBackdrop { display: none; }
+.railPanel { display: none; }
+
+@media (min-width: 641px) {
+  .layout {
+    display: grid;
+    grid-template-columns: var(--pcRailWidth) minmax(0, 1fr);
+    align-items: stretch;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .railCol {
+    display: block;
+    width: var(--pcRailWidth);
+    max-width: var(--pcRailWidth);
+  }
+
+  .chatCol {
+    display: block;
+    min-width: 0;
+    width: 100%;
+  }
+}
+
+@media (max-width: 640px) {
+  .layout { display: block; }
+  .railCol { display: none; }
+  .chatCol { display: block; }
+}
+
+/*
+このファイルの正式役割:
+ChatClient 全体の横幅責務・縦スクロール責務・PC/SP レイアウト基準を統一し、本文と composer の外枠挙動を安定化する唯一の CSS モジュール
+
+【今回このファイルで修正したこと】
+末尾で全画面幅に対して .layout を block、.railCol を none に固定していた定義をやめました。
+641px以上では layout を2カラムgrid、railCol を表示、chatCol を残す形に戻し、左カラム表示時に本文が右へ寄るようにしました。
+640px以下では従来どおり layout は block、railCol は非表示のままにして、他機能や状態の唯一の正には触れていません。
+*/

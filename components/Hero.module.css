@@ -1,0 +1,110 @@
+/* =========================
+   Hero — HOPY Phase3 polish
+   局所制御（グローバル非依存）
+========================= */
+
+.hero {
+  padding: clamp(48px, 7vw, 88px) 0;
+}
+
+.heroInner {
+  width: 100%;
+  max-width: var(--container);
+  margin: 0 auto;
+  padding: 0 var(--gutter);
+
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: clamp(24px, 4vw, 48px);
+  align-items: center;
+}
+
+.heroLeft {
+  display: grid;
+  gap: 14px;
+}
+
+.heroTag {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.6;
+}
+
+.heroHead {
+  margin: 0;
+  line-height: 1.05;
+  font-size: clamp(28px, 5vw, 52px);
+  font-weight: 600;
+}
+
+.heroHeadA {
+  display: block;
+}
+
+.heroHeadB {
+  display: block;
+  opacity: 0.85;
+}
+
+.heroSub {
+  margin: 0;
+  font-size: clamp(14px, 1.4vw, 16px);
+  line-height: 1.6;
+  max-width: 56ch;
+  opacity: 0.85;
+}
+
+.heroHint {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  opacity: 0.6;
+}
+
+.hintLine {
+  width: 24px;
+  height: 1px;
+  background: currentColor;
+}
+
+.hintText {
+  font-size: 12px;
+}
+
+.heroRight {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.vmark {
+  font-size: clamp(60px, 10vw, 140px);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  opacity: 0.05;
+  display: grid;
+  gap: 6px;
+}
+
+.heroScrollfade {
+  margin-top: 48px;
+  height: 60px;
+  pointer-events: none;
+}
+
+/* Responsive */
+@media (max-width: 860px) {
+  .heroInner {
+    grid-template-columns: 1fr;
+  }
+
+  .heroRight {
+    order: -1;
+  }
+
+  .vmark {
+    font-size: clamp(40px, 18vw, 90px);
+  }
+}

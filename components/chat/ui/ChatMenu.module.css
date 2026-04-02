@@ -1,0 +1,146 @@
+/* /components/chat/ui/ChatMenu.module.css */
+/* Minimal menu panel (no shadow, no gradient, no harsh borders)
+   ✅ Mobile stable: fixed to viewport so it never goes off-screen
+*/
+
+.wrap {
+  position: fixed; /* ✅ absolute→fixed（画面基準） */
+  top: calc(env(safe-area-inset-top) + 44px + 6px); /* ヘッダー直下 */
+  right: var(--gutter);
+  left: auto;
+
+  z-index: 70;
+
+  width: min(320px, calc(100vw - (var(--gutter) * 2)));
+  max-width: calc(100vw - (var(--gutter) * 2));
+
+  background: var(--paper);
+  color: var(--text);
+
+  /* 影・グラデ禁止 */
+  box-shadow: none;
+
+  border-radius: 12px;
+
+  /* “線”は禁止だが、境界の最小限として薄いアウトラインのみ */
+  outline: 1px solid rgba(0, 0, 0, 0.08);
+
+  /* ✅ 画面からはみ出さない（縦も保険） */
+  max-height: calc(100vh - (env(safe-area-inset-top) + 44px + 16px));
+  overflow: auto;
+
+  /* ✅ iOSでの慣性スクロール */
+  -webkit-overflow-scrolling: touch;
+
+  /* ✅ 1pxはみ出し抑制 */
+  box-sizing: border-box;
+}
+
+.profile {
+  display: grid;
+  grid-template-columns: 40px 1fr;
+  gap: 10px;
+  align-items: center;
+
+  padding: 12px 12px 10px;
+}
+
+.avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 9999px;
+  object-fit: cover;
+  display: block;
+}
+
+.avatarFallback {
+  width: 40px;
+  height: 40px;
+  border-radius: 9999px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--text);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.profileText {
+  min-width: 0;
+}
+
+.profileLabel {
+  font-size: 11px;
+  line-height: 1.2;
+  color: var(--muted);
+}
+
+.profileEmail {
+  margin-top: 2px;
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--text);
+
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.items {
+  padding: 6px 6px 8px;
+}
+
+.divider {
+  height: 1px;
+  margin: 6px 6px;
+  background: rgba(0, 0, 0, 0.08);
+  opacity: 0.6;
+}
+
+.itemBtn {
+  width: 100%;
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--text);
+
+  text-align: left;
+  padding: 10px 10px;
+  border-radius: 10px;
+
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+
+  transition: background 120ms ease;
+}
+
+.itemBtn:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.itemBtn:focus-visible {
+  outline: 2px solid var(--focusRing);
+  outline-offset: 2px;
+}
+
+.danger {
+  color: #b00020;
+}
+
+@media (max-width: 640px) {
+  .wrap {
+    /* ✅ SPは左右ガターで“必ず”画面内 */
+    right: var(--gutter);
+    left: var(--gutter);
+    width: auto;
+    max-width: none;
+  }
+
+  .danger {
+    color: #7a0000;
+  }
+}

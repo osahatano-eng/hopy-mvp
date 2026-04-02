@@ -1,0 +1,475 @@
+/* =========================
+   Memories Modal (Single Source of Truth)
+   - list takes remaining height
+   - last item never hidden
+   - action buttons never pushed off-canvas
+========================= */
+
+.memOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+}
+
+.memPanel {
+  width: min(980px, 100%);
+  max-height: min(82vh, 760px);
+  min-height: 520px;
+
+  background: rgba(10, 16, 26, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 18px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55);
+
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  outline: none;
+}
+
+.memHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 16px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.memTitle {
+  font-size: 18px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.memSub {
+  margin-top: 6px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.62);
+  max-width: 70ch;
+}
+
+.memHeaderActions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.memClose,
+.memGhost,
+.memPrimary,
+.memDanger {
+  font: inherit;
+  border-radius: 12px;
+  padding: 10px 12px;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.memPrimary {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.10);
+}
+
+.memDanger {
+  border-color: rgba(255, 80, 80, 0.30);
+  background: rgba(255, 80, 80, 0.14);
+}
+
+.memTabs {
+  display: flex;
+  gap: 8px;
+  padding: 0 18px;
+  margin-top: 10px;
+  margin-bottom: 10px;
+}
+
+.memTab {
+  position: relative;
+  font: inherit;
+  border-radius: 999px;
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.86);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.memTab:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.memTabActive {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.92);
+}
+
+/* Active indicator */
+.memTabActive::after {
+  content: "";
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  top: -6px;
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.28);
+}
+
+/* キーボード操作でも「今どこ見てるか」が分かる */
+.memTab:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.30);
+  outline-offset: 2px;
+}
+
+.memBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 12px;
+  line-height: 1;
+}
+
+.memPolicy {
+  margin: 2px 16px 10px;
+  padding: 12px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.memPolicyTitle {
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: rgba(255, 255, 255, 0.86);
+  margin-bottom: 6px;
+}
+
+.memPolicyLine {
+  font-size: 12px;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.58);
+}
+
+.memPolicyLine + .memPolicyLine {
+  margin-top: 2px;
+}
+
+@media (max-width: 760px) {
+  .memPolicy {
+    margin: 2px 16px 10px;
+  }
+}
+
+.memAdd {
+  padding: 12px 16px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.memAddTop {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.memAddTitle {
+  font-size: 13px;
+  font-weight: 650;
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.memAddHint {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.50);
+}
+
+.memAddField {
+  width: 100%;
+  font: inherit;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.18);
+  color: rgba(255, 255, 255, 0.92);
+  border-radius: 12px;
+  padding: 10px 10px;
+  resize: vertical;
+  outline: none;
+}
+
+.memAddActions {
+  margin-top: 10px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.memTools {
+  padding: 12px 16px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.memSearch {
+  width: 100%;
+  font: inherit;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.92);
+  border-radius: 12px;
+  padding: 12px 12px;
+  outline: none;
+}
+.memSearch::placeholder {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.memError {
+  margin: 10px 16px 0;
+  border: 1px solid rgba(255, 80, 80, 0.28);
+  background: rgba(255, 80, 80, 0.10);
+  color: rgba(255, 220, 220, 0.95);
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 13px;
+}
+
+/* ✅ ここが核心：残り高さを全部受け取る + 最下段が必ず見える */
+.memList {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
+
+  padding: 12px 16px 28px;
+  padding-right: 32px; /* scrollbarでボタンが隠れない逃げ */
+  scroll-padding-bottom: 28px;
+}
+
+.memLoading {
+  padding: 20px 4px;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.memEmpty {
+  padding: 18px 4px;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+/* ✅ ボタン列を絶対に画面外へ押し出さない */
+.memItem {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  gap: 14px;
+  padding: 14px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 14px;
+}
+
+.memItem + .memItem {
+  margin-top: 10px;
+}
+
+.memBody {
+  min-width: 0;
+}
+
+.memText {
+  font-size: 14px;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.92);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.memEdit {
+  width: 100%;
+  font: inherit;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.18);
+  color: rgba(255, 255, 255, 0.92);
+  border-radius: 12px;
+  padding: 10px 10px;
+  resize: vertical;
+  outline: none;
+}
+
+.memMeta {
+  margin-top: 10px;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.52);
+}
+
+.memActions {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  max-width: 260px;
+}
+
+.memRowError {
+  margin-top: 8px;
+  font-size: 12px;
+  color: rgba(255, 210, 210, 0.92);
+}
+
+@media (max-width: 760px) {
+  .memPanel {
+    min-height: 0;
+  }
+  .memItem {
+    grid-template-columns: 1fr;
+  }
+  .memActions {
+    justify-content: flex-end;
+    max-width: none;
+    width: 100%;
+    margin-top: 10px;
+  }
+  .memList {
+    padding-right: 16px;
+    padding-bottom: calc(16px + 80px);
+    scroll-padding-bottom: calc(16px + 80px);
+  }
+}
+
+@media (max-width: 640px) {
+  .memPanel {
+    min-height: 0;
+  }
+  .memList {
+    min-height: 220px;
+  }
+}
+
+/* Toast (Undo) */
+.toastWrap {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 14px;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+  padding: 0 14px;
+  z-index: 30;
+}
+
+.toast {
+  pointer-events: auto;
+  width: min(720px, 100%);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(10, 14, 22, 0.82);
+  backdrop-filter: blur(10px);
+  border-radius: 14px;
+  padding: 10px 12px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+}
+
+.toastDanger {
+  border-color: rgba(255, 120, 120, 0.22);
+}
+
+.toastMsg {
+  font-size: 13px;
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.toastActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toastBtn,
+.toastBtnSecondary,
+.toastBtnGhost {
+  font: inherit;
+  cursor: pointer;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.toastBtn,
+.toastBtnSecondary {
+  padding: 7px 12px;
+}
+
+.toastBtn {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.10);
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.toastBtn:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.toastBtnSecondary:hover {
+  background: rgba(255, 255, 255, 0.10);
+}
+
+.toastBtnGhost {
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.toastBtnGhost:hover {
+  background: rgba(255, 255, 255, 0.10);
+}
+
+/* =========================
+   Memory Importance Visual Layer
+========================= */
+
+.memImp5 {
+  border-left: 4px solid var(--hopy-gold, #C6A85C); /* Gold */
+  background: linear-gradient(90deg, rgba(198, 168, 92, 0.08), transparent 60%);
+}
+
+.memImp4 {
+  border-left: 4px solid var(--hopy-growth, #2F5D50); /* Growth */
+  background: linear-gradient(90deg, rgba(47, 93, 80, 0.08), transparent 60%);
+}
+
+.memImp3 {
+  border-left: 4px solid var(--hopy-calm, #1B2A44); /* Calm Navy */
+}
