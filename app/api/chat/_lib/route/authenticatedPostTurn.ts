@@ -42,7 +42,7 @@ type ConfirmedAssistantTurn = {
   stateChanged: boolean;
   canonicalAssistantState: CanonicalAssistantState;
   compassText?: string;
-  compassPrompt?: string | null;
+  compassPrompt?: string;
   compass?:
     | {
         text: string;
@@ -499,7 +499,7 @@ export async function finalizeAuthenticatedPostTurn(
     ...params.confirmedTurn,
     stateChanged: resolvedCompass.stateChanged,
     compassText: resolvedCompass.compassText ?? undefined,
-    compassPrompt: resolvedCompass.compassPrompt,
+    compassPrompt: resolvedCompass.compassPrompt ?? undefined,
     compass:
       resolvedCompass.compassText !== null
         ? {
@@ -562,8 +562,8 @@ Compass を含む最終 turn artifacts 作成、
 
 /*
 【今回このファイルで修正したこと】
-- ConfirmedAssistantTurn の compassText を string | undefined にそろえました。
-- confirmedTurnWithCompass へ渡す compassText も null のまま流さず、undefined に正規化しました。
-- compassText の null / undefined 型不一致で build が止まる症状だけを対象に修正しました。
+- ConfirmedAssistantTurn の compassPrompt を string | undefined にそろえました。
+- confirmedTurnWithCompass へ渡す compassPrompt も null のまま流さず、undefined に正規化しました。
+- compassPrompt の null / undefined 型不一致で build が止まる症状だけを対象に修正しました。
 - postTurn の実行ロジック、memory / Compass / payload の流れには触っていません。
 */
