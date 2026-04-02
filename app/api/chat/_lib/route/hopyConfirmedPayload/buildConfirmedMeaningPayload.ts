@@ -3,7 +3,6 @@
 import {
   normalizeConfirmedMemoryCandidates,
   type ConfirmedMemoryCandidate,
-  type MemoryWriteDebug,
 } from "../authenticatedHelpers";
 import type { NotificationState } from "../../state/notification";
 import { buildReplyState } from "./buildReplyState";
@@ -47,6 +46,17 @@ type ConfirmedAssistantTurn = {
     text?: unknown;
     prompt?: unknown;
   } | null;
+};
+
+type MemoryWriteDebug = {
+  mem_write_attempted?: boolean | null;
+  mem_write_allowed?: boolean | null;
+  mem_write_inserted?: number | null;
+  mem_write_reason?: string | null;
+  mem_items_count?: number | null;
+  mem_parse_ok?: boolean | null;
+  mem_extract_preview?: unknown;
+  mem_used_heuristic?: boolean | null;
 };
 
 export type HopyReplyState = ReturnType<typeof buildReplyState>;
@@ -294,9 +304,9 @@ hopy_confirmed_payload の正式shapeへ載せる。
 
 /*
 【今回このファイルで修正したこと】
-- authenticatedHelpers.ts から export されていない ConfirmedAssistantTurn の import を削除した。
-- このファイル内で必要最小限の ConfirmedAssistantTurn 型を定義した。
-- state 値は 1..5 / 5段階で固定した。
+- authenticatedHelpers.ts から export されていない MemoryWriteDebug の import を削除した。
+- このファイル内で必要最小限の MemoryWriteDebug 型を定義した。
+- ConfirmedAssistantTurn のローカル型定義はそのまま使った。
 - hopy_confirmed_payload の組み立てロジック自体は変えていない。
 */
 // このファイルの正式役割: hopy_confirmed_payload の正式組み立てファイル
