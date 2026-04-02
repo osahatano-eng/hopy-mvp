@@ -515,7 +515,7 @@ export async function handleAuthenticatedChat(
         mem_extract_preview: "",
         mem_used_heuristic: false,
         learning_save_attempted: false,
-        learning_save_inserted: false,
+        learning_save_inserted: 0,
         learning_save_reason: "skip_on_missing_confirmed_turn_inputs",
         learning_save_error: null,
         st,
@@ -856,6 +856,7 @@ authenticated 側の中継本体である。
 
 /* 【今回このファイルで修正したこと】
 - `attachDebugPayload(...)` に渡す `mem_write_inserted` の fallback を `false` ではなく `0` に修正しました。
+- `attachDebugPayload(...)` に渡す `learning_save_inserted` の fallback を `false` ではなく `0` に修正しました。
 - `openai_ok` の boolean 正規化はそのまま維持しました。
 - 他の処理や状態判定、Compass 系の流れには触れていません。
 */
