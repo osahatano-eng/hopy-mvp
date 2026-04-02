@@ -324,12 +324,13 @@ export function resolveBuiltResultFailure(
   result: RunHopyTurnBuiltResult,
 ): string | null {
   const reply = normalizeReply(result.reply);
+  const confirmedState = result.state ?? null;
 
   if (!reply) {
     return "runHopyTurn: built result reply is required";
   }
 
-  if (!hasCanonicalStateShape(result.state)) {
+  if (!hasCanonicalStateShape(confirmedState)) {
     return "runHopyTurn: built result state is required";
   }
 
@@ -337,7 +338,7 @@ export function resolveBuiltResultFailure(
     return "runHopyTurn: built result hopy_confirmed_payload.state is required";
   }
 
-  if (result.state?.state_changed === true) {
+  if (confirmedState.state_changed === true) {
     if (result.compassText === null) {
       return "runHopyTurn: compassText is required when state_changed is true";
     }
@@ -387,4 +388,5 @@ buildFailedRunHopyTurnResult で失敗時の標準結果を返す。
 - Compass 参照元の吸い上げロジックもこの責務へ移し、親ファイルから builtResult 整形本体を外せる受け皿にしました。
 - HOPY唯一の正である state / confirmed payload の意味生成は増やさず、受け取った値の整形・検証だけに限定しています。
 - finalizeBuiltResult() で result.threadPatch ?? null を渡すようにし、undefined のまま mergeThreadPatchWithState() へ入る build error を止めました。
+- resolveBuiltResultFailure() で result.state ?? null を confirmedState に受け直し、undefined のまま hasCanonicalStateShape() へ入る build error を止めました。
 */
