@@ -70,6 +70,32 @@ function isLearningType(value: string): value is LearningType {
   );
 }
 
+function isLearningPromptRecord(value: unknown): value is LearningPromptRecord {
+  if (!value || typeof value !== "object") return false;
+
+  const row = value as Record<string, unknown>;
+
+  return (
+    typeof row.id === "string" &&
+    (typeof row.user_id === "string" || row.user_id == null) &&
+    typeof row.source_type === "string" &&
+    typeof row.learning_type === "string" &&
+    typeof row.body === "string" &&
+    typeof row.cue === "string" &&
+    typeof row.polarity === "string" &&
+    typeof row.scope === "string" &&
+    typeof row.weight === "number" &&
+    typeof row.evidence_count === "number" &&
+    (typeof row.source_message_id === "string" || row.source_message_id == null) &&
+    (typeof row.source_thread_id === "string" || row.source_thread_id == null) &&
+    (typeof row.state_level === "number" || row.state_level == null) &&
+    (typeof row.current_phase === "number" || row.current_phase == null) &&
+    typeof row.status === "string" &&
+    typeof row.created_at === "string" &&
+    typeof row.updated_at === "string"
+  );
+}
+
 function normalizeLimit(limit?: number): number {
   if (!Number.isFinite(limit)) return DEFAULT_LIMIT;
   const safe = Math.floor(limit as number);
@@ -252,7 +278,11 @@ async function fetchScopedLearningRecords(params: {
       );
     }
 
-    rows.push(...(((data ?? []) as LearningPromptRecord[]).filter(Boolean)));
+    const safeRows = Array.isArray(data)
+      ? data.filter(isLearningPromptRecord)
+      : [];
+
+    rows.push(...safeRows);
   }
 
   await runScopedQuery("user", { userScoped: true });
@@ -306,3 +336,11 @@ export async function listLearningRecordsForPrompt({
 }
 
 export default listLearningRecordsForPrompt;
+
+/*
+このファイルの正式役割:
+HOPY回答用プロンプトに注入する learning records を、scope・state・user 条件で取得し、整形・重複除去して返すDB読み出し層。
+
+【今回このファイルで修正したこと】
+Supabaseの戻り値を直接 LearningPromptRecord[] にキャストしていた箇所をやめ、型ガードで安全に絞り込んでから rows に追加するよう修正した。
+*/
