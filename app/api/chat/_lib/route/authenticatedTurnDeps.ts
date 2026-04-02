@@ -16,6 +16,12 @@ import { buildAuthenticatedTurnResult } from "./authenticatedTurnResult";
 
 type ResolvedPlan = "free" | "plus" | "pro";
 
+type PromptBundle = {
+  baseSystemPrompt: string;
+  requestUserPrompt: string;
+  requestMessages: { role: "system" | "user" | "assistant"; content: string }[];
+};
+
 type RunHopyTurnBuiltResult = {
   reply?: unknown;
   turnRecord?: unknown;
@@ -29,7 +35,7 @@ type LoadedAuthenticatedContext = {
 };
 
 type AuthenticatedPromptInput = {
-  promptBundle: unknown;
+  promptBundle: PromptBundle;
   history: any[];
   userText: string;
   replyLang: Lang;
@@ -349,7 +355,7 @@ export function createAuthenticatedTurnDeps(params: {
   resolvedPlan: ResolvedPlan;
   resolvedConversationId: string;
   confirmedStateFallback: ConfirmedStateFallback;
-  promptBundle: AuthenticatedPromptInput["promptBundle"];
+  promptBundle: PromptBundle;
   ctxRes: { ok: boolean; items: any[] };
   currentPhase: number;
   currentStateLevel: number;
@@ -579,8 +585,8 @@ authenticated 経路の runHopyTurn 用 deps 作成ファイル。
 */
 /*
 【今回このファイルで修正したこと】
-- ./promptBundle から未 export の ResolvedPlan を import していたため、その import を削除しました。
-- このファイル内で実際に使っている最小限の ResolvedPlan 型を local type として定義し、このファイル単体で型境界を閉じました。
-- 既存の local ConfirmedAssistantTurn 型、buildTurnResult / callModel / persistTurn の実行ロジック、状態 1..5、Compass、保存フロー自体は変えていません。
+- generateAssistantReply(...) が要求する promptBundle 型に合わせるため、local PromptBundle 型を定義しました。
+- AuthenticatedPromptInput["promptBundle"] と createAuthenticatedTurnDeps(...) の promptBundle 受け口を unknown ではなく PromptBundle にそろえました。
+- 既存の local ResolvedPlan / ConfirmedAssistantTurn 型、buildTurnResult / callModel / persistTurn の実行ロジック、状態 1..5、Compass、保存フロー自体は変えていません。
 */
 // このファイルの正式役割: authenticated 経路の runHopyTurn 用 deps 作成ファイル
