@@ -508,7 +508,7 @@ export async function handleAuthenticatedChat(
         ctxRes,
         mem_write_attempted: false,
         mem_write_allowed: false,
-        mem_write_inserted: false,
+        mem_write_inserted: 0,
         mem_write_reason: "skip_on_missing_confirmed_turn_inputs",
         mem_items_count: 0,
         mem_parse_ok: null,
@@ -855,8 +855,8 @@ authenticated 側の中継本体である。
    正式エラーをそのまま返す。 */
 
 /* 【今回このファイルで修正したこと】
-- `attachDebugPayload(...)` に渡す `openai_ok` を `openai_ok ?? false` に統一しました。
-- `openai_ok` 自体の保持型は変えず、このファイルの引数受け渡し時だけ boolean へ正規化しました。
+- `attachDebugPayload(...)` に渡す `mem_write_inserted` の fallback を `false` ではなく `0` に修正しました。
+- `openai_ok` の boolean 正規化はそのまま維持しました。
 - 他の処理や状態判定、Compass 系の流れには触れていません。
 */
 // このファイルの正式役割: authenticated ユーザー用のチャット処理本体
