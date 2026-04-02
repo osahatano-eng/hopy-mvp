@@ -9,8 +9,6 @@ import { systemCoreDigest, systemCorePrompt } from "../system/system";
 import type { Lang } from "../router/simpleRouter";
 import { resolveThreadTitleForPayload } from "./threadTitle";
 import { handleMemoryWrite } from "./memoryWrite";
-import type { RunHopyTurnBuiltResult } from "./runHopyTurn";
-import type { ResolvedPlan } from "./promptBundle";
 import type { NotificationState } from "../state/notification";
 import type {
   ConfirmedAssistantTurn,
@@ -27,6 +25,9 @@ import {
   buildFinalizedTurnArtifacts,
 } from "./authenticatedFinalize";
 import { resolveConfirmedCompassArtifacts } from "./authenticatedPostTurnCompass";
+
+type RunHopyTurnBuiltResult = Record<string, any>;
+type ResolvedPlan = "free" | "plus" | "pro";
 
 export type AuthenticatedPostTurnParams = {
   runTurnResult: RunHopyTurnBuiltResult | null | undefined;
@@ -530,11 +531,9 @@ Compass を含む最終 turn artifacts 作成、
 
 /*
 【今回このファイルで修正したこと】
-- Compass 解決責務を authenticatedPostTurnCompass.ts へ分離し、
-  この親ファイルには import と呼び出しだけを残しました。
-- normalizeCompassString / asRecord を使った Compass text・prompt 抽出、
-  契約確認、resolveConfirmedCompassArtifacts 本体を親ファイルから削除しました。
-- memory 書き込み、learning 保存、audit 保存、thread title 解決、
-  payload 組み立ての流れは触っていません。
+- ./runHopyTurn から export されていない RunHopyTurnBuiltResult の import を削除しました。
+- ./promptBundle から export されていない ResolvedPlan の import を削除しました。
+- このファイル内で使う最小のローカル型として RunHopyTurnBuiltResult = Record<string, any> を定義しました。
+- このファイル内で使う正式値に合わせて ResolvedPlan = "free" | "plus" | "pro" をローカル定義しました。
+- postTurn の実行ロジック、memory / Compass / payload の流れには触っていません。
 */
-// このファイルの正式役割: authenticated 経路の postTurn 最終化ファイル
