@@ -150,7 +150,7 @@ export function postFilterMemories(items: MemoryItem[], uiLang: Lang) {
   const maxPerTurn = envInt("MEMORY_MAX_PER_TURN", 4);
 
   for (const it of items) {
-    const content = normalizeMemoryText(it.content);
+    const content = normalizeMemoryText(String(it.content ?? ""));
     let importance = Math.max(1, Math.min(5, Number(it.importance || 1)));
 
     if (!content) continue;
@@ -181,4 +181,5 @@ export function postFilterMemories(items: MemoryItem[], uiLang: Lang) {
 
 【今回このファイルで修正したこと】
 MemoryItem の import 元を ../db/memories から ../db/memoriesFilters へ修正した。
+postFilterMemories 内で it.content を文字列化してから normalizeMemoryText に渡すよう修正した。
 */
