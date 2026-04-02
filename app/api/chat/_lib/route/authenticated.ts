@@ -661,7 +661,7 @@ export async function handleAuthenticatedChat(
       mem_items_count: postTurn.memoryWrite.mem_items_count ?? 0,
       mem_parse_ok: postTurn.memoryWrite.mem_parse_ok ?? null,
       mem_extract_preview: postTurn.memoryWrite.mem_extract_preview,
-      mem_used_heuristic: postTurn.memoryWrite.mem_used_heuristic,
+      mem_used_heuristic: postTurn.memoryWrite.mem_used_heuristic ?? null,
       learning_save_attempted: postTurn.learning_save_attempted,
       learning_save_inserted: postTurn.learning_save_inserted,
       learning_save_reason: postTurn.learning_save_reason,
@@ -830,7 +830,7 @@ authenticated 側の中継本体である。
    正式エラーをそのまま返す。 */
 
 /* 【今回このファイルで修正したこと】
-- attachDebugPayload(...) に渡す mem_parse_ok を `postTurn.memoryWrite.mem_parse_ok ?? null` に正規化しました。
+- attachDebugPayload(...) に渡す mem_used_heuristic を `postTurn.memoryWrite.mem_used_heuristic ?? null` に正規化しました。
 - build を止めていた boolean | null 型不整合だけを止血しました。
 - 他の debug 項目、状態判定、Compass 系の流れには触っていません。
 */
