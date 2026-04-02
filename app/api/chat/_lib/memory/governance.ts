@@ -1,7 +1,7 @@
 // /app/api/chat/_lib/memory/governance.ts
 import type { Lang } from "../text";
 import { envInt } from "../env";
-import type { MemoryItem } from "../db/memories";
+import type { MemoryItem } from "../db/memoriesFilters";
 
 export function normalizeMemoryText(s: string) {
   return String(s ?? "")
@@ -60,8 +60,8 @@ export function isHardRejectMemory(content: string, uiLang: Lang) {
     return true;
   }
 
-  const jaAck = ["はい","了解","りょうかい","おけ","オケ","ありがとう","すごい","最高","いいね","うん","わかった","助かる"];
-  const enAck = ["ok","okay","thanks","thank you","got it","cool","nice"];
+  const jaAck = ["はい", "了解", "りょうかい", "おけ", "オケ", "ありがとう", "すごい", "最高", "いいね", "うん", "わかった", "助かる"];
+  const enAck = ["ok", "okay", "thanks", "thank you", "got it", "cool", "nice"];
 
   const lower = s.toLowerCase();
   if (uiLang === "ja") {
@@ -70,8 +70,8 @@ export function isHardRejectMemory(content: string, uiLang: Lang) {
     if (enAck.includes(lower)) return true;
   }
 
-  const jaOps = ["次","続け","戻して","やって","入れて","消して","直して"];
-  const enOps = ["next","continue","undo","fix","delete","add"];
+  const jaOps = ["次", "続け", "戻して", "やって", "入れて", "消して", "直して"];
+  const enOps = ["next", "continue", "undo", "fix", "delete", "add"];
   if (uiLang === "ja") {
     if (jaOps.includes(s)) return true;
   } else {
@@ -86,13 +86,45 @@ export function isHardAllowMemory(content: string, uiLang: Lang) {
   const lower = s.toLowerCase();
 
   const jaKeys = [
-    "今後","ルール","方針","固定","採用","禁止","必須","覚えて","記憶","全文","差分","末尾に追記","末尾","追記",
-    "階層","パス","推測しない","デグレード","レスポンシブ","世界基準","安心感",
+    "今後",
+    "ルール",
+    "方針",
+    "固定",
+    "採用",
+    "禁止",
+    "必須",
+    "覚えて",
+    "記憶",
+    "全文",
+    "差分",
+    "末尾に追記",
+    "末尾",
+    "追記",
+    "階層",
+    "パス",
+    "推測しない",
+    "デグレード",
+    "レスポンシブ",
+    "世界基準",
+    "安心感",
   ];
 
   const enKeys = [
-    "from now on","rule","policy","always","never","must","do not","remember","full code","no diff",
-    "append at end","path","responsive","world-class","safety",
+    "from now on",
+    "rule",
+    "policy",
+    "always",
+    "never",
+    "must",
+    "do not",
+    "remember",
+    "full code",
+    "no diff",
+    "append at end",
+    "path",
+    "responsive",
+    "world-class",
+    "safety",
   ];
 
   if (uiLang === "ja") return jaKeys.some((k) => s.includes(k));
@@ -142,3 +174,11 @@ export function postFilterMemories(items: MemoryItem[], uiLang: Lang) {
 
   return out;
 }
+
+/*
+このファイルの正式役割：
+会話から抽出された記憶候補を、保存可否ルール・重要度・重複排除で後段フィルタする統制層。
+
+【今回このファイルで修正したこと】
+MemoryItem の import 元を ../db/memories から ../db/memoriesFilters へ修正した。
+*/
