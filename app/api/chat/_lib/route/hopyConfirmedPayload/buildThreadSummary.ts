@@ -1,7 +1,14 @@
 // /app/api/chat/_lib/route/hopyConfirmedPayload/buildThreadSummary.ts
 
-import type { ConfirmedAssistantTurn } from "../authenticatedHelpers";
 import type { HopyReplyState } from "./buildConfirmedMeaningPayload";
+
+type ConfirmedAssistantTurn = {
+  currentStateLevel: 1 | 2 | 3 | 4 | 5;
+  currentPhase: 1 | 2 | 3 | 4 | 5;
+  prevStateLevel: 1 | 2 | 3 | 4 | 5;
+  prevPhase: 1 | 2 | 3 | 4 | 5;
+  stateChanged: boolean;
+};
 
 export type HopyThreadSummary = {
   thread_id: string;
@@ -44,3 +51,13 @@ export function buildThreadSummary(
     title_candidate_updated: autoTitleUpdated,
   };
 }
+
+/*
+このファイルの正式役割:
+hopy_confirmed_payload 用の thread_summary を confirmedTurn と会話情報から組み立てる専用ファイル
+
+【今回このファイルで修正したこと】
+authenticatedHelpers.ts から export されていない ConfirmedAssistantTurn の import を削除しました。
+このファイル内で buildThreadSummary に必要な最小限の ConfirmedAssistantTurn 型を定義しました。
+thread_summary の組み立てロジック自体は変更していません。
+*/
