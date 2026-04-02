@@ -24,6 +24,7 @@ import { resolveConfirmedCompassArtifacts } from "./authenticatedPostTurnCompass
 
 type RunHopyTurnBuiltResult = Record<string, any>;
 type ResolvedPlan = "free" | "plus" | "pro";
+type InterventionTone = Parameters<typeof insertInterventionLog>[0]["input_tone"];
 
 type CanonicalAssistantState = {
   current_phase: 1 | 2 | 3 | 4 | 5;
@@ -66,7 +67,7 @@ export type AuthenticatedPostTurnParams = {
   userText: string;
   uiLang: Lang;
   routed: {
-    tone: string;
+    tone: InterventionTone;
     intensity: number;
     lang?: Lang | null;
   };
@@ -562,8 +563,8 @@ Compass を含む最終 turn artifacts 作成、
 
 /*
 【今回このファイルで修正したこと】
-- ConfirmedAssistantTurn の compassPrompt を string | undefined にそろえました。
-- confirmedTurnWithCompass へ渡す compassPrompt も null のまま流さず、undefined に正規化しました。
-- compassPrompt の null / undefined 型不一致で build が止まる症状だけを対象に修正しました。
-- postTurn の実行ロジック、memory / Compass / payload の流れには触っていません。
+- routed.tone の型を広い string のまま持たず、insertInterventionLog 側の input_tone 型へ合わせました。
+- input_tone: params.routed.tone で Tone5 不一致になっていた build error だけを対象に修正しました。
+- 実行時の値や tone の判定ロジックは変えず、このファイル内の型の受け口だけをそろえました。
+- postTurn の実行ロジック、memory / Compass / payload / 状態 1..5 の流れには触っていません。
 */
