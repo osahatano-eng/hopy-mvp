@@ -43,7 +43,6 @@ import {
 import {
   createAuthenticatedTurnDeps,
   resolveConfirmedTurnFromBuiltResult,
-  type ConfirmedAssistantTurn,
   type ConfirmedStateFallback,
 } from "./authenticatedTurnDeps";
 import { finalizeAuthenticatedPostTurn } from "./authenticatedPostTurn";
@@ -563,7 +562,7 @@ export async function handleAuthenticatedChat(
     };
   }
 
-  const confirmedTurn: ConfirmedAssistantTurn = resolveConfirmedTurnFromBuiltResult(
+  const confirmedTurn = resolveConfirmedTurnFromBuiltResult(
     runTurn.result,
     confirmedStateFallback,
   );
@@ -856,8 +855,8 @@ authenticated 側の中継本体である。
    正式エラーをそのまま返す。 */
 
 /* 【今回このファイルで修正したこと】
-- `type ConfirmedAssistantTurn` の import 元を `./authenticatedHelpers` から外しました。
-- `type ConfirmedAssistantTurn` を `resolveConfirmedTurnFromBuiltResult` と同じ `./authenticatedTurnDeps` 側から受ける形にそろえました。
+- `type ConfirmedAssistantTurn` の import を削除しました。
+- `resolveConfirmedTurnFromBuiltResult(...)` の戻り値はこのファイル内で型注釈せず、そのまま `confirmedTurn` として扱う形に修正しました。
 - 他の処理や状態判定、Compass 系の流れには触れていません。
 */
 // このファイルの正式役割: authenticated ユーザー用のチャット処理本体
