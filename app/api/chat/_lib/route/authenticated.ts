@@ -53,6 +53,8 @@ type RoutedTone =
 type SelectedStrategy =
   Parameters<typeof finalizeAuthenticatedPostTurn>[0]["selectedStrategy"];
 
+type RunHopyTurnDeps = Parameters<typeof runHopyTurn>[0]["deps"];
+
 type HandleAuthenticatedChatParams = {
   openai: OpenAI;
   modelName: string;
@@ -400,7 +402,7 @@ export async function handleAuthenticatedChat(
     markUsedHeuristicConfirmedMemoryCandidates: () => {
       usedHeuristicConfirmedMemoryCandidates = true;
     },
-  });
+  }) as RunHopyTurnDeps;
 
   const runTurn = await runHopyTurn({
     ctx: {
@@ -810,7 +812,7 @@ finalizeAuthenticatedPostTurn(...) へ
 - state / title / memory / debug / request / thread / OpenAI 実行結果 一式
 
 最後に postTurn.payload を返す。
-debugSave=true のときは attachDebugPayload(...) で debug を積み増して返す。
+debugSave=true のときは attachDebugPayload(...) で debug を積み増して返す。 
 
 【Compass 観点でこのファイルの意味】
 このファイル自身は Compass 本文を生成していない。
@@ -837,9 +839,8 @@ authenticated 側の中継本体である。
 */
 
 /* 【今回このファイルで修正したこと】
-- selectedStrategy の型を finalizeAuthenticatedPostTurn 側の selectedStrategy 型に合わせました。
-- finalizeAuthenticatedPostTurn(...) 呼び出し時の selectedStrategy 型不一致で build が止まる症状だけを対象に修正しました。
-- 実行時の値や strategy の判定ロジックは変えず、このファイル内の型の受け口だけをそろえました。
-- routed、memory、Compass、payload、状態 1..5 の流れには触っていません。
+- runHopyTurn(...) の deps 受け口型を Parameters<typeof runHopyTurn>[0]["deps"] から取得するようにしました。
+- createAuthenticatedTurnDeps(...) の返り値を、このファイル内で runHopyTurn の正式な deps 型として扱う境界にそろえました。
+- 直したのは authenticated.ts 側の型境界だけで、authenticatedTurnDeps.ts の実行ロジックや HOPY の回答ロジックには触っていません。
 */
 // このファイルの正式役割: authenticated ユーザー用のチャット処理本体
