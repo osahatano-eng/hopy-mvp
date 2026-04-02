@@ -7,8 +7,6 @@ import { memoryRecoveryContractSystem } from "./openaiContracts";
 import { extractAssistantReplyPayload } from "./openaiParsing";
 import { withTimeout, type OpenAIChatMessage } from "./openaiExecution";
 
-const MEMORY_RECOVERY_MAX_TOKENS = 220;
-
 export async function recoverMemoryCandidatesFromPlainReply(params: {
   openai: OpenAI;
   modelName: string;
@@ -46,7 +44,6 @@ export async function recoverMemoryCandidatesFromPlainReply(params: {
       openai.chat.completions.create({
         model: modelName,
         messages: recoveryMessages,
-        temperature: 0.0,
         response_format: { type: "json_object" },
         ...phaseParams(phaseForParams),
       }),
@@ -75,7 +72,8 @@ confirmed_memory_candidates を安全に復元する責務を持つ。
 
 /*
 【今回このファイルで修正したこと】
-- openai.chat.completions.create(...) で重複指定されていた max_tokens: MEMORY_RECOVERY_MAX_TOKENS を削除しました。
-- max_tokens は phaseParams(phaseForParams) 側の値だけを使う形にそろえ、TypeScript の重複指定 build error を止めました。
-- それ以外の temperature、response_format、memory recovery の抽出処理は触っていません。
+- openai.chat.completions.create(...) で重複指定されていた temperature: 0.0 を削除しました。
+- temperature は phaseParams(phaseForParams) 側の値だけを使う形にそろえ、TypeScript の重複指定 build error を止めました。
+- 使われなくなった MEMORY_RECOVERY_MAX_TOKENS 定数も削除しました。
+- それ以外の response_format、memory recovery の抽出処理、timeout 処理は触っていません。
 */
