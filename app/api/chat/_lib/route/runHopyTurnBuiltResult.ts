@@ -280,7 +280,7 @@ export function finalizeBuiltResult(
 ): RunHopyTurnBuiltResult {
   const confirmedState = result.state ?? null;
   const persistedThreadPatch = mergeThreadPatchWithState(
-    result.threadPatch,
+    result.threadPatch ?? null,
     confirmedState,
   );
 
@@ -386,4 +386,5 @@ buildFailedRunHopyTurnResult で失敗時の標準結果を返す。
 - runHopyTurn.ts 内にあった builtResult の normalize / finalize / validation / failed result 生成責務を、この新規ファイルへ切り出しました。
 - Compass 参照元の吸い上げロジックもこの責務へ移し、親ファイルから builtResult 整形本体を外せる受け皿にしました。
 - HOPY唯一の正である state / confirmed payload の意味生成は増やさず、受け取った値の整形・検証だけに限定しています。
+- finalizeBuiltResult() で result.threadPatch ?? null を渡すようにし、undefined のまま mergeThreadPatchWithState() へ入る build error を止めました。
 */
