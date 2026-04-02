@@ -658,7 +658,7 @@ export async function handleAuthenticatedChat(
       mem_write_allowed: postTurn.memoryWrite.mem_write_allowed ?? false,
       mem_write_inserted: postTurn.memoryWrite.mem_write_inserted,
       mem_write_reason: postTurn.memoryWrite.mem_write_reason,
-      mem_items_count: postTurn.memoryWrite.mem_items_count,
+      mem_items_count: postTurn.memoryWrite.mem_items_count ?? 0,
       mem_parse_ok: postTurn.memoryWrite.mem_parse_ok,
       mem_extract_preview: postTurn.memoryWrite.mem_extract_preview,
       mem_used_heuristic: postTurn.memoryWrite.mem_used_heuristic,
@@ -830,8 +830,8 @@ authenticated 側の中継本体である。
    正式エラーをそのまま返す。 */
 
 /* 【今回このファイルで修正したこと】
-- attachDebugPayload(...) に渡す mem_write_allowed を `postTurn.memoryWrite.mem_write_allowed ?? false` に正規化しました。
-- build を止めていた boolean 型不整合だけを止血しました。
+- attachDebugPayload(...) に渡す mem_items_count を `postTurn.memoryWrite.mem_items_count ?? 0` に正規化しました。
+- build を止めていた number 型不整合だけを止血しました。
 - 他の debug 項目、状態判定、Compass 系の流れには触っていません。
 */
 // このファイルの正式役割: authenticated ユーザー用のチャット処理本体
