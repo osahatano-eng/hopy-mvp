@@ -1,9 +1,10 @@
 // /app/api/chat/_lib/route/hopyConfirmedPayload/buildMemoryCandidates.ts
 
-import type {
-  ConfirmedMemoryCandidate,
-  MemoryWriteDebug,
-} from "../authenticatedHelpers";
+import type { ConfirmedMemoryCandidate } from "../authenticatedHelpers";
+
+type MemoryWriteDebug = {
+  mem_extract_preview?: unknown;
+};
 
 export type HopyMemoryCandidate = {
   source_type: "auto" | "manual";
@@ -146,3 +147,17 @@ export function buildMemoryCandidates(
     return [candidate];
   });
 }
+
+/*
+このファイルの正式役割
+confirmed memory preview から HOPY 用 memory_candidates を復元する専用ファイル。
+mem_extract_preview を読み、正規化・重複除去して HopyMemoryCandidate[] を返す。
+*/
+
+/*
+【今回このファイルで修正したこと】
+- authenticatedHelpers.ts から export されていない MemoryWriteDebug の import を削除した。
+- このファイル内で必要最小限の MemoryWriteDebug 型を定義した。
+- memory candidate の正規化・重複除去ロジック自体は変えていない。
+*/
+// このファイルの正式役割: confirmed memory preview から HOPY 用 memory_candidates を復元する専用ファイル
