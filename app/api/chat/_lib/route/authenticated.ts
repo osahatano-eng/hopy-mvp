@@ -540,8 +540,6 @@ export async function handleAuthenticatedChat(
         response_generation_log_error,
         state_transition_signal_ok,
         state_transition_signal_error,
-        mem_write_ok: null,
-        mem_write_error: null,
         user_phrase_learning_attempted: userPhraseLearningOutcome.attempted,
         user_phrase_learning_observation_count:
           userPhraseLearningOutcome.observationCount,
@@ -700,8 +698,6 @@ export async function handleAuthenticatedChat(
       response_generation_log_error,
       state_transition_signal_ok,
       state_transition_signal_error,
-      mem_write_ok: postTurn.mem_write_ok,
-      mem_write_error: postTurn.mem_write_error,
       user_phrase_learning_attempted: userPhraseLearningOutcome.attempted,
       user_phrase_learning_observation_count:
         userPhraseLearningOutcome.observationCount,
@@ -855,9 +851,9 @@ authenticated 側の中継本体である。
    正式エラーをそのまま返す。 */
 
 /* 【今回このファイルで修正したこと】
-- `attachDebugPayload(...)` に渡す `mem_write_inserted` の fallback を `false` ではなく `0` に修正しました。
-- `attachDebugPayload(...)` に渡す `learning_save_inserted` の fallback を `false` ではなく `0` に修正しました。
-- `openai_ok` の boolean 正規化はそのまま維持しました。
+- `attachDebugPayload(...)` に渡していた `mem_write_ok` を削除しました。
+- `attachDebugPayload(...)` に渡していた `mem_write_error` を削除しました。
+- 既存の `mem_write_attempted` / `mem_write_allowed` / `mem_write_inserted` / `mem_write_reason` などの正式な debug 項目は維持しました。
 - 他の処理や状態判定、Compass 系の流れには触れていません。
 */
 // このファイルの正式役割: authenticated ユーザー用のチャット処理本体
