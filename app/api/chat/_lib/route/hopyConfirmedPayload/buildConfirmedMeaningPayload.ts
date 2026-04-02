@@ -2,7 +2,6 @@
 
 import {
   normalizeConfirmedMemoryCandidates,
-  type ConfirmedAssistantTurn,
   type ConfirmedMemoryCandidate,
   type MemoryWriteDebug,
 } from "../authenticatedHelpers";
@@ -25,6 +24,30 @@ import {
   buildUiEffects,
   type HopyUiEffects,
 } from "./buildUiEffects";
+
+type ConfirmedAssistantTurn = {
+  assistantText: string;
+  currentPhase: 1 | 2 | 3 | 4 | 5;
+  currentStateLevel: 1 | 2 | 3 | 4 | 5;
+  stateChanged: boolean;
+  prevPhase: 1 | 2 | 3 | 4 | 5;
+  prevStateLevel: 1 | 2 | 3 | 4 | 5;
+  canonicalAssistantState: {
+    state_level: 1 | 2 | 3 | 4 | 5;
+    current_phase: 1 | 2 | 3 | 4 | 5;
+    state_changed: boolean;
+    prev_phase: 1 | 2 | 3 | 4 | 5;
+    prev_state_level: 1 | 2 | 3 | 4 | 5;
+  };
+  compassText?: unknown;
+  compass_text?: unknown;
+  compassPrompt?: unknown;
+  compass_prompt?: unknown;
+  compass?: {
+    text?: unknown;
+    prompt?: unknown;
+  } | null;
+};
 
 export type HopyReplyState = ReturnType<typeof buildReplyState>;
 export type HopyDashboardSignals = ReturnType<typeof buildDashboardSignals>;
@@ -94,9 +117,7 @@ function resolveCompassTextValue(params: {
 
   return normalizeCompassValue(
     typeof params.compassText === "undefined"
-      ? source.compassText ??
-          source.compass_text ??
-          source.compass?.text
+      ? source.compassText ?? source.compass_text ?? source.compass?.text
       : params.compassText,
   );
 }
@@ -115,9 +136,7 @@ function resolveCompassPromptValue(params: {
 
   return normalizeCompassValue(
     typeof params.compassPrompt === "undefined"
-      ? source.compassPrompt ??
-          source.compass_prompt ??
-          source.compass?.prompt
+      ? source.compassPrompt ?? source.compass_prompt ?? source.compass?.prompt
       : params.compassPrompt,
   );
 }
@@ -275,9 +294,9 @@ hopy_confirmed_payload の正式shapeへ載せる。
 
 /*
 【今回このファイルで修正したこと】
-- HopyConfirmedMeaningPayload の正式shapeに top-level の compass を追加した。
-- buildConfirmedMeaningPayload(...) の return に top-level の compass を追加した。
-- これにより authenticatedFinalize.ts が payload.hopy_confirmed_payload を上書きしても、
-  hopy_confirmed_payload.compass が欠けないようにした。
+- authenticatedHelpers.ts から export されていない ConfirmedAssistantTurn の import を削除した。
+- このファイル内で必要最小限の ConfirmedAssistantTurn 型を定義した。
+- state 値は 1..5 / 5段階で固定した。
+- hopy_confirmed_payload の組み立てロジック自体は変えていない。
 */
 // このファイルの正式役割: hopy_confirmed_payload の正式組み立てファイル
