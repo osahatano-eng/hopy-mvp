@@ -540,17 +540,6 @@ export async function handleAuthenticatedChat(
         response_generation_log_error,
         state_transition_signal_ok,
         state_transition_signal_error,
-        user_phrase_learning_attempted: userPhraseLearningOutcome.attempted,
-        user_phrase_learning_observation_count:
-          userPhraseLearningOutcome.observationCount,
-        user_phrase_learning_persistable_observation_count:
-          userPhraseLearningOutcome.persistableObservationCount,
-        user_phrase_learning_inserted_observation_count:
-          userPhraseLearningOutcome.insertedObservationCount,
-        user_phrase_learning_upserted_pattern_count:
-          userPhraseLearningOutcome.upsertedPatternCount,
-        user_phrase_learning_reason: userPhraseLearningOutcome.reason,
-        user_phrase_learning_error: userPhraseLearningOutcome.error,
       });
     }
 
@@ -698,17 +687,6 @@ export async function handleAuthenticatedChat(
       response_generation_log_error,
       state_transition_signal_ok,
       state_transition_signal_error,
-      user_phrase_learning_attempted: userPhraseLearningOutcome.attempted,
-      user_phrase_learning_observation_count:
-        userPhraseLearningOutcome.observationCount,
-      user_phrase_learning_persistable_observation_count:
-        userPhraseLearningOutcome.persistableObservationCount,
-      user_phrase_learning_inserted_observation_count:
-        userPhraseLearningOutcome.insertedObservationCount,
-      user_phrase_learning_upserted_pattern_count:
-        userPhraseLearningOutcome.upsertedPatternCount,
-      user_phrase_learning_reason: userPhraseLearningOutcome.reason,
-      user_phrase_learning_error: userPhraseLearningOutcome.error,
     });
   }
 
@@ -851,9 +829,8 @@ authenticated 側の中継本体である。
    正式エラーをそのまま返す。 */
 
 /* 【今回このファイルで修正したこと】
-- `attachDebugPayload(...)` に渡していた `mem_write_ok` を削除しました。
-- `attachDebugPayload(...)` に渡していた `mem_write_error` を削除しました。
-- 既存の `mem_write_attempted` / `mem_write_allowed` / `mem_write_inserted` / `mem_write_reason` などの正式な debug 項目は維持しました。
+- `attachDebugPayload(...)` に渡していた `user_phrase_learning_*` 一式を削除しました。
+- 既存の debug 項目は維持し、`DebugPayloadArgs` に存在しない項目だけを外しました。
 - 他の処理や状態判定、Compass 系の流れには触れていません。
 */
 // このファイルの正式役割: authenticated ユーザー用のチャット処理本体
