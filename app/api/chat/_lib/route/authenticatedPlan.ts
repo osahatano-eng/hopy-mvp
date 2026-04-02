@@ -89,10 +89,12 @@ export async function resolvePromptMemoryLoad(params: {
       clientMemoryBlock: params.clientMemoryBlock,
     });
 
-    if (typeof loaded === "string") {
+    const loadedText = String(loaded ?? "").trim();
+
+    if (loadedText.length > 0) {
       return {
-        memoryBlock: loaded,
-        memoryInjected: loaded.trim().length > 0,
+        memoryBlock: loadedText,
+        memoryInjected: true,
       };
     }
 
@@ -125,7 +127,7 @@ plan ごとの memory 読み込み上限と learning 有効可否を返す。
 
 /*
 【今回このファイルで修正したこと】
-- ./promptBundle から export されていない ResolvedPlan の import を削除しました。
-- このファイル内で使う正式値に合わせて ResolvedPlan = "free" | "plus" | "pro" をローカル定義しました。
-- 既存の plan 判定ロジックと memory 制御ロジックには触っていません。
+- loadMemoriesForPrompt(...) の戻り値を loaded.trim() で直接読んでいた箇所をやめました。
+- 先に String(loaded ?? "").trim() で loadedText を作り、その文字列を使って判定する形へ修正しました。
+- loadMemoriesForPrompt.ts 本体や plan 判定ロジックには触っていません。
 */
