@@ -10,10 +10,7 @@ import type { Lang } from "../router/simpleRouter";
 import { resolveThreadTitleForPayload } from "./threadTitle";
 import { handleMemoryWrite } from "./memoryWrite";
 import type { NotificationState } from "../state/notification";
-import type {
-  ConfirmedMemoryCandidate,
-  MemoryWriteDebug,
-} from "./authenticatedHelpers";
+import type { ConfirmedMemoryCandidate } from "./authenticatedHelpers";
 import {
   createDefaultMemoryWriteDebug,
   saveConfirmedAssistantLearningEntry,
@@ -42,6 +39,15 @@ type ConfirmedAssistantTurn = {
         prompt: string | null;
       }
     | undefined;
+};
+
+type MemoryWriteDebug = {
+  mem_write_attempted: boolean;
+  mem_write_allowed?: boolean | null;
+  mem_parse_ok?: boolean | null;
+  mem_items_count?: number | null;
+  mem_used_heuristic?: boolean | null;
+  [key: string]: any;
 };
 
 export type AuthenticatedPostTurnParams = {
@@ -546,8 +552,8 @@ Compass を含む最終 turn artifacts 作成、
 
 /*
 【今回このファイルで修正したこと】
-- ./authenticatedHelpers から export されていない ConfirmedAssistantTurn の import を削除しました。
-- このファイル内で使う最小のローカル型として ConfirmedAssistantTurn を定義しました。
-- currentPhase / prevPhase / currentStateLevel は 1..5 の正式値で固定しました。
+- ./authenticatedHelpers から export されていない MemoryWriteDebug の import を削除しました。
+- このファイル内で使う最小のローカル型として MemoryWriteDebug を定義しました。
+- 既存コード内で実際に使っている mem_write_* 系の形だけを受けられるようにしました。
 - postTurn の実行ロジック、memory / Compass / payload の流れには触っていません。
 */
