@@ -172,6 +172,10 @@ function extractSpeedAuditFromModelOutput(
   return isRecord(modelOutput.speed_audit) ? modelOutput.speed_audit : null;
 }
 
+function resolveSpeedAudit(value: unknown): RunHopyTurnSpeedAudit {
+  return isRecord(value) ? value : null;
+}
+
 function buildFailedModelOutput(
   error: string,
   speedAudit: RunHopyTurnSpeedAudit = null,
@@ -237,6 +241,8 @@ export async function runHopyTurn(
 
   const builtResultFailure = resolveBuiltResultFailure(result);
   if (builtResultFailure !== null) {
+    const speedAudit = resolveSpeedAudit(result.speed_audit);
+
     return {
       response: buildChatResponse({
         ok: false,
@@ -244,11 +250,8 @@ export async function runHopyTurn(
       }),
       loadedContext,
       promptInput,
-      modelOutput: buildFailedModelOutput(
-        builtResultFailure,
-        result.speed_audit ?? null,
-      ),
-      result: buildFailedRunHopyTurnResult(result.speed_audit ?? null),
+      modelOutput: buildFailedModelOutput(builtResultFailure, speedAudit),
+      result: buildFailedRunHopyTurnResult(speedAudit),
     };
   }
 
@@ -327,13 +330,13 @@ persistence → buildChatResponse(...) による response 化
 
 /*
 【今回このファイルで修正したこと】
-- resolveResponseCompass() 内で result.compassText / result.compassPrompt を typeof === "string" で明示確認するように修正しました。
-- state_changed=true でも Compass 値が文字列で確定していない場合は undefined を返すようにし、buildChatResponse に渡す compass.text / prompt の型を string に固定しました。
-- runHopyTurn の実行順序、persist 呼び出し、response 組み立ての流れ自体は触っていません。
+- builtResultFailure 分岐で result.speed_audit をそのまま渡さず、resolveSpeedAudit() で Record<string, unknown> | null に絞ってから buildFailedModelOutput() と buildFailedRunHopyTurnResult() に渡すように修正しました。
+- これにより、{} | null のままでは通らない RunHopyTurnSpeedAudit の型不一致をこのファイル内で止めました。
+- それ以外の runHopyTurn の実行順序、persist 呼び出し、response 組み立ては触っていません。
 */
 // このファイルの正式役割: runHopyTurn の共通実行本体
 
 /*
 【今回このファイルで修正したこと】
-resolveResponseCompass() で compassText / compassPrompt の型を string に絞ってから返すように修正しました。
+builtResultFailure 分岐で speed_audit を RunHopyTurnSpeedAudit に絞ってから渡すように修正しました。
 */
