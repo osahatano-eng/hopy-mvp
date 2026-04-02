@@ -4,9 +4,10 @@ import { PERSONA_VERSION, personaPromptDigest } from "../system/persona";
 import {
   detectExplicitReplyLanguageRequest,
   isShortLowSignalEnglish,
-  type ResolvedPlan,
 } from "./promptBundle";
 import type { Lang } from "../router/simpleRouter";
+
+type ResolvedPlan = "free" | "plus" | "pro";
 
 type DebugPayloadArgs = {
   payload: any;
@@ -244,3 +245,17 @@ export function attachDebugPayload(args: DebugPayloadArgs) {
   args.payload.short_low_signal_english =
     languageDebug.short_low_signal_english;
 }
+
+/*
+このファイルの正式役割
+debug payload へ各種診断情報を積む専用ファイル。
+build 時や実行時の確認に必要な情報を payload に集約する。
+*/
+
+/*
+【今回このファイルで修正したこと】
+- promptBundle.ts から export されていない ResolvedPlan の import を削除した。
+- このファイル内で必要最小限の ResolvedPlan 型を定義した。
+- attachDebugPayload の実行ロジック自体は変えていない。
+*/
+// このファイルの正式役割: debug payload へ各種診断情報を積む専用ファイル
