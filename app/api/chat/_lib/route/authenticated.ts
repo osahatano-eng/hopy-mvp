@@ -455,6 +455,7 @@ export async function handleAuthenticatedChat(
     auto_title_reason,
     auto_title_title,
   } = autoTitleRes;
+  const normalizedAutoTitleUpdated = auto_title_updated ?? false;
 
   const hasTurnRecord = asRecord(runTurn.result?.turnRecord) !== null;
   const hasConfirmedPayload =
@@ -523,7 +524,7 @@ export async function handleAuthenticatedChat(
         audit_error: null,
         precheck_not_found,
         auto_title_ok,
-        auto_title_updated,
+        auto_title_updated: normalizedAutoTitleUpdated,
         auto_title_reason,
         auto_title_title,
         server_created_thread,
@@ -593,7 +594,7 @@ export async function handleAuthenticatedChat(
     stateUpdateError,
     precheck_not_found,
     auto_title_ok,
-    auto_title_updated,
+    auto_title_updated: normalizedAutoTitleUpdated,
     auto_title_reason,
     auto_title_title,
     server_created_thread,
@@ -670,7 +671,7 @@ export async function handleAuthenticatedChat(
       audit_error: postTurn.audit_error,
       precheck_not_found,
       auto_title_ok,
-      auto_title_updated,
+      auto_title_updated: normalizedAutoTitleUpdated,
       auto_title_reason,
       auto_title_title,
       server_created_thread,
@@ -829,8 +830,8 @@ authenticated 側の中継本体である。
    正式エラーをそのまま返す。 */
 
 /* 【今回このファイルで修正したこと】
-- `attachDebugPayload(...)` に渡していた `user_phrase_learning_*` 一式を削除しました。
-- 既存の debug 項目は維持し、`DebugPayloadArgs` に存在しない項目だけを外しました。
+- `auto_title_updated` を `normalizedAutoTitleUpdated = auto_title_updated ?? false` で boolean に正規化しました。
+- その正規化済み値を `finalizeAuthenticatedPostTurn(...)` と `attachDebugPayload(...)` の両方へ渡すようにしました。
 - 他の処理や状態判定、Compass 系の流れには触れていません。
 */
 // このファイルの正式役割: authenticated ユーザー用のチャット処理本体
