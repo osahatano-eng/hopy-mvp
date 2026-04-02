@@ -1,7 +1,12 @@
 // /app/api/chat/_lib/route/memoryExtraction.ts
 import { extractFirstJsonObject } from "../infra/text";
-import type { MemoryItem } from "../db/memories";
 import type { Lang } from "../router/simpleRouter";
+
+type MemoryItem = {
+  content: string;
+  importance: number;
+  memory_type: "trait" | "theme" | "support_context" | "dashboard_signal";
+};
 
 export function memoryExtractionSystem(uiLang: Lang): string {
   if (uiLang === "en") {
@@ -135,3 +140,13 @@ export function safeParseMemoryItems(raw: string): { items: MemoryItem[]; parse_
     }
   }
 }
+
+/*
+このファイルの正式役割:
+memory 抽出結果の system prompt 生成と、抽出JSONの安全パースを行う専用ファイル
+
+【今回このファイルで修正したこと】
+../db/memories から export されていない MemoryItem の import を削除しました。
+このファイル内で safeParseMemoryItems に必要な最小限の MemoryItem 型を定義しました。
+memory 抽出文面と JSON パースの実行ロジック自体は変更していません。
+*/
