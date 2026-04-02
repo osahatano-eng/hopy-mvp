@@ -338,6 +338,10 @@ export function resolveBuiltResultFailure(
     return "runHopyTurn: built result hopy_confirmed_payload.state is required";
   }
 
+  if (!confirmedState) {
+    return "runHopyTurn: built result state is required";
+  }
+
   if (confirmedState.state_changed === true) {
     if (result.compassText === null) {
       return "runHopyTurn: compassText is required when state_changed is true";
@@ -383,10 +387,20 @@ buildFailedRunHopyTurnResult で失敗時の標準結果を返す。
 */
 
 /*
+このファイルの正式役割
+runHopyTurn における builtResult の整形・補完・検証をまとめる責務ファイル。
+buildTurnResult から返された結果を normalizeBuiltResult で正規化し、
+finalizeBuiltResult で state と threadPatch の整合を補完し、
+resolveBuiltResultFailure で回答成立条件を検証し、
+buildFailedRunHopyTurnResult で失敗時の標準結果を返す。
+*/
+
+/*
 【今回このファイルで修正したこと】
 - runHopyTurn.ts 内にあった builtResult の normalize / finalize / validation / failed result 生成責務を、この新規ファイルへ切り出しました。
 - Compass 参照元の吸い上げロジックもこの責務へ移し、親ファイルから builtResult 整形本体を外せる受け皿にしました。
 - HOPY唯一の正である state / confirmed payload の意味生成は増やさず、受け取った値の整形・検証だけに限定しています。
 - finalizeBuiltResult() で result.threadPatch ?? null を渡すようにし、undefined のまま mergeThreadPatchWithState() へ入る build error を止めました。
 - resolveBuiltResultFailure() で result.state ?? null を confirmedState に受け直し、undefined のまま hasCanonicalStateShape() へ入る build error を止めました。
+- confirmedState の null 可能性を残したまま state_changed を読まないように、null 明示ガードを追加しました。
 */
