@@ -36,7 +36,7 @@ type ConfirmedAssistantTurn = {
   prevStateLevel: Phase5;
   canonicalAssistantState: CanonicalAssistantState;
   compassText?: string;
-  compassPrompt?: string | null;
+  compassPrompt?: string;
 };
 
 type RunHopyTurnBuiltResult = {
@@ -357,7 +357,7 @@ export async function buildAuthenticatedTurnResult(
     confirmedTurn.compassText = compassText;
   }
 
-  if (compassPrompt !== undefined) {
+  if (compassPrompt !== null) {
     confirmedTurn.compassPrompt = compassPrompt;
   }
 
@@ -426,9 +426,8 @@ RunHopyTurnBuiltResult にそのまま載せる。
 
 /*
 【今回このファイルで修正したこと】
-- export されていない ConfirmedAssistantTurn を authenticatedHelpers.ts から import する形をやめた。
-- このファイル内で current/prev phase・state_changed・canonicalAssistantState を含む必要最小限の ConfirmedAssistantTurn 型を定義した。
-- resolveStateLevelValue の返り値を Phase5 に絞り、1..5 の正式型へ合わせた。
+- confirmTurn の compassPrompt 型を string | undefined に合わせた。
+- null をそのまま入れず、compassPrompt !== null のときだけ代入する形へそろえた。
 - それ以外の実行ロジック、Compass 条件、状態 1..5 の意味、memory candidate の流れには触っていない。
 */
 // このファイルの正式役割: authenticated 経路における turn 結果の正式組み立てファイル
