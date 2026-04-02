@@ -1,6 +1,13 @@
 // /app/api/chat/_lib/route/hopyConfirmedPayload/buildReplyState.ts
 
-import type { ConfirmedAssistantTurn } from "../authenticatedHelpers";
+type ConfirmedAssistantTurn = {
+  assistantText: string;
+  currentStateLevel: 1 | 2 | 3 | 4 | 5;
+  currentPhase: 1 | 2 | 3 | 4 | 5;
+  prevStateLevel: 1 | 2 | 3 | 4 | 5;
+  prevPhase: 1 | 2 | 3 | 4 | 5;
+  stateChanged: boolean;
+};
 
 export type HopyReplyState = {
   reply: string;
@@ -33,3 +40,13 @@ export function buildReplyState(
     },
   };
 }
+
+/*
+このファイルの正式役割:
+hopy_confirmed_payload 用の reply/state を confirmedTurn から最小構成で組み立てる専用ファイル
+
+【今回このファイルで修正したこと】
+authenticatedHelpers.ts から export されていない ConfirmedAssistantTurn の import を削除しました。
+このファイル内で buildReplyState に必要な最小限の ConfirmedAssistantTurn 型を定義しました。
+reply/state の組み立てロジック自体は変更していません。
+*/
