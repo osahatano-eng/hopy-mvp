@@ -50,6 +50,9 @@ import { finalizeAuthenticatedPostTurn } from "./authenticatedPostTurn";
 type RoutedTone =
   Parameters<typeof finalizeAuthenticatedPostTurn>[0]["routed"]["tone"];
 
+type SelectedStrategy =
+  Parameters<typeof finalizeAuthenticatedPostTurn>[0]["selectedStrategy"];
+
 type HandleAuthenticatedChatParams = {
   openai: OpenAI;
   modelName: string;
@@ -65,7 +68,7 @@ type HandleAuthenticatedChatParams = {
     intensity: number;
     lang?: Lang | null;
   };
-  selectedStrategy: string;
+  selectedStrategy: SelectedStrategy;
   buildSig: string;
   debugSave: boolean;
   openaiTimeoutMs: number;
@@ -830,12 +833,13 @@ authenticated 側の中継本体である。
 4. 最終 payload の直接生成者はこのファイルではなく
    finalizeAuthenticatedPostTurn(...) 側。
 5. runHopyTurn 失敗時は authenticated.ts で擬似成功へ回復させず、
-   正式エラーをそのまま返す。 */
+   正式エラーをそのまま返す。
+*/
 
 /* 【今回このファイルで修正したこと】
-- routed.tone の型を finalizeAuthenticatedPostTurn 側の routed.tone 型に合わせました。
-- finalizeAuthenticatedPostTurn(...) 呼び出し時の routed 型不一致で build が止まる症状だけを対象に修正しました。
-- 実行時の値や routed の判定ロジックは変えず、このファイル内の型の受け口だけをそろえました。
-- 状態判定、Compass 系の流れ、debug の中身には触っていません。
+- selectedStrategy の型を finalizeAuthenticatedPostTurn 側の selectedStrategy 型に合わせました。
+- finalizeAuthenticatedPostTurn(...) 呼び出し時の selectedStrategy 型不一致で build が止まる症状だけを対象に修正しました。
+- 実行時の値や strategy の判定ロジックは変えず、このファイル内の型の受け口だけをそろえました。
+- routed、memory、Compass、payload、状態 1..5 の流れには触っていません。
 */
 // このファイルの正式役割: authenticated ユーザー用のチャット処理本体
