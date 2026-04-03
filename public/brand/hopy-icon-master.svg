@@ -22,7 +22,7 @@
     cy="512"
     r="318"
     stroke="#CBD5E1"
-    stroke-width="28"
+    stroke-width="20"
     fill="none"
   />
 
@@ -32,82 +32,79 @@
     cy="512"
     r="258"
     stroke="#E2E8F0"
-    stroke-width="12"
+    stroke-width="10"
     fill="none"
   />
 
   <!-- directional guide lines -->
   <line
     x1="512"
-    y1="214"
+    y1="248"
     x2="512"
-    y2="810"
+    y2="776"
     stroke="#E2E8F0"
-    stroke-width="10"
+    stroke-width="8"
     stroke-linecap="round"
   />
   <line
-    x1="214"
+    x1="248"
     y1="512"
-    x2="810"
+    x2="776"
     y2="512"
     stroke="#E2E8F0"
-    stroke-width="10"
+    stroke-width="8"
     stroke-linecap="round"
   />
 
+  <!-- soft center halo for calm presence -->
+  <circle cx="512" cy="512" r="64" fill="#F8FAFC" fill-opacity="0.86" />
+
   <!-- state circles -->
   <!-- north = decision -->
-  <circle cx="512" cy="214" r="44" fill="#F59E0B" />
+  <circle cx="512" cy="214" r="40" fill="#F59E0B" />
 
   <!-- east = exploration -->
-  <circle cx="810" cy="512" r="38" fill="#3B82F6" />
+  <circle cx="810" cy="512" r="34" fill="#3B82F6" />
 
   <!-- south = organization -->
-  <circle cx="512" cy="810" r="38" fill="#14B8A6" />
+  <circle cx="512" cy="810" r="34" fill="#14B8A6" />
 
   <!-- west = convergence -->
-  <circle cx="214" cy="512" r="38" fill="#8B5CF6" />
+  <circle cx="214" cy="512" r="34" fill="#8B5CF6" />
 
   <!-- center = confusion -->
-  <circle cx="512" cy="512" r="34" fill="#6B7280" />
+  <circle cx="512" cy="512" r="30" fill="#6B7280" />
 
   <!-- upward needle -->
   <g>
     <path
-      d="M512 298
-         C523 372 530 438 530 512
-         C530 586 523 652 512 726
-         C501 652 494 586 494 512
-         C494 438 501 372 512 298Z"
+      d="M512 322
+         C520 388 525 448 525 512
+         C525 576 520 636 512 702
+         C504 636 499 576 499 512
+         C499 448 504 388 512 322Z"
       fill="#1F2937"
     />
     <path
-      d="M512 256
-         L544 334
-         L512 320
-         L480 334
+      d="M512 272
+         L538 340
+         L512 328
+         L486 340
          Z"
       fill="#1F2937"
     />
   </g>
 
-  <!-- soft center halo for calm presence -->
-  <circle cx="512" cy="512" r="78" fill="#F8FAFC" fill-opacity="0.72" />
-  <circle cx="512" cy="512" r="34" fill="#6B7280" />
-
   <!-- tiny north emphasis ring -->
   <circle
     cx="512"
     cy="214"
-    r="62"
+    r="56"
     stroke="#F59E0B"
-    stroke-opacity="0.22"
-    stroke-width="10"
+    stroke-opacity="0.16"
+    stroke-width="8"
     fill="none"
   />
-
-  <!-- safe area hint removed from export usage; visual structure only -->
 </svg>
 
 <!--
@@ -118,7 +115,8 @@ favicon・PWA用PNG・apple-touch-icon へ展開する前提の唯一の正の�
 
 <!--
 【今回このファイルで修正したこと】
-1. HOPYアイコンの親ソースとなる master SVG を新規作成しました。
-2. 中心=混線、北=決定、東西南=模索・収束・整理、上向きの針、静かなリング構造を1枚に統合しました。
-3. 既存の manifest.ts、layout.tsx、PNG書き出し、favicon差し替えにはまだ触れていません。
+1. 外周リング・補助リング・十字線の太さを少し下げて、説明図っぽさを減らしました。
+2. 針の長さと太さを少し控えめにし、上向きの凛とした印象は残しつつ圧を弱めました。
+3. 中心ハローを小さく・静かにし、中心点が埋もれず上品に見えるようにしました。
+4. 北の決定点と強調リングを少し抑えて、主張しすぎず特別感だけ残す形に整えました。
 -->
