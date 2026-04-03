@@ -42,19 +42,24 @@ function getRailText(uiLang: string) {
   };
 }
 
-function isConfirmedThreadStateLike(
+function resolveConfirmedThreadState(
   value: LeftRailProps["activeThreadState"],
-): value is NonNullable<ReturnType<typeof buildActiveThreadState>> {
-  if (!value || typeof value !== "object") return false;
+  activeThread: LeftRailProps["activeThread"],
+) {
+  if (value && typeof value === "object") {
+    const currentPhase = (value as { current_phase?: unknown }).current_phase;
+    if (
+      currentPhase === 1 ||
+      currentPhase === 2 ||
+      currentPhase === 3 ||
+      currentPhase === 4 ||
+      currentPhase === 5
+    ) {
+      return value;
+    }
+  }
 
-  const currentPhase = (value as { current_phase?: unknown }).current_phase;
-  return (
-    currentPhase === 1 ||
-    currentPhase === 2 ||
-    currentPhase === 3 ||
-    currentPhase === 4 ||
-    currentPhase === 5
-  );
+  return buildActiveThreadState(activeThread);
 }
 
 export default function LeftRail(props: LeftRailProps) {
@@ -92,10 +97,7 @@ export default function LeftRail(props: LeftRailProps) {
   const railText = React.useMemo(() => getRailText(uiLang), [uiLang]);
 
   const resolvedDirectActiveThreadState = React.useMemo(() => {
-    if (isConfirmedThreadStateLike(activeThreadState)) {
-      return activeThreadState;
-    }
-    return buildActiveThreadState(activeThread);
+    return resolveConfirmedThreadState(activeThreadState, activeThread);
   }, [activeThreadState, activeThread]);
 
   const controllerProps = React.useMemo(
@@ -507,7 +509,7 @@ export default function LeftRail(props: LeftRailProps) {
 
 /*
 【今回このファイルで修正したこと】
-1. activeThreadState をそのまま通さず、current_phase が 1..5 の確定済み状態だけを通す絞り込みを追加しました。
-2. ConfirmedThreadState でない値が来た場合は、buildActiveThreadState(activeThread) に戻すようにしました。
+1. 型述語関数をやめて、確定済み状態へ寄せる通常関数 resolveConfirmedThreadState に置き換えました。
+2. current_phase が 1..5 の値だけを通し、それ以外は buildActiveThreadState(activeThread) に戻す形へ整理しました。
 3. 左カラムの表示構造、Current Chat、Threads、Memories、AccountSection の責務には触れていません。
 */
