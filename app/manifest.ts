@@ -15,25 +15,25 @@ export default function manifest(): MetadataRoute.Manifest {
     orientation: "portrait",
     icons: [
       {
-        src: "/icons/icon-192.png",
+        src: "/icon.png",
         sizes: "192x192",
         type: "image/png",
         purpose: "any",
       },
       {
-        src: "/icons/icon-512.png",
+        src: "/icon.png",
         sizes: "512x512",
         type: "image/png",
         purpose: "any",
       },
       {
-        src: "/icons/maskable-192.png",
+        src: "/icon.png",
         sizes: "192x192",
         type: "image/png",
         purpose: "maskable",
       },
       {
-        src: "/icons/maskable-512.png",
+        src: "/icon.png",
         sizes: "512x512",
         type: "image/png",
         purpose: "maskable",
@@ -41,3 +41,14 @@ export default function manifest(): MetadataRoute.Manifest {
     ],
   };
 }
+
+/*
+このファイルの正式役割
+PWA manifest の基本情報と、ホーム画面追加・インストール時に使うアイコン定義を返すファイル
+*/
+
+/*
+【今回このファイルで修正したこと】
+古い /icons/icon-192.png / icon-512.png / maskable-*.png 参照をやめて、
+現在の favicon 系で使う /icon.png を PWA icons に統一しました。
+*/
