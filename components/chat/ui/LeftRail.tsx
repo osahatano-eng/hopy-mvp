@@ -45,7 +45,7 @@ function getRailText(uiLang: string) {
 function resolveConfirmedThreadState(
   value: LeftRailProps["activeThreadState"],
   activeThread: LeftRailProps["activeThread"],
-) {
+): ReturnType<typeof buildActiveThreadState> {
   if (value && typeof value === "object") {
     const currentPhase = (value as { current_phase?: unknown }).current_phase;
     if (
@@ -55,7 +55,7 @@ function resolveConfirmedThreadState(
       currentPhase === 4 ||
       currentPhase === 5
     ) {
-      return value;
+      return value as ReturnType<typeof buildActiveThreadState>;
     }
   }
 
@@ -100,7 +100,7 @@ export default function LeftRail(props: LeftRailProps) {
     return resolveConfirmedThreadState(activeThreadState, activeThread);
   }, [activeThreadState, activeThread]);
 
-  const controllerProps = React.useMemo(
+  const controllerProps: LeftRailProps = React.useMemo(
     () => ({
       uiLang,
       ui,
@@ -509,7 +509,8 @@ export default function LeftRail(props: LeftRailProps) {
 
 /*
 【今回このファイルで修正したこと】
-1. 型述語関数をやめて、確定済み状態へ寄せる通常関数 resolveConfirmedThreadState に置き換えました。
-2. current_phase が 1..5 の値だけを通し、それ以外は buildActiveThreadState(activeThread) に戻す形へ整理しました。
-3. 左カラムの表示構造、Current Chat、Threads、Memories、AccountSection の責務には触れていません。
+1. resolveConfirmedThreadState の戻り型を buildActiveThreadState と同じ型へ固定しました。
+2. current_phase が 1..5 のときだけ、その値を確定済み状態として明示 cast して返すようにしました。
+3. controllerProps 自体を LeftRailProps と明示し、activeThreadState の推論が広がらないようにしました。
+4. 左カラムの表示構造、Current Chat、Threads、Memories、AccountSection の責務には触れていません。
 */
