@@ -58,7 +58,11 @@ export default function ChatApp() {
   const sendingLockRef = useRef(false);
   const lastSendMsRef = useRef(0);
 
-  useAutoGrowTextarea(inputRef, input, 160);
+  useAutoGrowTextarea(
+    inputRef as React.RefObject<HTMLTextAreaElement>,
+    input,
+    160,
+  );
 
   useChatAppTranslationRunner({
     uiLang,
@@ -573,3 +577,14 @@ export default function ChatApp() {
     </main>
   );
 }
+
+/*
+【このファイルの正式役割】
+ChatApp 全体の表示・送受信・ログイン状態・スクロール・composer 挙動をまとめるチャット画面本体です。
+
+【今回このファイルで修正したこと】
+useAutoGrowTextarea 呼び出し時に、
+nullable ref を non-null 前提引数へ渡して build error になっていたため、
+このファイル側で RefObject<HTMLTextAreaElement> として渡す形にそろえました。
+他の hook や周辺実装には触れていません。
+*/
