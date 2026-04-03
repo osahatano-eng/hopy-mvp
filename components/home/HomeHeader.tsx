@@ -2,8 +2,8 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
-import HopyCompassIcon from "@/components/icons/HopyCompassIcon";
 import { supabase } from "@/lib/supabaseClient";
 import { useLang } from "@/components/site/LangProvider";
 import styles from "./HomeHeader.module.css";
@@ -80,12 +80,14 @@ export default function HomeHeader({
     <header className={styles.header}>
       <div className={styles.inner}>
         <Link href="/" aria-label="HOPY Home" className={styles.brand}>
-          <HopyCompassIcon
+          <Image
+            src="/brand/hopy-icon-master.svg"
+            alt=""
             className={styles.brandIcon}
             width={20}
             height={20}
             aria-hidden="true"
-            title=""
+            priority
           />
           <span className={styles.brandText}>HOPY</span>
         </Link>
@@ -121,3 +123,12 @@ export default function HomeHeader({
     </header>
   );
 }
+
+/*
+このファイルの正式役割:
+トップページヘッダーのブランド表示、言語切替、サインイン導線を表示するファイル。
+
+【今回このファイルで修正したこと】
+ヘッダー左側ロゴを HopyCompassIcon 固定表示から外し、
+public/brand/hopy-icon-master.svg を直接表示するように変更しました。
+*/
