@@ -129,13 +129,13 @@ const AUTH_CONTEXT_TIMEOUT_MS = 12000;
 async function resolveAuthContextForSendWithTimeout(
   supabase: SupabaseClient
 ): Promise<Awaited<ReturnType<typeof resolveAuthContextForSend>>> {
-  let timer: ReturnType<typeof window.setTimeout> | null = null;
+  let timer: ReturnType<typeof setTimeout> | null = null;
 
   try {
     return await Promise.race([
       resolveAuthContextForSend(supabase),
       new Promise<never>((_, reject) => {
-        timer = window.setTimeout(() => {
+        timer = setTimeout(() => {
           reject(new Error("[Auth/Timeout] auth_context_timeout"));
         }, AUTH_CONTEXT_TIMEOUT_MS);
       }),
@@ -143,7 +143,7 @@ async function resolveAuthContextForSendWithTimeout(
   } finally {
     if (timer != null) {
       try {
-        window.clearTimeout(timer);
+        clearTimeout(timer);
       } catch {}
     }
   }
@@ -795,9 +795,7 @@ export function useChatSend<TState>(params: {
 */
 /*
 【今回このファイルで修正したこと】
-1. resolveAuthContextForSend(supabase) が本番で戻らない場合に備えて、
-   useChatSend.ts 内だけで 12秒のタイムアウト付き wrapper を追加しました。
-2. sendCore と retryLastFailed の auth 取得を timeout 付きへ差し替え、
-   無限待機で pending が残り続ける状態を避けるようにしました。
-3. resolveAuthContextForSend 本体、Supabase 設定、API 側、他ファイルには触っていません。
+1. auth timeout 用 timer の型を ReturnType<typeof setTimeout> に変更しました。
+2. timer の作成と解放を window 経由ではなく setTimeout / clearTimeout にそろえました。
+3. auth timeout の導入意図、resolveAuthContextForSend 本体、Supabase 設定、API 側、他ファイルには触っていません。
 */
