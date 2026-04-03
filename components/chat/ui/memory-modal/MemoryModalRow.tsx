@@ -9,6 +9,14 @@ import { getHopyStateVisual } from "../../lib/stateBadge";
 import { importanceClass, resolveMemoryState, resolveVisualDotColor } from "./memoryModalFormat";
 import type { MemoryModalUi, RowState } from "./types";
 
+function toPhaseOrUndefined(value: unknown): 1 | 2 | 3 | 4 | 5 | undefined {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return undefined;
+  const r = Math.trunc(n);
+  if (r < 1 || r > 5) return undefined;
+  return r as 1 | 2 | 3 | 4 | 5;
+}
+
 function MemoryStateDot({ item, uiLang }: { item: MemoryItem; uiLang: Lang }) {
   const resolved = resolveMemoryState(item);
 
@@ -16,8 +24,8 @@ function MemoryStateDot({ item, uiLang }: { item: MemoryItem; uiLang: Lang }) {
 
   const visual = getHopyStateVisual({
     state: resolved.normalizedState ?? undefined,
-    level: resolved.level ?? undefined,
-    phase: resolved.phase ?? undefined,
+    level: toPhaseOrUndefined(resolved.level),
+    phase: toPhaseOrUndefined(resolved.phase),
     uiLang,
   });
 
@@ -203,3 +211,16 @@ export default function MemoryModalRow({
     </div>
   );
 }
+
+/*
+このファイルの正式役割
+Memory Modal の1行表示責務だけを持ち、メモリー本文・状態ドット・作成更新日時・編集/削除/復元操作を描画するファイル。
+状態の唯一の正は作らず、受け取った item と resolveMemoryState の結果を表示に載せるだけに限定する。
+*/
+
+/*
+【今回このファイルで修正したこと】
+1. getHopyStateVisual に渡す前に、level / phase を 1..5 のみへ絞る toPhaseOrUndefined をこのファイル内に追加しました。
+2. resolved.level / resolved.phase の broad な number をそのまま渡さないようにしました。
+3. Memory Modal の表示構造、編集UI、削除・復元処理には触れていません。
+*/
