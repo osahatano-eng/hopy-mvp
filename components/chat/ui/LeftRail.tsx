@@ -20,6 +20,10 @@ const SP_MAX_WIDTH_PX = 768;
 const LEFT_RAIL_WIDTH_PX = 288;
 const OPENING_BACKDROP_RGB = "15, 23, 42";
 
+type ControllerLeftRailProps = Omit<LeftRailProps, "activeThreadState"> & {
+  activeThreadState: ReturnType<typeof buildActiveThreadState>;
+};
+
 function getRailText(uiLang: string) {
   if (uiLang === "ja") {
     return {
@@ -100,7 +104,7 @@ export default function LeftRail(props: LeftRailProps) {
     return resolveConfirmedThreadState(activeThreadState, activeThread);
   }, [activeThreadState, activeThread]);
 
-  const controllerProps: LeftRailProps = React.useMemo(
+  const controllerProps: ControllerLeftRailProps = React.useMemo(
     () => ({
       uiLang,
       ui,
@@ -509,8 +513,7 @@ export default function LeftRail(props: LeftRailProps) {
 
 /*
 【今回このファイルで修正したこと】
-1. resolveConfirmedThreadState の戻り型を buildActiveThreadState と同じ型へ固定しました。
-2. current_phase が 1..5 のときだけ、その値を確定済み状態として明示 cast して返すようにしました。
-3. controllerProps 自体を LeftRailProps と明示し、activeThreadState の推論が広がらないようにしました。
-4. 左カラムの表示構造、Current Chat、Threads、Memories、AccountSection の責務には触れていません。
+1. controllerProps 用に activeThreadState を確定済み状態へ固定した専用型 ControllerLeftRailProps を追加しました。
+2. controllerProps を LeftRailProps ではなく ControllerLeftRailProps で受けるようにして、広い HopyState が再混入しないようにしました。
+3. 左カラムの表示構造、Current Chat、Threads、Memories、AccountSection の責務には触れていません。
 */
