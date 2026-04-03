@@ -20,10 +20,6 @@ const SP_MAX_WIDTH_PX = 768;
 const LEFT_RAIL_WIDTH_PX = 288;
 const OPENING_BACKDROP_RGB = "15, 23, 42";
 
-type ControllerLeftRailProps = Omit<LeftRailProps, "activeThreadState"> & {
-  activeThreadState: ReturnType<typeof buildActiveThreadState>;
-};
-
 function getRailText(uiLang: string) {
   if (uiLang === "ja") {
     return {
@@ -49,7 +45,7 @@ function getRailText(uiLang: string) {
 function resolveConfirmedThreadState(
   value: LeftRailProps["activeThreadState"],
   activeThread: LeftRailProps["activeThread"],
-): ReturnType<typeof buildActiveThreadState> {
+): NonNullable<LeftRailProps["activeThreadState"]> {
   if (value && typeof value === "object") {
     const currentPhase = (value as { current_phase?: unknown }).current_phase;
     if (
@@ -59,11 +55,13 @@ function resolveConfirmedThreadState(
       currentPhase === 4 ||
       currentPhase === 5
     ) {
-      return value as ReturnType<typeof buildActiveThreadState>;
+      return value as NonNullable<LeftRailProps["activeThreadState"]>;
     }
   }
 
-  return buildActiveThreadState(activeThread);
+  return buildActiveThreadState(
+    activeThread
+  ) as NonNullable<LeftRailProps["activeThreadState"]>;
 }
 
 export default function LeftRail(props: LeftRailProps) {
@@ -100,11 +98,13 @@ export default function LeftRail(props: LeftRailProps) {
   const t = React.useMemo(() => buildLeftRailLabels(uiLang), [uiLang]);
   const railText = React.useMemo(() => getRailText(uiLang), [uiLang]);
 
-  const resolvedDirectActiveThreadState = React.useMemo(() => {
+  const resolvedDirectActiveThreadState = React.useMemo<
+    NonNullable<LeftRailProps["activeThreadState"]>
+  >(() => {
     return resolveConfirmedThreadState(activeThreadState, activeThread);
   }, [activeThreadState, activeThread]);
 
-  const controllerProps: ControllerLeftRailProps = React.useMemo(
+  const controllerProps = React.useMemo<LeftRailProps>(
     () => ({
       uiLang,
       ui,
@@ -513,7 +513,8 @@ export default function LeftRail(props: LeftRailProps) {
 
 /*
 【今回このファイルで修正したこと】
-1. controllerProps 用に activeThreadState を確定済み状態へ固定した専用型 ControllerLeftRailProps を追加しました。
-2. controllerProps を LeftRailProps ではなく ControllerLeftRailProps で受けるようにして、広い HopyState が再混入しないようにしました。
-3. 左カラムの表示構造、Current Chat、Threads、Memories、AccountSection の責務には触れていません。
+1. ControllerLeftRailProps を削除し、useLeftRailController が要求する LeftRailProps にそのまま合わせました。
+2. resolveConfirmedThreadState の戻り型を NonNullable<LeftRailProps["activeThreadState"]> に固定しました。
+3. resolvedDirectActiveThreadState と controllerProps も LeftRailProps 基準で揃え、activeThreadState が広い HopyState に戻らないようにしました。
+4. 左カラムの表示構造、Current Chat、Threads、Memories、AccountSection の責務には触れていません。
 */
