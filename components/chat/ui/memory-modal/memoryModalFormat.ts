@@ -394,7 +394,6 @@ export function resolveMemoryState(item: MemoryItem) {
     raw?.hopyState?.reply_prev_phase,
     raw?.hopyState?.replyPrevPhase,
     normalizedState?.prev_phase,
-    normalizedState?.previous_phase,
   ];
 
   let prevPhase: number | null = null;
@@ -508,7 +507,6 @@ export function resolveMemoryState(item: MemoryItem) {
     raw?.hopyState?.reply_prev_state_level,
     raw?.hopyState?.replyPrevStateLevel,
     normalizedState?.prev_state_level,
-    normalizedState?.previous_state_level,
   ];
 
   let prevLevel: number | null = null;
@@ -593,3 +591,17 @@ export function resolveMemoryState(item: MemoryItem) {
     normalizedState,
   };
 }
+
+/*
+このファイルの正式役割
+Memory Modal で使う表示用の整形責務だけを持ち、MemoryItem から状態・重要度・表示補助情報を安全に読み出して UI へ渡すファイルです。
+状態の唯一の正は作らず、既存データから canonical な key を優先して表示用に整えることに限定します。
+*/
+
+/*
+【今回このファイルで修正したこと】
+normalizeHopyState() の戻り値に存在しない normalizedState?.previous_phase と
+normalizedState?.previous_state_level の参照を削除し、
+canonical key の normalizedState?.prev_phase と normalizedState?.prev_state_level だけを使うように修正しました。
+Memory Modal のUI、文言、削除・復元処理には触れていません。
+*/
