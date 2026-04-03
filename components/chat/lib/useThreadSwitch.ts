@@ -347,12 +347,12 @@ export function useThreadSwitch(params: {
     [supabase, setThreadBusy, setUserStateErr]
   );
 
-  const selectThreadRef = useRef<(id: string, source?: SwitchSource) => void>();
+  const selectThreadRef = useRef<((id: string, source?: SwitchSource) => void) | null>(null);
   useEffect(() => {
     selectThreadRef.current = (id, source) => selectThread(id, (source ?? "direct") as SwitchSource);
   }, [selectThread]);
 
-  const renameThreadRef = useRef<typeof renameThread>();
+  const renameThreadRef = useRef<typeof renameThread | null>(null);
   useEffect(() => {
     renameThreadRef.current = renameThread;
   }, [renameThread]);
@@ -504,11 +504,6 @@ export function useThreadSwitch(params: {
         p.setLastFailed?.(null);
         p.setUserStateErr?.(null);
 
-        // ✅ スレッドを切り替える以上、本文は必ず先にクリアする
-        // - direct だけに限定すると、event 経由で未送信新規チャットへ戻った際に
-        //   前スレッド本文が残ることがある
-        // - useEffect は activeThreadId が変わったときだけ走るため、
-        //   同一スレッド内の通常送信ではここは発火しない
         try {
           guardedSetMessages([]);
           guardedSetVisibleCount(200);
@@ -556,8 +551,6 @@ export function useThreadSwitch(params: {
                 p.setActiveThreadId(rollback);
               } catch {}
             } else {
-              // ✅ 一時的な読込失敗では activeThread を消さない
-              //    ここで null に落とすと、既存チャット表示中でも次回送信が新規作成へ流れる
               lastSwitchSourceRef.current = "event";
               activeThreadIdRef.current = nextId;
 
@@ -614,3 +607,15 @@ export function useThreadSwitch(params: {
 
   return { selectThread };
 }
+
+/*
+このファイルの正式役割
+スレッド切替の親フック。
+選択イベント受付、activeThreadId 更新、メッセージ再読込、rename 連携、切替失敗時の復元を担う。
+*/
+
+/*
+【今回このファイルで修正したこと】
+selectThreadRef と renameThreadRef の useRef に null 初期値を追加し、
+引数なし useRef 呼び出しによる build エラーを止めました。
+*/
