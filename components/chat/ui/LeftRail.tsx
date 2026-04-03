@@ -42,6 +42,21 @@ function getRailText(uiLang: string) {
   };
 }
 
+function isConfirmedThreadStateLike(
+  value: LeftRailProps["activeThreadState"],
+): value is NonNullable<ReturnType<typeof buildActiveThreadState>> {
+  if (!value || typeof value !== "object") return false;
+
+  const currentPhase = (value as { current_phase?: unknown }).current_phase;
+  return (
+    currentPhase === 1 ||
+    currentPhase === 2 ||
+    currentPhase === 3 ||
+    currentPhase === 4 ||
+    currentPhase === 5
+  );
+}
+
 export default function LeftRail(props: LeftRailProps) {
   const extendedProps = props as LeftRailProps & {
     isLeftRailOpeningDrag?: boolean;
@@ -77,7 +92,9 @@ export default function LeftRail(props: LeftRailProps) {
   const railText = React.useMemo(() => getRailText(uiLang), [uiLang]);
 
   const resolvedDirectActiveThreadState = React.useMemo(() => {
-    if (activeThreadState) return activeThreadState;
+    if (isConfirmedThreadStateLike(activeThreadState)) {
+      return activeThreadState;
+    }
     return buildActiveThreadState(activeThread);
   }, [activeThreadState, activeThread]);
 
@@ -490,7 +507,7 @@ export default function LeftRail(props: LeftRailProps) {
 
 /*
 【今回このファイルで修正したこと】
-1. 左カラム最下部のアカウント表示責務を LeftRailAccountSection へ分離しました。
-2. LeftRail から Supabase session 取得、profiles.plan 取得、auth監視、fallback表示の本体を削除し、import と呼び出しだけにしました。
-3. 状態の唯一の正、Current Chat、Threads、Memories、Compass には触れていません。
+1. activeThreadState をそのまま通さず、current_phase が 1..5 の確定済み状態だけを通す絞り込みを追加しました。
+2. ConfirmedThreadState でない値が来た場合は、buildActiveThreadState(activeThread) に戻すようにしました。
+3. 左カラムの表示構造、Current Chat、Threads、Memories、AccountSection の責務には触れていません。
 */
