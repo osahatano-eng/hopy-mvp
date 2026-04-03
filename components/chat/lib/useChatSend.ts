@@ -157,7 +157,7 @@ export function useChatSend<TState>(params: {
   setAtBottom: (v: boolean) => void;
   scrollToBottom: (mode?: "auto" | "smooth") => void;
   lastFailed: FailedSend | null;
-  setLastFailed: (v: FailedSend | null) => void;
+  setLastFailed: Dispatch<SetStateAction<FailedSend | null>>;
   normalizeState: (s: any) => TState | null;
   setUserState: (s: TState | null) => void;
   setUserStateErr: (s: string | null) => void;
@@ -770,11 +770,6 @@ export function useChatSend<TState>(params: {
 */
 /*
 【今回このファイルで修正したこと】
-- auth 解決関数とその型を親ファイルから削除しました。
-- /components/chat/lib/chatSendAuth.ts を import し、親ファイルは auth 解決を呼ぶだけにしました。
-- 送信本体、state反映、thread解決、retry、rename の責務には触れていません。
-*/
-/*
-このファイルの正式役割
-送信フロー全体を管理し、pending追加、API送信、assistant message確定反映、state反映、thread反映、retry をつなぐ親ファイル。
+params の setLastFailed 型を値専用から Dispatch<SetStateAction<FailedSend | null>> に修正し、
+retryLastFailed 内の setLastFailed((prev) => ...) を正しく受けられるようにしました。
 */
