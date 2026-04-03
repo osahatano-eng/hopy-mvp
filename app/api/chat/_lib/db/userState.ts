@@ -1,7 +1,7 @@
 // /app/api/chat/_lib/db/userState.ts
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { clampInt, envInt } from "../env";
-import type { Lang } from "../text";
+import type { Lang } from "../router/simpleRouter";
 import {
   stabilizedDelta,
   detectTrigger,
@@ -476,3 +476,18 @@ export async function updateUserStateFromMessage(params: {
     return { ok: false, error };
   }
 }
+
+/*
+このファイルの正式役割
+user_state の読取・初回作成・更新本体です。
+新規ユーザーなら初回 row を作成し、
+既存ユーザーなら current_phase / stability_score / last_trigger / updated_at を更新します。
+route 層からは update.ts 経由で呼ばれる前提です。
+*/
+
+/*
+【今回このファイルで修正したこと】
+- Lang の import 元を現行ルート系とそろえて ../router/simpleRouter に戻しました。
+- それ以外の user_state 読取・初回作成・更新ロジックは変えていません。
+*/
+// このファイルの正式役割: user_state の読取・初回作成・更新本体
