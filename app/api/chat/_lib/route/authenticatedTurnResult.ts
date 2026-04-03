@@ -37,6 +37,12 @@ type ConfirmedAssistantTurn = {
   canonicalAssistantState: CanonicalAssistantState;
   compassText?: string;
   compassPrompt?: string;
+  compass?:
+    | {
+        text: string;
+        prompt: string | null;
+      }
+    | undefined;
 };
 
 type RunHopyTurnBuiltResult = {
@@ -318,6 +324,8 @@ export async function buildAuthenticatedTurnResult(
     stateChanged: resolvedStateChanged,
     prevPhase: resolvedPrevPhase,
     prevStateLevel: resolvedPrevStateLevel,
+    compassText,
+    compassPrompt,
   }) as ConfirmedAssistantTurn;
 
   const decision = decideBadgeFromAssistantReply(confirmedTurn.assistantText);
@@ -352,14 +360,6 @@ export async function buildAuthenticatedTurnResult(
       : ((rawModelOutput.confirmed_memory_candidates ??
           rawModelOutput.memory_candidates ??
           []) as ConfirmedMemoryCandidate[]);
-
-  if (compassText) {
-    confirmedTurn.compassText = compassText;
-  }
-
-  if (compassPrompt !== null) {
-    confirmedTurn.compassPrompt = compassPrompt;
-  }
 
   return {
     reply: confirmedTurn.assistantText,
@@ -426,8 +426,8 @@ RunHopyTurnBuiltResult にそのまま載せる。
 
 /*
 【今回このファイルで修正したこと】
-- confirmTurn の compassPrompt 型を string | undefined に合わせた。
-- null をそのまま入れず、compassPrompt !== null のときだけ代入する形へそろえた。
-- それ以外の実行ロジック、Compass 条件、状態 1..5 の意味、memory candidate の流れには触っていない。
+- buildConfirmedAssistantTurn(...) に compassText / compassPrompt を渡すように修正しました。
+- 後段の手動代入を削除し、confirmedTurn.compass を buildConfirmedAssistantTurn 側で正式shapeとして組み立てる流れにそろえました。
+- それ以外の実行ロジック、Compass 条件、状態 1..5 の意味、memory candidate の流れには触っていません。
 */
 // このファイルの正式役割: authenticated 経路における turn 結果の正式組み立てファイル
