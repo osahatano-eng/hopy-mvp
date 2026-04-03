@@ -205,7 +205,7 @@ export function useChatAuth({ supabase, setEmail }: Params) {
         signedOutCauseRef.current = false;
       }
 
-      if (event === "SIGNED_OUT" || event === "USER_DELETED") {
+      if (event === "SIGNED_OUT") {
         signedOutCauseRef.current = true;
         clearTransientTimer();
 
@@ -331,3 +331,14 @@ export function useChatAuth({ supabase, setEmail }: Params) {
     loggedInRef,
   };
 }
+
+/*
+このファイルの正式役割
+チャット画面の認証状態を監視し、session・logout遷移・表示用ログイン状態を安定して返すためのhook。
+*/
+
+/*
+【今回このファイルで修正したこと】
+Supabase の auth event 型に含まれていない "USER_DELETED" 比較を削除し、
+"SIGNED_OUT" のみで判定するようにして build の型エラーを止めました。
+*/
