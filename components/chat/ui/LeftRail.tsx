@@ -210,6 +210,8 @@ export default function LeftRail(props: LeftRailProps) {
     return () => media.removeListener(update);
   }, []);
 
+  const railOpenSafe = railOpen ?? false;
+
   const panelWidthPx =
     typeof window !== "undefined" && isSpViewport ? window.innerWidth : LEFT_RAIL_WIDTH_PX;
 
@@ -221,7 +223,7 @@ export default function LeftRail(props: LeftRailProps) {
     handleCloseTouchMove,
     handleCloseTouchEnd,
   } = useLeftRailDragStyle({
-    railOpen,
+    railOpen: railOpenSafe,
     enabled: isSpViewport,
     panelWidthPx,
   });
@@ -513,8 +515,7 @@ export default function LeftRail(props: LeftRailProps) {
 
 /*
 【今回このファイルで修正したこと】
-1. ControllerLeftRailProps を削除し、useLeftRailController が要求する LeftRailProps にそのまま合わせました。
-2. resolveConfirmedThreadState の戻り型を NonNullable<LeftRailProps["activeThreadState"]> に固定しました。
-3. resolvedDirectActiveThreadState と controllerProps も LeftRailProps 基準で揃え、activeThreadState が広い HopyState に戻らないようにしました。
-4. 左カラムの表示構造、Current Chat、Threads、Memories、AccountSection の責務には触れていません。
+1. useLeftRailDragStyle に渡す railOpen を railOpenSafe = railOpen ?? false で boolean に固定しました。
+2. ドラッグ処理へは railOpenSafe を渡すようにし、boolean | undefined のまま流れないようにしました。
+3. 左カラムの表示構造、Current Chat、Threads、Memories、AccountSection、状態表示の責務には触れていません。
 */
