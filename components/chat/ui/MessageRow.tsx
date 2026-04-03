@@ -127,7 +127,13 @@ function getAssistantStateDotRenderKey(node: React.ReactNode): string {
       typeof el.type === "string"
         ? el.type
         : typeof el.type === "function"
-        ? el.type.displayName || el.type.name || "fn"
+        ? (() => {
+            const namedType = el.type as React.JSXElementConstructor<any> & {
+              displayName?: string;
+              name?: string;
+            };
+            return namedType.displayName || namedType.name || "fn";
+          })()
         : "other";
 
     const keyPart = el.key == null ? "nokey" : String(el.key);
@@ -288,3 +294,16 @@ const MessageRow = React.memo(
 );
 
 export default MessageRow;
+
+/*
+このファイルの正式役割
+メッセージ1行分の表示責務だけを持ち、user / assistant の本文表示、段落分割、pending表示、assistant横の状態丸表示を描画するファイル。
+状態の唯一の正は作らず、受け取った props をそのまま表示するだけに限定する。
+*/
+
+/*
+【今回このファイルで修正したこと】
+1. el.type.displayName を直接参照せず、displayName?: string / name?: string を持つ関数型として明示してから参照するようにしました。
+2. JSXElementConstructor<any> に displayName が無いという TypeScript の型エラーを、このファイル内だけで解消しました。
+3. MessageRow の表示構造、pending判定、assistantStateDot の描画仕様には触れていません。
+*/
