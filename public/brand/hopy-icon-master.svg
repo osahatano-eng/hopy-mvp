@@ -1,0 +1,124 @@
+<!-- /public/brand/hopy-icon-master.svg -->
+<svg
+  width="1024"
+  height="1024"
+  viewBox="0 0 1024 1024"
+  fill="none"
+  xmlns="http://www.w3.org/2000/svg"
+  role="img"
+  aria-labelledby="title desc"
+>
+  <title id="title">HOPY Icon Master v1</title>
+  <desc id="desc">
+    Center confusion point, four outer state points, and an upward compass needle moving toward decision.
+  </desc>
+
+  <!-- background safe field -->
+  <rect x="0" y="0" width="1024" height="1024" rx="240" fill="#F8FAFC" />
+
+  <!-- quiet outer field -->
+  <circle
+    cx="512"
+    cy="512"
+    r="318"
+    stroke="#CBD5E1"
+    stroke-width="28"
+    fill="none"
+  />
+
+  <!-- secondary ring -->
+  <circle
+    cx="512"
+    cy="512"
+    r="258"
+    stroke="#E2E8F0"
+    stroke-width="12"
+    fill="none"
+  />
+
+  <!-- directional guide lines -->
+  <line
+    x1="512"
+    y1="214"
+    x2="512"
+    y2="810"
+    stroke="#E2E8F0"
+    stroke-width="10"
+    stroke-linecap="round"
+  />
+  <line
+    x1="214"
+    y1="512"
+    x2="810"
+    y2="512"
+    stroke="#E2E8F0"
+    stroke-width="10"
+    stroke-linecap="round"
+  />
+
+  <!-- state circles -->
+  <!-- north = decision -->
+  <circle cx="512" cy="214" r="44" fill="#F59E0B" />
+
+  <!-- east = exploration -->
+  <circle cx="810" cy="512" r="38" fill="#3B82F6" />
+
+  <!-- south = organization -->
+  <circle cx="512" cy="810" r="38" fill="#14B8A6" />
+
+  <!-- west = convergence -->
+  <circle cx="214" cy="512" r="38" fill="#8B5CF6" />
+
+  <!-- center = confusion -->
+  <circle cx="512" cy="512" r="34" fill="#6B7280" />
+
+  <!-- upward needle -->
+  <g>
+    <path
+      d="M512 298
+         C523 372 530 438 530 512
+         C530 586 523 652 512 726
+         C501 652 494 586 494 512
+         C494 438 501 372 512 298Z"
+      fill="#1F2937"
+    />
+    <path
+      d="M512 256
+         L544 334
+         L512 320
+         L480 334
+         Z"
+      fill="#1F2937"
+    />
+  </g>
+
+  <!-- soft center halo for calm presence -->
+  <circle cx="512" cy="512" r="78" fill="#F8FAFC" fill-opacity="0.72" />
+  <circle cx="512" cy="512" r="34" fill="#6B7280" />
+
+  <!-- tiny north emphasis ring -->
+  <circle
+    cx="512"
+    cy="214"
+    r="62"
+    stroke="#F59E0B"
+    stroke-opacity="0.22"
+    stroke-width="10"
+    fill="none"
+  />
+
+  <!-- safe area hint removed from export usage; visual structure only -->
+</svg>
+
+<!--
+このファイルの正式役割
+HOPYアイコンの親ソースとして使う元SVG。
+favicon・PWA用PNG・apple-touch-icon へ展開する前提の唯一の正の元データ。
+-->
+
+<!--
+【今回このファイルで修正したこと】
+1. HOPYアイコンの親ソースとなる master SVG を新規作成しました。
+2. 中心=混線、北=決定、東西南=模索・収束・整理、上向きの針、静かなリング構造を1枚に統合しました。
+3. 既存の manifest.ts、layout.tsx、PNG書き出し、favicon差し替えにはまだ触れていません。
+-->
