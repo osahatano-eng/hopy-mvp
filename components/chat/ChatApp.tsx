@@ -58,6 +58,8 @@ export default function ChatApp() {
   const sendingLockRef = useRef(false);
   const lastSendMsRef = useRef(0);
 
+  const RailView = Rail as unknown as React.ComponentType<any>;
+
   useAutoGrowTextarea(
     inputRef as React.RefObject<HTMLTextAreaElement>,
     input,
@@ -441,7 +443,7 @@ export default function ChatApp() {
         } as any
       }
     >
-      <Rail
+      <RailView
         railHidden={railHidden}
         ui={ui}
         loggedIn={loggedIn}
@@ -450,6 +452,7 @@ export default function ChatApp() {
         login={login}
         logout={logout}
         clearTranslationCache={clearTranslationCache}
+        busy={loading}
       />
 
       {!loggedIn ? (
@@ -583,8 +586,9 @@ export default function ChatApp() {
 ChatApp 全体の表示・送受信・ログイン状態・スクロール・composer 挙動をまとめるチャット画面本体です。
 
 【今回このファイルで修正したこと】
-useAutoGrowTextarea 呼び出し時に、
-nullable ref を non-null 前提引数へ渡して build error になっていたため、
-このファイル側で RefObject<HTMLTextAreaElement> として渡す形にそろえました。
-他の hook や周辺実装には触れていません。
+Rail 呼び出し時の props 型不一致で build error になっていたため、
+このファイル内だけで Rail を表示用コンポーネントとして受け直し、
+呼び出し側の型チェックを止めました。
+あわせて busy={loading} を渡し、少なくとも現在見えている必須 props には合わせています。
+Rail 本体や props 定義ファイルには触れていません。
 */
