@@ -124,6 +124,31 @@ type ApiResponse<TState> = {
   compass_prompt?: string | null;
 };
 
+const AUTH_CONTEXT_TIMEOUT_MS = 12000;
+
+async function resolveAuthContextForSendWithTimeout(
+  supabase: SupabaseClient
+): Promise<Awaited<ReturnType<typeof resolveAuthContextForSend>>> {
+  let timer: ReturnType<typeof window.setTimeout> | null = null;
+
+  try {
+    return await Promise.race([
+      resolveAuthContextForSend(supabase),
+      new Promise<never>((_, reject) => {
+        timer = window.setTimeout(() => {
+          reject(new Error("[Auth/Timeout] auth_context_timeout"));
+        }, AUTH_CONTEXT_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timer != null) {
+      try {
+        window.clearTimeout(timer);
+      } catch {}
+    }
+  }
+}
+
 function mergeConfirmedMeaningFields(
   message: ChatMsg,
   confirmedPayload: ConfirmedMeaningPayload | null
@@ -299,7 +324,7 @@ export function useChatSend<TState>(params: {
         : null;
 
       try {
-        const auth = await resolveAuthContextForSend(supabase);
+        const auth = await resolveAuthContextForSendWithTimeout(supabase);
         const isLoggedIn = auth.isLoggedIn;
         const accessToken = auth.accessToken;
 
@@ -705,7 +730,7 @@ export function useChatSend<TState>(params: {
       const clientRequestId =
         String(lastFailed.clientRequestId ?? "").trim() || genClientRequestId();
 
-      const auth = await resolveAuthContextForSend(supabase);
+      const auth = await resolveAuthContextForSendWithTimeout(supabase);
 
       let conversationId = auth.isLoggedIn
         ? String(lastFailed.conversationId ?? "").trim() || null
@@ -770,6 +795,9 @@ export function useChatSend<TState>(params: {
 */
 /*
 【今回このファイルで修正したこと】
-params の setLastFailed 型を値専用から Dispatch<SetStateAction<FailedSend | null>> に修正し、
-retryLastFailed 内の setLastFailed((prev) => ...) を正しく受けられるようにしました。
+1. resolveAuthContextForSend(supabase) が本番で戻らない場合に備えて、
+   useChatSend.ts 内だけで 12秒のタイムアウト付き wrapper を追加しました。
+2. sendCore と retryLastFailed の auth 取得を timeout 付きへ差し替え、
+   無限待機で pending が残り続ける状態を避けるようにしました。
+3. resolveAuthContextForSend 本体、Supabase 設定、API 側、他ファイルには触っていません。
 */
