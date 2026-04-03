@@ -21,6 +21,8 @@ export type OpenAIChatMessage = {
   content: string;
 };
 
+type PhaseValue = 1 | 2 | 3 | 4 | 5;
+
 function normalizeResolvedPlan(value: ResolvedPlanLike): string {
   return String(value ?? "").trim().toLowerCase();
 }
@@ -116,7 +118,9 @@ function buildCompassStructureSystem(args: {
       "state_changed=true のときは compassText と compassPrompt を必ず非空で返すこと。",
       "compassText は短くてよい。",
       "compassPrompt も短くてよい。",
-      "ただし reply と state を最優先し、絶対に省略しないこと。",
+      "ただし HOPY回答○ の唯一の正を壊してはならない。",
+      "state_changed=true なら Compass 欠落は不正であり、空文字でごまかしてはならない。",
+      "reply と state を省略してはならない。",
     ].join("\n");
   }
 
@@ -126,7 +130,9 @@ function buildCompassStructureSystem(args: {
     "When state_changed=true, compassText and compassPrompt must both be non-empty.",
     "compassText may be short.",
     "compassPrompt may be short.",
-    "However, always prioritize reply and state, and never omit them.",
+    "Do not break the single source of truth for the HOPY reply badge.",
+    "When state_changed=true, missing Compass is invalid and must not be faked with empty strings.",
+    "Never omit reply or state.",
   ].join("\n");
 }
 
@@ -155,6 +161,36 @@ function buildEmptyJsonRetrySystem(args: {
     "reply must contain at least 1 character.",
     "state is required.",
     "Do not return state as null.",
+  ].join("\n");
+}
+
+function buildContractRetrySystem(args: {
+  uiLang: Lang;
+}): string {
+  if (args.uiLang === "ja") {
+    return [
+      "再出力指示:",
+      "直前の JSON は HOPY の正式契約に違反していました。",
+      "今回は正式shapeを厳守してください。",
+      "state.current_phase / state.state_level / state.prev_phase / state.prev_state_level は 1|2|3|4|5 の整数必須です。",
+      "state.state_changed は boolean 必須です。",
+      "Free では compassText / compassPrompt は必ず空文字です。",
+      "Plus / Pro では state_changed=true の回に compassText を必ず非空で返してください。",
+      "空文字や省略でごまかしてはいけません。",
+      "必ず JSON object 1個だけを返してください。",
+    ].join("\n");
+  }
+
+  return [
+    "Retry instruction:",
+    "The previous JSON violated the HOPY contract.",
+    "Return the official shape exactly this time.",
+    "state.current_phase, state.state_level, state.prev_phase, and state.prev_state_level must be integers in 1|2|3|4|5.",
+    "state.state_changed must be a boolean.",
+    "On Free, compassText and compassPrompt must both be empty strings.",
+    "On Plus or Pro, when state_changed=true, compassText must be non-empty.",
+    "Do not fake compliance with empty strings or omissions.",
+    "Return exactly one JSON object.",
   ].join("\n");
 }
 
@@ -201,6 +237,8 @@ function isRetryableOpenAIError(error: unknown): boolean {
   if (lowerMessage.includes("econnreset")) return true;
   if (lowerMessage.includes("socket hang up")) return true;
   if (lowerMessage.includes("empty_json_content")) return true;
+  if (lowerMessage.includes("invalid_json_object_content")) return true;
+  if (lowerMessage.includes("invalid_hopy_json_contract")) return true;
 
   const status = Number((error as { status?: unknown } | null)?.status);
   if (status === 408 || status === 409 || status === 429) return true;
@@ -309,6 +347,132 @@ function ensureJsonCompletionHasContent(
   throw new Error(buildEmptyJsonContentErrorMessage(completion));
 }
 
+function parseJsonObjectContent(content: string): Record<string, unknown> {
+  try {
+    const parsed: unknown = JSON.parse(content);
+    if (!isRecord(parsed)) {
+      throw new Error("invalid_json_object_content | root_not_object");
+    }
+    return parsed;
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("invalid_json_object_content")) {
+      throw error;
+    }
+    throw new Error("invalid_json_object_content | parse_failed");
+  }
+}
+
+function isPhaseValue(value: unknown): value is PhaseValue {
+  return (
+    typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= 1 &&
+    value <= 5
+  );
+}
+
+function readRequiredPhaseValue(
+  state: Record<string, unknown>,
+  key: "current_phase" | "state_level" | "prev_phase" | "prev_state_level",
+): PhaseValue {
+  const value = state[key];
+  if (!isPhaseValue(value)) {
+    throw new Error(`invalid_hopy_json_contract | ${key}_must_be_1_to_5_integer`);
+  }
+  return value;
+}
+
+function readRequiredStateChanged(
+  state: Record<string, unknown>,
+): boolean {
+  const value = state["state_changed"];
+  if (typeof value !== "boolean") {
+    throw new Error("invalid_hopy_json_contract | state_changed_must_be_boolean");
+  }
+  return value;
+}
+
+function readStringField(
+  body: Record<string, unknown>,
+  key: "reply" | "compassText" | "compassPrompt",
+): string {
+  const value = body[key];
+  if (typeof value !== "string") {
+    return "";
+  }
+  return value.trim();
+}
+
+function detectFreePlanFromMessages(messages: OpenAIChatMessage[]): boolean {
+  const joined = messages
+    .map((message) => String(message.content ?? ""))
+    .join("\n")
+    .toLowerCase();
+
+  return (
+    joined.includes("do not output compass on free.") ||
+    joined.includes("free では compass を出さないこと。")
+  );
+}
+
+function ensureJsonCompletionMatchesHopyContract(args: {
+  completion: Awaited<ReturnType<OpenAI["chat"]["completions"]["create"]>>;
+  messages: OpenAIChatMessage[];
+}): Awaited<ReturnType<OpenAI["chat"]["completions"]["create"]>> {
+  const content = readCompletionContent(args.completion);
+  const body = parseJsonObjectContent(content);
+
+  const reply = readStringField(body, "reply");
+  if (!reply) {
+    throw new Error("invalid_hopy_json_contract | reply_missing_or_empty");
+  }
+
+  const state = body["state"];
+  if (!isRecord(state)) {
+    throw new Error("invalid_hopy_json_contract | state_missing_or_invalid");
+  }
+
+  readRequiredPhaseValue(state, "current_phase");
+  readRequiredPhaseValue(state, "state_level");
+  readRequiredPhaseValue(state, "prev_phase");
+  readRequiredPhaseValue(state, "prev_state_level");
+  const stateChanged = readRequiredStateChanged(state);
+
+  const compassText = readStringField(body, "compassText");
+  const compassPrompt = readStringField(body, "compassPrompt");
+
+  const isFreePlan = detectFreePlanFromMessages(args.messages);
+
+  if (isFreePlan) {
+    if (compassText !== "") {
+      throw new Error("invalid_hopy_json_contract | free_must_not_return_compass_text");
+    }
+    if (compassPrompt !== "") {
+      throw new Error("invalid_hopy_json_contract | free_must_not_return_compass_prompt");
+    }
+    return args.completion;
+  }
+
+  if (stateChanged && !compassText) {
+    throw new Error(
+      "invalid_hopy_json_contract | plus_or_pro_requires_compass_text_when_state_changed",
+    );
+  }
+
+  return args.completion;
+}
+
+function ensureJsonCompletionIsValid(args: {
+  completion: Awaited<ReturnType<OpenAI["chat"]["completions"]["create"]>>;
+  messages: OpenAIChatMessage[];
+}): Awaited<ReturnType<OpenAI["chat"]["completions"]["create"]>> {
+  const withContent = ensureJsonCompletionHasContent(args.completion);
+  return ensureJsonCompletionMatchesHopyContract({
+    completion: withContent,
+    messages: args.messages,
+  });
+}
+
 export function buildOpenAIMessages(args: {
   promptBundle: PromptBundle;
   history: HistoryItem[];
@@ -384,7 +548,10 @@ async function runJsonForcedCompletion(params: {
     "openai",
   );
 
-  return ensureJsonCompletionHasContent(completion);
+  return ensureJsonCompletionIsValid({
+    completion,
+    messages: params.messages,
+  });
 }
 
 export async function createJsonForcedCompletion(params: {
@@ -406,7 +573,12 @@ export async function createJsonForcedCompletion(params: {
           error instanceof Error ? error.message : String(error ?? "");
         const lowerMessage = message.toLowerCase();
 
-        if (!lowerMessage.includes("empty_json_content")) {
+        const shouldRetryWithExtraSystemPrompt =
+          lowerMessage.includes("empty_json_content") ||
+          lowerMessage.includes("invalid_json_object_content") ||
+          lowerMessage.includes("invalid_hopy_json_contract");
+
+        if (!shouldRetryWithExtraSystemPrompt) {
           throw error;
         }
 
@@ -415,6 +587,12 @@ export async function createJsonForcedCompletion(params: {
           {
             role: "system",
             content: buildEmptyJsonRetrySystem({
+              uiLang: params.replyLang,
+            }),
+          },
+          {
+            role: "system",
+            content: buildContractRetrySystem({
               uiLang: params.replyLang,
             }),
           },
@@ -463,9 +641,10 @@ completion 実行を安定して OpenAI 呼び出し層へ渡す責務を持つ�
 
 /*
 【今回このファイルで修正したこと】
-- runJsonForcedCompletion(...) と createPlainCompletion(...) で重複指定されていた temperature: 0.0 を削除しました。
-- temperature は phaseParams(...) 側の値だけを使う形にそろえ、TypeScript の重複指定 build error を止めました。
-- それ以外の timeout、single retry、empty_json_content 判定、messages 組み立て責務は触っていません。
+- JSON completion 受領直後に、state の正式shape（1..5 / state_changed boolean）を検証するよう修正しました。
+- Free / Plus / Pro の Compass 契約をこのファイルで検証し、Free で Compass 混入、Plus / Pro で state_changed=true なのに compassText 欠落、を不正として止めるよう修正しました。
+- invalid_hopy_json_contract / invalid_json_object_content を retry 対象に追加し、再出力指示で正式契約を再要求するよう修正しました。
+- それ以外の timeout、single retry、messages 組み立て責務、plain completion の流れは触っていません。
 */
 
 // このファイルの正式役割: OpenAI へ渡す messages の組み立てと completion 実行制御ファイル
