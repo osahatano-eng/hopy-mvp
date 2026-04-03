@@ -228,17 +228,46 @@ function shouldRetryWithStructuredForMissingCompass(params: {
   return !compassText.trim() || !compassPrompt.trim();
 }
 
+function buildMissingRequiredCompassErrorMessage(params: {
+  resolvedPlan: string;
+  state: Record<string, unknown> | null;
+  compassText: string;
+  compassPrompt: string;
+}): string {
+  const canonicalState = resolveCanonicalState(params.state);
+
+  return [
+    "openai.ts: compass is required before returning model output",
+    `resolvedPlan=${params.resolvedPlan || "unknown"}`,
+    `state_changed=${canonicalState?.state_changed === true ? "true" : "false"}`,
+    `hasCompassText=${params.compassText.trim() ? "true" : "false"}`,
+    `hasCompassPrompt=${params.compassPrompt.trim() ? "true" : "false"}`,
+  ].join(" | ");
+}
+
 function buildConfirmedPayload(params: {
   assistantText: string;
   state: Record<string, unknown> | null;
   compassText: string;
   compassPrompt: string;
+  resolvedPlan: string;
 }): GenerateAssistantReplyResult["hopy_confirmed_payload"] {
-  const { assistantText, state, compassText, compassPrompt } = params;
+  const { assistantText, state, compassText, compassPrompt, resolvedPlan } =
+    params;
 
   const canonicalState = resolveCanonicalState(state);
   if (!canonicalState) return undefined;
   if (!assistantText.trim()) return undefined;
+
+  if (
+    isCompassRequiredForPlan({
+      resolvedPlan,
+      state,
+    }) &&
+    (!compassText.trim() || !compassPrompt.trim())
+  ) {
+    return undefined;
+  }
 
   const payload: NonNullable<
     GenerateAssistantReplyResult["hopy_confirmed_payload"]
@@ -494,13 +523,14 @@ export async function generateAssistantReply(
   let compassText = "";
   let compassPrompt = "";
   let state: Record<string, unknown> | null = null;
+  let resolvedPlan = "free";
   const attemptDebugInfos: AttemptDebugInfo[] = [];
   const speed_audit = createInitialSpeedAudit();
 
   const openaiTotalStartMs = nowMs();
 
   try {
-    const resolvedPlan = detectResolvedPlanFromPromptBundle(promptBundle);
+    resolvedPlan = detectResolvedPlanFromPromptBundle(promptBundle);
     const messages = buildOpenAIMessages({
       promptBundle,
       history,
@@ -646,20 +676,22 @@ export async function generateAssistantReply(
     });
     speed_audit.compass_resolve_ms += elapsedMs(requiredCompassResolveStartMs);
 
-    if (compassRequiredForPlan && !compassText.trim()) {
-      openai_error =
-        "openai.ts: compassText is missing when resolvedPlan is not free and state_changed is true";
-    }
-
-    if (compassRequiredForPlan && !compassPrompt.trim()) {
-      openai_error =
-        "openai.ts: compassPrompt is missing when resolvedPlan is not free and state_changed is true";
+    if (
+      compassRequiredForPlan &&
+      (!compassText.trim() || !compassPrompt.trim())
+    ) {
+      throw new Error(
+        buildMissingRequiredCompassErrorMessage({
+          resolvedPlan,
+          state,
+          compassText,
+          compassPrompt,
+        }),
+      );
     }
 
     openai_ok = true;
-    if (!openai_error) {
-      openai_error = null;
-    }
+    openai_error = null;
   } catch (e: unknown) {
     openai_error = String(e ?? "");
     openai_ok = false;
@@ -680,6 +712,7 @@ export async function generateAssistantReply(
         state,
         compassText,
         compassPrompt,
+        resolvedPlan,
       })
     : undefined;
   speed_audit.confirmed_payload_build_ms = elapsedMs(
@@ -714,8 +747,14 @@ compassText / compassPrompt / state を抽出して返す。
 
 /*
 【今回このファイルで修正したこと】
-- 状態変化時に compassText / compassPrompt が欠けていても throw せず、回答本文と state は返し続けるように修正しました。
-- 欠落は openai_error に記録するだけにし、assistantText を空へ落とさないようにしました。
-- state 必須、assistantText 必須、speed_audit、confirmed payload 生成の基本構造は触っていません。
+- Plus / Pro で state_changed=true かつ compassText / compassPrompt が欠けている場合、openai_error 記録だけで通さず不正として throw するよう修正しました。
+- buildConfirmedPayload(...) に resolvedPlan を渡し、Compass 必須回の confirmed payload を片肺のまま作らないよう修正しました。
+- それ以外の state 抽出、assistantText 必須、retry 判定、speed_audit、memory_candidates 回収責務は触っていません。
 */
 // このファイルの正式役割: OpenAI 応答の生成・回収ファイル
+
+/*
+【今回このファイルで修正したこと】
+Plus / Pro で state_changed=true の回に Compass 欠落を許容していた箇所を、不正として停止する形へ修正しました。
+confirmed payload も片肺状態では生成しないようにそろえました。
+*/
