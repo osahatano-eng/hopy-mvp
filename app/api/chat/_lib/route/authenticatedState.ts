@@ -44,17 +44,13 @@ export function normalizeConfirmedStateLevel(
 
 function normalizeRequiredAssistantText(value: unknown): string {
   if (typeof value !== "string") {
-    throw new Error(
-      "authenticatedState: assistantText is required",
-    );
+    throw new Error("authenticatedState: assistantText is required");
   }
 
   const normalized = value.trim();
 
   if (normalized.length === 0) {
-    throw new Error(
-      "authenticatedState: assistantText is required",
-    );
+    throw new Error("authenticatedState: assistantText is required");
   }
 
   return normalized;
@@ -67,9 +63,7 @@ function normalizeRequiredPhase1to5(
   const normalized = normalizeConfirmedStateLevel(value);
 
   if (!isPhase1to5(normalized)) {
-    throw new Error(
-      `authenticatedState: ${fieldName} must be 1..5`,
-    );
+    throw new Error(`authenticatedState: ${fieldName} must be 1..5`);
   }
 
   return normalized;
@@ -80,9 +74,7 @@ function normalizeRequiredBoolean(
   fieldName: string,
 ): boolean {
   if (typeof value !== "boolean") {
-    throw new Error(
-      `authenticatedState: ${fieldName} is required`,
-    );
+    throw new Error(`authenticatedState: ${fieldName} is required`);
   }
 
   return value;
@@ -153,7 +145,15 @@ export function buildConfirmedAssistantTurn(params: {
   const compassText = normalizeOptionalCompassValue(params.compassText);
   const compassPrompt = normalizeOptionalCompassValue(params.compassPrompt);
 
-  return {
+  const canonicalAssistantState = buildCanonicalAssistantState({
+    currentPhase,
+    currentStateLevel,
+    stateChanged,
+    prevPhase,
+    prevStateLevel,
+  });
+
+  const confirmedTurn: ConfirmedAssistantTurn = {
     assistantText,
     currentPhase,
     currentStateLevel,
@@ -162,14 +162,17 @@ export function buildConfirmedAssistantTurn(params: {
     stateChanged,
     compassText,
     compassPrompt,
-    canonicalAssistantState: buildCanonicalAssistantState({
-      currentPhase,
-      currentStateLevel,
-      stateChanged,
-      prevPhase,
-      prevStateLevel,
-    }),
+    canonicalAssistantState,
   };
+
+  if (compassText) {
+    confirmedTurn.compass = {
+      text: compassText,
+      prompt: compassPrompt ?? null,
+    };
+  }
+
+  return confirmedTurn;
 }
 
 /*
@@ -182,10 +185,8 @@ confirmedTurn と canonicalAssistantState を組み立てる。
 
 /*
 【今回このファイルで修正したこと】
-- buildConfirmedAssistantTurn の入口で assistantText の必須チェックを追加しました。
-- currentPhase / currentStateLevel / prevPhase / prevStateLevel を runtime で 1..5 に厳密検証するようにしました。
-- stateChanged を boolean 必須で検証するようにしました。
-- compassText / compassPrompt は trim 後に空文字を undefined に統一しました。
-- これにより、未確定値のまま confirmedTurn を組み立てて後段へ流す経路を止めました。
+- buildConfirmedAssistantTurn で compassText / compassPrompt だけでなく、正式shapeの confirmedTurn.compass も組み立てるようにしました。
+- compassText が存在する場合だけ、confirmedTurn.compass.text / prompt を載せるようにしました。
+- state の 1..5 固定、assistantText 必須、stateChanged 必須の既存正規化ロジックは変えていません。
 */
 // このファイルの正式役割: authenticated の confirmed state / confirmed turn を確定するファイル
