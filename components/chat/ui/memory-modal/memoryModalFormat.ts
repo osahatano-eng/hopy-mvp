@@ -229,7 +229,6 @@ export function resolveMemoryState(item: MemoryItem) {
     raw?.hopyState?.state_phase,
     raw?.hopyState?.statePhase,
     normalizedState?.current_phase,
-    normalizedState?.phase,
   ];
 
   let phase: number | null = null;
@@ -279,7 +278,6 @@ export function resolveMemoryState(item: MemoryItem) {
     raw?.hopyState?.stateLevel,
     raw?.hopyState?.level,
     normalizedState?.state_level,
-    normalizedState?.level,
   ];
 
   let level: number | null = null;
@@ -576,11 +574,11 @@ export function resolveMemoryState(item: MemoryItem) {
     }
   }
 
-  if (phase == null && normalizedState?.phase != null) {
-    phase = clampPhase(normalizedState.phase);
+  if (phase == null && normalizedState?.current_phase != null) {
+    phase = clampPhase(normalizedState.current_phase);
   }
-  if (level == null && normalizedState?.level != null) {
-    level = clampPhase(normalizedState.level);
+  if (level == null && normalizedState?.state_level != null) {
+    level = clampPhase(normalizedState.state_level);
   }
 
   if (phase == null && level != null) phase = levelToPhase(level);
