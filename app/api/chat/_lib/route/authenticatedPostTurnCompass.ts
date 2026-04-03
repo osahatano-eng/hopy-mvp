@@ -4,6 +4,16 @@ type ResolvedPlan = "free" | "plus" | "pro";
 
 type ConfirmedAssistantTurn = {
   stateChanged?: boolean | null;
+  compassText?: string | null;
+  compassPrompt?: string | null;
+  compass?:
+    | {
+        text?: string | null;
+        prompt?: string | null;
+      }
+    | null;
+  hopy_confirmed_payload?: unknown;
+  hopyConfirmedPayload?: unknown;
   [key: string]: unknown;
 };
 
@@ -18,96 +28,81 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value as Record<string, unknown>;
 }
 
-function resolveCompassTextFromSource(
-  source: Record<string, unknown> | null,
-): string | null {
-  if (!source) return null;
-
-  const directCompass = asRecord(source.compass);
-  const directTurnRecord = asRecord(source.turnRecord);
-  const directTurnRecordCompass = asRecord(directTurnRecord?.compass);
-
-  const uiEffects = asRecord(source.ui_effects) ?? asRecord(source.uiEffects);
-  const uiEffectsCompass = asRecord(uiEffects?.compass);
-
-  const confirmedPayload =
-    asRecord(source.hopy_confirmed_payload) ??
-    asRecord(source.hopyConfirmedPayload);
-  const confirmedCompass = asRecord(confirmedPayload?.compass);
-  const confirmedUiEffects =
-    asRecord(confirmedPayload?.ui_effects) ??
-    asRecord(confirmedPayload?.uiEffects);
-  const confirmedUiEffectsCompass = asRecord(confirmedUiEffects?.compass);
+function resolveConfirmedPayloadRecord(source: unknown): Record<string, unknown> | null {
+  const record = asRecord(source);
+  if (!record) return null;
 
   return (
-    normalizeCompassString(source.compassText) ??
-    normalizeCompassString(source.compass_text) ??
-    normalizeCompassString(directCompass?.text) ??
-    normalizeCompassString(directTurnRecord?.compassText) ??
-    normalizeCompassString(directTurnRecord?.compass_text) ??
-    normalizeCompassString(directTurnRecordCompass?.text) ??
-    normalizeCompassString(uiEffectsCompass?.text) ??
-    normalizeCompassString(confirmedPayload?.compassText) ??
-    normalizeCompassString(confirmedPayload?.compass_text) ??
+    asRecord(record.hopy_confirmed_payload) ??
+    asRecord(record.hopyConfirmedPayload) ??
+    null
+  );
+}
+
+function resolveCompassTextFromConfirmedPayload(source: unknown): string | null {
+  const confirmedPayload = resolveConfirmedPayloadRecord(source);
+  if (!confirmedPayload) return null;
+
+  const confirmedCompass = asRecord(confirmedPayload.compass);
+
+  return (
     normalizeCompassString(confirmedCompass?.text) ??
-    normalizeCompassString(confirmedUiEffectsCompass?.text)
+    normalizeCompassString(confirmedPayload.compassText) ??
+    normalizeCompassString(confirmedPayload.compass_text)
   );
 }
 
-function resolveCompassPromptFromSource(
-  source: Record<string, unknown> | null,
-): string | null {
-  if (!source) return null;
+function resolveCompassPromptFromConfirmedPayload(source: unknown): string | null {
+  const confirmedPayload = resolveConfirmedPayloadRecord(source);
+  if (!confirmedPayload) return null;
 
-  const directCompass = asRecord(source.compass);
-  const directTurnRecord = asRecord(source.turnRecord);
-  const directTurnRecordCompass = asRecord(directTurnRecord?.compass);
-
-  const uiEffects = asRecord(source.ui_effects) ?? asRecord(source.uiEffects);
-  const uiEffectsCompass = asRecord(uiEffects?.compass);
-
-  const confirmedPayload =
-    asRecord(source.hopy_confirmed_payload) ??
-    asRecord(source.hopyConfirmedPayload);
-  const confirmedCompass = asRecord(confirmedPayload?.compass);
-  const confirmedUiEffects =
-    asRecord(confirmedPayload?.ui_effects) ??
-    asRecord(confirmedPayload?.uiEffects);
-  const confirmedUiEffectsCompass = asRecord(confirmedUiEffects?.compass);
+  const confirmedCompass = asRecord(confirmedPayload.compass);
 
   return (
-    normalizeCompassString(source.compassPrompt) ??
-    normalizeCompassString(source.compass_prompt) ??
-    normalizeCompassString(directCompass?.prompt) ??
-    normalizeCompassString(directTurnRecord?.compassPrompt) ??
-    normalizeCompassString(directTurnRecord?.compass_prompt) ??
-    normalizeCompassString(directTurnRecordCompass?.prompt) ??
-    normalizeCompassString(uiEffectsCompass?.prompt) ??
-    normalizeCompassString(confirmedPayload?.compassPrompt) ??
-    normalizeCompassString(confirmedPayload?.compass_prompt) ??
     normalizeCompassString(confirmedCompass?.prompt) ??
-    normalizeCompassString(confirmedUiEffectsCompass?.prompt)
+    normalizeCompassString(confirmedPayload.compassPrompt) ??
+    normalizeCompassString(confirmedPayload.compass_prompt)
   );
 }
 
-function resolveRunTurnCompassText(result: unknown): string | null {
-  return resolveCompassTextFromSource(asRecord(result ?? null));
-}
-
-function resolveRunTurnCompassPrompt(result: unknown): string | null {
-  return resolveCompassPromptFromSource(asRecord(result ?? null));
-}
-
-function resolveConfirmedTurnCompassText(
+function resolveCompassTextFromConfirmedTurn(
   confirmedTurn: ConfirmedAssistantTurn,
 ): string | null {
-  return resolveCompassTextFromSource(asRecord(confirmedTurn));
+  return (
+    normalizeCompassString(confirmedTurn.compass?.text) ??
+    normalizeCompassString(confirmedTurn.compassText) ??
+    resolveCompassTextFromConfirmedPayload(confirmedTurn)
+  );
 }
 
-function resolveConfirmedTurnCompassPrompt(
+function resolveCompassPromptFromConfirmedTurn(
   confirmedTurn: ConfirmedAssistantTurn,
 ): string | null {
-  return resolveCompassPromptFromSource(asRecord(confirmedTurn));
+  return (
+    normalizeCompassString(confirmedTurn.compass?.prompt) ??
+    normalizeCompassString(confirmedTurn.compassPrompt) ??
+    resolveCompassPromptFromConfirmedPayload(confirmedTurn)
+  );
+}
+
+function resolveCompassText(params: {
+  runTurnResult: unknown;
+  confirmedTurn: ConfirmedAssistantTurn;
+}): string | null {
+  return (
+    resolveCompassTextFromConfirmedPayload(params.runTurnResult) ??
+    resolveCompassTextFromConfirmedTurn(params.confirmedTurn)
+  );
+}
+
+function resolveCompassPrompt(params: {
+  runTurnResult: unknown;
+  confirmedTurn: ConfirmedAssistantTurn;
+}): string | null {
+  return (
+    resolveCompassPromptFromConfirmedPayload(params.runTurnResult) ??
+    resolveCompassPromptFromConfirmedTurn(params.confirmedTurn)
+  );
 }
 
 export function resolveConfirmedCompassArtifacts(params: {
@@ -137,13 +132,15 @@ export function resolveConfirmedCompassArtifacts(params: {
     };
   }
 
-  const resolvedCompassText =
-    resolveRunTurnCompassText(params.runTurnResult) ??
-    resolveConfirmedTurnCompassText(params.confirmedTurn);
+  const resolvedCompassText = resolveCompassText({
+    runTurnResult: params.runTurnResult,
+    confirmedTurn: params.confirmedTurn,
+  });
 
-  const resolvedCompassPrompt =
-    resolveRunTurnCompassPrompt(params.runTurnResult) ??
-    resolveConfirmedTurnCompassPrompt(params.confirmedTurn);
+  const resolvedCompassPrompt = resolveCompassPrompt({
+    runTurnResult: params.runTurnResult,
+    confirmedTurn: params.confirmedTurn,
+  });
 
   return {
     stateChanged: resolvedStateChanged,
@@ -162,8 +159,8 @@ plan と stateChanged 条件に従って最終利用可能な Compass 情報を�
 
 /*
 【今回このファイルで修正したこと】
-- confirmedTurn.stateChanged === true かつ compassText 欠落時に throw していた契約確認を削除しました。
-- 唯一の正である confirmedTurn.stateChanged はそのまま維持し、compassText / compassPrompt は取得できた値だけを返す形に修正しました。
-- Compass の抽出順、plan 条件、stateChanged の判定元は変えていません。
+- Compass の取得元を、確定意味ペイロードとそこから作られた confirmedTurn のみに限定しました。
+- ui_effects、turnRecord、直接の compassText など、唯一の正ではない広い探索経路を削除しました。
+- stateChanged は confirmedTurn.stateChanged だけを正として維持し、このファイル内で再判定しない形に固定しました。
 */
 // このファイルの正式役割: authenticated postTurn の Compass 解決専用ファイル
