@@ -38,7 +38,7 @@ export function MobileRailOverlay(props: {
         <LeftRail
           uiLang={uiLang}
           ui={ui}
-          onOpenMem={() => setMemOpen(true)}
+          onOpenMemories={() => setMemOpen(true)}
           userState={userState as any}
           userStateErr={userStateErr}
           showCloseButton={true}
@@ -48,3 +48,16 @@ export function MobileRailOverlay(props: {
     </div>
   );
 }
+
+/*
+このファイルの正式役割
+SP時の LeftRail をオーバーレイとして表示し、開閉と backdrop 閉鎖だけを担当する表示ラッパーです。
+LeftRail 自体の意味や状態の正は持たず、必要な props を受け渡すことだけに限定します。
+*/
+
+/*
+【今回このファイルで修正したこと】
+LeftRail へ渡していた古い prop 名 onOpenMem を、
+現在の props 名 onOpenMemories に合わせて修正しました。
+見た目、開閉構造、LeftRail 本体の責務には触れていません。
+*/
