@@ -50,7 +50,7 @@ export function resolveActiveThreadStateForView({
       clampStatePhase(source?.prev_state_level) ??
       clampStatePhase(fallback?.prev_phase) ??
       clampStatePhase(fallback?.prev_state_level) ??
-      null;
+      currentPhase;
 
     const sourceChanged = source?.state_changed;
     const fallbackChanged = fallback?.state_changed;
@@ -91,8 +91,8 @@ ChatClient 親本体から、表示用の activeThread 解決と activeThreadSta
 
 /*
 【今回このファイルで修正したこと】
-1. ChatClient.tsx 内にあった resolvedActiveThreadForView の解決責務を新規ファイルへ分離しました。
-2. ChatClient.tsx 内にあった resolvedActiveThreadState の解決責務を新規ファイルへ分離しました。
-3. state の唯一の正は再判定せず、受け取った値を clampStatePhase と既存優先順で整えるだけに留めています。
-4. 送信処理、Compass本体、MEMORIES、UI文言、他責務には触っていません。
+1. ConfirmedThreadState の prev_phase / prev_state_level が null を許容しないため、
+   prevPhase の最終 fallback を null ではなく currentPhase に変更しました。
+2. active thread の解決順、current_phase の解決順、state_changed の扱いには触れていません。
+3. 送信処理、Compass本体、MEMORIES、UI文言、他責務には触っていません。
 */
