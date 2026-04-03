@@ -147,7 +147,15 @@ function parseLabeledLines(lines: string[]): LabeledLine[] {
 
 function renderLines(lines: string[]) {
   return lines.map((line, index) => (
-    <p key={`${line}-${index}`} className={styles.compassText} style={{ margin: 0 }}>
+    <p
+      key={`${line}-${index}`}
+      className={styles.compassText}
+      style={{
+        margin: 0,
+        fontSize: "15px",
+        lineHeight: 1.8,
+      }}
+    >
       {line}
     </p>
   ));
@@ -161,7 +169,7 @@ function renderLabeledLines(lines: string[]) {
       key={`${item.label}-${item.body}-${index}`}
       style={{
         display: "grid",
-        gap: "4px",
+        gap: "6px",
         width: "100%",
         maxWidth: "100%",
         minWidth: 0,
@@ -173,8 +181,8 @@ function renderLabeledLines(lines: string[]) {
           style={{
             margin: 0,
             padding: 0,
-            fontSize: "12px",
-            lineHeight: 1.35,
+            fontSize: "13px",
+            lineHeight: 1.5,
             fontWeight: 700,
             letterSpacing: "0.02em",
             opacity: 0.84,
@@ -185,7 +193,14 @@ function renderLabeledLines(lines: string[]) {
       ) : null}
 
       {item.body ? (
-        <p className={styles.compassText} style={{ margin: 0 }}>
+        <p
+          className={styles.compassText}
+          style={{
+            margin: 0,
+            fontSize: "15px",
+            lineHeight: 1.8,
+          }}
+        >
           {item.body}
         </p>
       ) : null}
@@ -214,8 +229,8 @@ function renderStructuredSection(
         style={{
           margin: 0,
           padding: 0,
-          fontSize: "12px",
-          lineHeight: 1.35,
+          fontSize: "13px",
+          lineHeight: 1.5,
           fontWeight: 700,
           letterSpacing: "0.02em",
           opacity: 0.84,
@@ -227,7 +242,7 @@ function renderStructuredSection(
       <div
         style={{
           display: "grid",
-          gap: "8px",
+          gap: "10px",
           marginTop: "8px",
         }}
       >
@@ -268,7 +283,15 @@ function ChatStreamCompassInner({ item }: Props) {
 
       <div className={styles.compassBody}>
         {!structured || !structuredCompass ? (
-          <p className={styles.compassText}>{compassText}</p>
+          <p
+            className={styles.compassText}
+            style={{
+              fontSize: "15px",
+              lineHeight: 1.8,
+            }}
+          >
+            {compassText}
+          </p>
         ) : (
           <div
             style={{
@@ -334,4 +357,11 @@ item.kind === "compass" かつ item.text が空でないときだけ描画する
 4. このファイルは ViewItem 化された後の結果だけを表示する。
 5. structured Compass のときは見出しごとに整形表示し、そうでなければ本文をそのまま表示する。
 6. よって、このファイルで Compass が出ない原因の核心は、ViewItem を作る前段にある。
+*/
+
+/*
+【今回このファイルで修正したこと】
+Compass 本文と構造化セクション内本文の文字サイズを 15px、行間を 1.8 に上げました。
+各セクション見出しとラベルの文字サイズを 13px、行間を 1.5 に上げました。
+Compass の表示責務だけに限定し、表示可否ロジックや HOPY唯一の正には触れていません。
 */
