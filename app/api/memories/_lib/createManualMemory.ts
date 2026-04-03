@@ -80,7 +80,6 @@ export async function createManualMemory(
       {
         body,
         memory_type: "manual_note",
-        source_type: "manual",
         source_message_id: sourceMessageId,
         source_thread_id: sourceThreadId,
         save_hint: "save",
@@ -103,3 +102,14 @@ export async function createManualMemory(
     inserted: result.inserted,
   };
 }
+
+/*
+【このファイルの正式役割】
+manual memory 作成APIから、手動登録メモを正規化して insertMemoryRows へ渡す薄い登録窓口です。
+
+【今回このファイルで修正したこと】
+manual memory の candidate に source_type: "manual" を入れていたため、
+auto 前提型と衝突して build error になっていた箇所を外しました。
+manual / auto の種別は top-level の sourceType: "manual" に委ね、
+このファイルでは余計な再指定をしない形へそろえました。
+*/
