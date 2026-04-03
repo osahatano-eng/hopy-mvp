@@ -325,6 +325,8 @@ export function resolveBuiltResultFailure(
 ): string | null {
   const reply = normalizeReply(result.reply);
   const confirmedState = result.state ?? null;
+  const hasCompassText = result.compassText !== null;
+  const hasCompassPrompt = result.compassPrompt !== null;
 
   if (!reply) {
     return "runHopyTurn: built result reply is required";
@@ -342,14 +344,12 @@ export function resolveBuiltResultFailure(
     return "runHopyTurn: built result state is required";
   }
 
-  if (confirmedState.state_changed === true) {
-    if (result.compassText === null) {
-      return "runHopyTurn: compassText is required when state_changed is true";
+  if (hasCompassText !== hasCompassPrompt) {
+    if (!hasCompassText) {
+      return "runHopyTurn: compassText is required when compassPrompt exists";
     }
 
-    if (result.compassPrompt === null) {
-      return "runHopyTurn: compassPrompt is required when state_changed is true";
-    }
+    return "runHopyTurn: compassPrompt is required when compassText exists";
   }
 
   return null;
@@ -403,4 +403,16 @@ buildFailedRunHopyTurnResult で失敗時の標準結果を返す。
 - finalizeBuiltResult() で result.threadPatch ?? null を渡すようにし、undefined のまま mergeThreadPatchWithState() へ入る build error を止めました。
 - resolveBuiltResultFailure() で result.state ?? null を confirmedState に受け直し、undefined のまま hasCanonicalStateShape() へ入る build error を止めました。
 - confirmedState の null 可能性を残したまま state_changed を読まないように、null 明示ガードを追加しました。
+- state_changed=true のときに Compass を無条件必須としていた判定をやめ、Compass が存在する場合だけ text/prompt の片方欠落を失敗扱いにするよう修正しました。
+*/
+
+/*
+このファイルの正式役割
+runHopyTurn における builtResult の整形・補完・検証をまとめる責務ファイル。
+*/
+
+/*
+【今回このファイルで修正したこと】
+Freeでも state_changed=true になりうるのに、Compass を無条件必須にしていた失敗判定をやめました。
+Compass がある場合だけ text/prompt の整合を確認する形へ変更しました。
 */
