@@ -314,7 +314,6 @@ export function useChatSend<TState>(params: {
     }) => {
       const { text, conversationIdSeed, uiLangForFailed, clientRequestId } = opts;
 
-      if (isComposingNow()) return;
       if (inflightRef.current) return;
       inflightRef.current = true;
 
@@ -745,7 +744,6 @@ export function useChatSend<TState>(params: {
 
   const sendMessage = useCallback(
     async (textOverride?: string) => {
-      if (isComposingNow()) return;
       if (loading) return;
       if (sendGateRef.current) return;
       sendGateRef.current = true;
@@ -858,7 +856,7 @@ export function useChatSend<TState>(params: {
 */
 /*
 【今回このファイルで修正したこと】
-1. Compass 付き回答の後処理で落ちても送信全体を失敗扱いにしないよう、assistant message 反映を段階ごとに安全化しました。
-2. mergeAssistantStateFields / mergeConfirmedMeaningFields / mergeAssistantCompassFields を個別に try-catch で包み、Compass 反映だけが失敗しても reply 本文までは確実に残るようにしました。
-3. resolveConfirmedCompassText / resolveConfirmedCompassPrompt の取得も保護し、Compass 系の値解決で例外が起きても送信失敗へ直結しないようにしました。
+1. sendMessage の入口では isComposingNow() による早期 return を行わないようにしました。
+2. これにより、IME 判定が残留していても送信ボタン押下時に /chat fetch まで到達できるようにしました。
+3. sendCore 側の重複防止・inflight 防止・送信本体の流れは変更していません。
 */
