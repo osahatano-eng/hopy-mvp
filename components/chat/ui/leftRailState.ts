@@ -46,7 +46,7 @@ export function toPhaseOrNull(v: unknown): 1 | 2 | 3 | 4 | 5 | null {
   return clampPhase1to5(v);
 }
 
-export function safePhaseFromThread(thread: unknown): number | null {
+export function safePhaseFromThread(thread: unknown): 1 | 2 | 3 | 4 | 5 | null {
   const source = resolveCanonicalStateSource(thread);
   if (!source) return null;
 
@@ -60,7 +60,7 @@ export function safePhaseFromThread(thread: unknown): number | null {
   return null;
 }
 
-export function safePrevPhaseFromThread(thread: unknown): number | null {
+export function safePrevPhaseFromThread(thread: unknown): 1 | 2 | 3 | 4 | 5 | null {
   const source = resolveCanonicalStateSource(thread);
   if (!source) return null;
 
@@ -119,3 +119,17 @@ export function buildActiveThreadState(activeThread: unknown): HopyState {
     return null;
   }
 }
+
+/*
+このファイルの正式役割
+左カラム用の activeThreadState を安全に組み立てる補助だけを持つファイル。
+thread から 1..5 / 5段階の canonical state を読み取り、表示用 HopyState へ整えることに限定する。
+*/
+
+/*
+【今回このファイルで修正したこと】
+1. safePhaseFromThread の戻り型を number | null ではなく 1 | 2 | 3 | 4 | 5 | null に固定しました。
+2. safePrevPhaseFromThread の戻り型も同じく 1 | 2 | 3 | 4 | 5 | null に固定しました。
+3. 1..5 に絞った値が途中で broad な number に広がらないようにしました。
+4. leftRail の表示構造や state の意味定義には触れていません。
+*/
