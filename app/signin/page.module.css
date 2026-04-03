@@ -21,6 +21,18 @@
 
   background: #1a1a1a;
   color: #e6e6e6;
+  font-family:
+    "Inter",
+    "Noto Sans JP",
+    "Hiragino Sans",
+    "Hiragino Kaku Gothic ProN",
+    "Yu Gothic",
+    "Meiryo",
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
 }
 
 .card {
@@ -34,6 +46,7 @@
   border-radius: 8px;
 
   box-shadow: none;
+  font-family: inherit;
 }
 
 .badge {
@@ -43,6 +56,7 @@
   opacity: 0.72;
   user-select: none;
   margin-bottom: 10px;
+  font-family: inherit;
 }
 
 .h1 {
@@ -50,6 +64,7 @@
   font-size: 26px;
   line-height: 1.15;
   letter-spacing: 0.01em;
+  font-family: inherit;
 }
 
 .p {
@@ -60,6 +75,7 @@
   line-height: 1.2;
   color: rgba(230, 230, 230, 0.72);
   max-width: 56ch;
+  font-family: inherit;
 }
 
 .btn {
@@ -78,6 +94,7 @@
   justify-content: center;
 
   cursor: pointer;
+  font-family: inherit;
 }
 
 .btn:hover {
@@ -103,6 +120,7 @@
   margin-top: 14px;
   font-size: 12px;
   opacity: 0.66;
+  font-family: inherit;
 }
 
 /* Mobile (light) */
@@ -172,3 +190,15 @@
     outline: 2px solid rgba(230, 230, 230, 0.35);
   }
 }
+
+/*
+このファイルの正式役割:
+signin画面の配色・余白・枠線・文字見え方を担うCSSモジュールです。
+PC/SPそれぞれの見た目を分けつつ、/app/signin/page.tsx の表示UIへ最終スタイルを与える役割です。
+*/
+
+/*
+【今回このファイルで修正したこと】
+SPで明朝に寄る原因を止めるため、.main に sans-serif 系の font-family を明示しました。
+あわせて .card / .badge / .h1 / .p / .btn / .note を inherit にそろえ、PCとSPで同じ系統のフォント見え方へ固定しました。
+*/
