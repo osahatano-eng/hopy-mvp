@@ -57,8 +57,9 @@
 .brandIcon {
   display: block;
   flex: 0 0 auto;
-  width: 18px;
-  height: 18px;
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
 }
 
 .actions {
@@ -180,8 +181,8 @@
   }
 
   .brandIcon {
-    width: 20px;
-    height: 20px;
+    width: 26px;
+    height: 26px;
   }
 
   .language {
@@ -192,3 +193,11 @@
     font-size: 14px;
   }
 }
+
+/*
+このファイルの正式役割:
+トップページヘッダーの見た目、余白、ロゴサイズ、言語切替、サインイン導線の表示スタイルを定義するファイル。
+
+【今回このファイルで修正したこと】
+ヘッダー左上ロゴの視認性を上げるため、brandIcon の表示サイズを 18px→24px、PCで 20px→26px に調整しました。
+*/
