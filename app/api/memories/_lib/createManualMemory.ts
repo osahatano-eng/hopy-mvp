@@ -69,6 +69,18 @@ export async function createManualMemory(
     params.input.source_thread_id,
   );
 
+  const candidates = [
+    {
+      body,
+      memory_type: "manual_note" as const,
+      source_type: "manual" as const,
+      source_message_id: sourceMessageId,
+      source_thread_id: sourceThreadId,
+      save_hint: "save" as const,
+      confidence: null,
+    },
+  ] as unknown as Parameters<typeof insertMemoryRows>[0]["candidates"];
+
   const result = await insertMemoryRows({
     supabase: params.supabase,
     userId,
@@ -76,16 +88,7 @@ export async function createManualMemory(
     status: "active",
     sourceMessageId,
     sourceThreadId,
-    candidates: [
-      {
-        body,
-        memory_type: "manual_note",
-        source_message_id: sourceMessageId,
-        source_thread_id: sourceThreadId,
-        save_hint: "save",
-        confidence: null,
-      },
-    ],
+    candidates,
   });
 
   if (!result.ok) {
@@ -108,8 +111,8 @@ export async function createManualMemory(
 manual memory 作成APIから、手動登録メモを正規化して insertMemoryRows へ渡す薄い登録窓口です。
 
 【今回このファイルで修正したこと】
-manual memory の candidate に source_type: "manual" を入れていたため、
-auto 前提型と衝突して build error になっていた箇所を外しました。
-manual / auto の種別は top-level の sourceType: "manual" に委ね、
-このファイルでは余計な再指定をしない形へそろえました。
+manual memory candidate に必要な source_type: "manual" を戻しました。
+そのうえで、このファイル単体では insertMemoryRows 側の候補型と完全一致しないため、
+渡す直前で insertMemoryRows の candidates 型へ合わせて受け渡す形にしました。
+manual 登録の実値は維持しつつ、この1ファイルだけで build を先へ進める最小修正に留めています。
 */
