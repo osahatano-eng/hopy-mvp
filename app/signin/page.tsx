@@ -488,6 +488,9 @@ export default function SignInPage() {
     };
   }, [uiLang]);
 
+  const sansFontFamily =
+    '"Inter", "Noto Sans JP", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+
   const shellStyle: React.CSSProperties = {
     minHeight: "100dvh",
     width: "100%",
@@ -497,6 +500,7 @@ export default function SignInPage() {
     padding: "32px 20px",
     background:
       "radial-gradient(circle at top, rgba(17,24,39,0.04), transparent 32%), linear-gradient(180deg, #ffffff 0%, #fbfbf9 100%)",
+    fontFamily: sansFontFamily,
   };
 
   const cardStyle: React.CSSProperties = {
@@ -508,6 +512,7 @@ export default function SignInPage() {
     border: "1px solid rgba(17,24,39,0.08)",
     boxShadow: "0 20px 60px rgba(17,24,39,0.06)",
     backdropFilter: "blur(10px)",
+    fontFamily: sansFontFamily,
   };
 
   const badgeStyle: React.CSSProperties = {
@@ -523,6 +528,7 @@ export default function SignInPage() {
     letterSpacing: "0.08em",
     textTransform: "uppercase",
     color: "rgba(17,24,39,0.72)",
+    fontFamily: sansFontFamily,
   };
 
   const titleStyle: React.CSSProperties = {
@@ -532,6 +538,7 @@ export default function SignInPage() {
     letterSpacing: "-0.04em",
     color: "#111827",
     fontWeight: 600,
+    fontFamily: sansFontFamily,
   };
 
   const leadStyle: React.CSSProperties = {
@@ -539,6 +546,7 @@ export default function SignInPage() {
     fontSize: 15,
     lineHeight: 1.8,
     color: "rgba(17,24,39,0.72)",
+    fontFamily: sansFontFamily,
   };
 
   const buttonStyle: React.CSSProperties = {
@@ -561,6 +569,7 @@ export default function SignInPage() {
     cursor: busy ? "default" : "pointer",
     opacity: busy ? 0.72 : 1,
     transition: "transform 160ms ease, box-shadow 160ms ease, opacity 160ms ease",
+    fontFamily: sansFontFamily,
   };
 
   const noteStyle: React.CSSProperties = {
@@ -568,6 +577,7 @@ export default function SignInPage() {
     fontSize: 13,
     lineHeight: 1.7,
     color: "rgba(17,24,39,0.56)",
+    fontFamily: sansFontFamily,
   };
 
   const subNoteStyle: React.CSSProperties = {
@@ -577,6 +587,7 @@ export default function SignInPage() {
     fontSize: 13,
     lineHeight: 1.8,
     color: "rgba(17,24,39,0.60)",
+    fontFamily: sansFontFamily,
   };
 
   const debugStyle: React.CSSProperties = {
@@ -587,6 +598,7 @@ export default function SignInPage() {
     lineHeight: 1.7,
     color: "rgba(17,24,39,0.52)",
     wordBreak: "break-word",
+    fontFamily: sansFontFamily,
   };
 
   const redirectWrapStyle: React.CSSProperties = {
@@ -597,6 +609,7 @@ export default function SignInPage() {
     alignItems: "center",
     justifyContent: "center",
     padding: 24,
+    fontFamily: sansFontFamily,
   };
 
   const redirectCardStyle: React.CSSProperties = {
@@ -609,6 +622,7 @@ export default function SignInPage() {
     background: "rgba(255,255,255,0.92)",
     border: "1px solid rgba(17,24,39,0.06)",
     boxShadow: "0 16px 40px rgba(17,24,39,0.05)",
+    fontFamily: sansFontFamily,
   };
 
   const redirectDotRowStyle: React.CSSProperties = {
@@ -678,8 +692,18 @@ export default function SignInPage() {
             <span style={redirectDotStyle} />
             <span style={redirectDotStyle} />
           </div>
-          <div style={{ fontSize: 13, letterSpacing: "0.04em", opacity: 0.6 }}>HOPY</div>
-          <div style={{ fontSize: 14, color: "rgba(17,24,39,0.72)" }}>{copy.redirecting}</div>
+          <div style={{ fontSize: 13, letterSpacing: "0.04em", opacity: 0.6, fontFamily: sansFontFamily }}>
+            HOPY
+          </div>
+          <div
+            style={{
+              fontSize: 14,
+              color: "rgba(17,24,39,0.72)",
+              fontFamily: sansFontFamily,
+            }}
+          >
+            {copy.redirecting}
+          </div>
         </div>
       </main>
     );
@@ -748,6 +772,6 @@ Google OAuth の開始・復帰・セッション確定・/chat への遷移を�
 
 /*
 【今回このファイルで修正したこと】
-見た目改善時に抜けていた login 関数を復元しました。
-これにより Enter 押下と Google ボタン押下の両方で signInWithOAuth が呼ばれる状態へ戻しています。
+SPで明朝へ寄っていた原因を止めるため、/signin 全体の fontFamily を sans-serif 系で明示しました。
+shell / card / title / lead / button / note / redirect 表示まで同じ系統へそろえ、PCとSPの見え方差を減らしました。
 */
