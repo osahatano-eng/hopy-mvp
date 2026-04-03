@@ -1297,8 +1297,6 @@ export function createInitController<TState>(args: InitControllerArgs<TState>) {
   };
 }
 
-export { createInitController };
-
 /*
 このファイルの正式役割
 チャット初期化の実体ファイル。
@@ -1307,7 +1305,6 @@ session 確立後の初期化、threads 再取得、activeThread 復元、新規
 
 /*
 【今回このファイルで修正したこと】
-1. fetchUserStateOnly 内の profiles 参照キーを id から user_id に修正しました。
-2. public.profiles の実在カラム前提に合わせ、profiles.id does not exist を止める形に戻しました。
-3. 状態の唯一の正、Compass 条件、回答ルート本体には触れていません。
+createInitController は関数宣言ですでに export 済みだったため、
+ファイル末尾の export { createInitController }; を削除して二重 export を止めました。
 */
