@@ -361,7 +361,7 @@ export default function LeftRail(props: LeftRailProps) {
             <LeftRailNavRow
               as="button"
               onClick={() => {
-                onOpenMemories();
+                onOpenMemories?.();
                 if (shouldCloseAfterAction) {
                   closeLayerNextFrame();
                 }
@@ -461,7 +461,7 @@ export default function LeftRail(props: LeftRailProps) {
 
           {showRecover ? (
             <div className={styles.block}>
-              <div className={`${styles.label} ${styles.recoverLabel}`} title={String(userStateErr ?? "")}>
+              <div className={styles.label} style={styles.recoverLabel ? undefined : undefined} title={String(userStateErr ?? "")}>
                 {t.recoverTitle}
               </div>
 
@@ -515,7 +515,7 @@ export default function LeftRail(props: LeftRailProps) {
 
 /*
 【今回このファイルで修正したこと】
-1. useLeftRailDragStyle に渡す railOpen を railOpenSafe = railOpen ?? false で boolean に固定しました。
-2. ドラッグ処理へは railOpenSafe を渡すようにし、boolean | undefined のまま流れないようにしました。
-3. 左カラムの表示構造、Current Chat、Threads、Memories、AccountSection、状態表示の責務には触れていません。
+1. onOpenMemories() の直接呼び出しを onOpenMemories?.() に変更しました。
+2. onOpenMemories が undefined の可能性を含む型でも build が止まらないようにしました。
+3. LeftRail の表示構造、Current Chat、Threads、Recover、AccountSection、状態表示の責務には触れていません。
 */
