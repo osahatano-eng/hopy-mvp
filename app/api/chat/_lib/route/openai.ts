@@ -8,6 +8,7 @@ import { sanitizeAssistantReply } from "./openaiSanitize";
 import {
   detectResolvedPlanFromPromptBundle,
   getReplyMaxTokensByPlan,
+  type ResolvedPlanLike,
 } from "./openaiPlan";
 import {
   buildOpenAIMessages,
@@ -190,7 +191,7 @@ function isStateChangedTrue(state: Record<string, unknown> | null): boolean {
 }
 
 function isCompassRequiredForPlan(params: {
-  resolvedPlan: string;
+  resolvedPlan: ResolvedPlanLike;
   state: Record<string, unknown> | null;
 }): boolean {
   const { resolvedPlan, state } = params;
@@ -208,7 +209,7 @@ function shouldRetryWithStructuredForMissingState(params: {
 }
 
 function shouldRetryWithStructuredForMissingCompass(params: {
-  resolvedPlan: string;
+  resolvedPlan: ResolvedPlanLike;
   state: Record<string, unknown> | null;
   compassText: string;
   compassPrompt: string;
@@ -229,7 +230,7 @@ function shouldRetryWithStructuredForMissingCompass(params: {
 }
 
 function buildMissingRequiredCompassErrorMessage(params: {
-  resolvedPlan: string;
+  resolvedPlan: ResolvedPlanLike;
   state: Record<string, unknown> | null;
   compassText: string;
   compassPrompt: string;
@@ -238,7 +239,7 @@ function buildMissingRequiredCompassErrorMessage(params: {
 
   return [
     "openai.ts: compass is required before returning model output",
-    `resolvedPlan=${params.resolvedPlan || "unknown"}`,
+    `resolvedPlan=${String(params.resolvedPlan || "unknown")}`,
     `state_changed=${canonicalState?.state_changed === true ? "true" : "false"}`,
     `hasCompassText=${params.compassText.trim() ? "true" : "false"}`,
     `hasCompassPrompt=${params.compassPrompt.trim() ? "true" : "false"}`,
@@ -250,7 +251,7 @@ function buildConfirmedPayload(params: {
   state: Record<string, unknown> | null;
   compassText: string;
   compassPrompt: string;
-  resolvedPlan: string;
+  resolvedPlan: ResolvedPlanLike;
 }): GenerateAssistantReplyResult["hopy_confirmed_payload"] {
   const { assistantText, state, compassText, compassPrompt, resolvedPlan } =
     params;
@@ -523,7 +524,7 @@ export async function generateAssistantReply(
   let compassText = "";
   let compassPrompt = "";
   let state: Record<string, unknown> | null = null;
-  let resolvedPlan = "free";
+  let resolvedPlan: ResolvedPlanLike = "free";
   const attemptDebugInfos: AttemptDebugInfo[] = [];
   const speed_audit = createInitialSpeedAudit();
 
@@ -747,14 +748,15 @@ compassText / compassPrompt / state を抽出して返す。
 
 /*
 【今回このファイルで修正したこと】
-- Plus / Pro で state_changed=true かつ compassText / compassPrompt が欠けている場合、openai_error 記録だけで通さず不正として throw するよう修正しました。
-- buildConfirmedPayload(...) に resolvedPlan を渡し、Compass 必須回の confirmed payload を片肺のまま作らないよう修正しました。
+- ResolvedPlanLike 型を import し、resolvedPlan を string ではなく ResolvedPlanLike で保持するよう修正しました。
+- isCompassRequiredForPlan / shouldRetryWithStructuredForMissingCompass / buildMissingRequiredCompassErrorMessage / buildConfirmedPayload の resolvedPlan 型も ResolvedPlanLike にそろえました。
+- これにより buildOpenAIMessages(...) へ resolvedPlan を渡す箇所の build error を解消しました。
 - それ以外の state 抽出、assistantText 必須、retry 判定、speed_audit、memory_candidates 回収責務は触っていません。
 */
 // このファイルの正式役割: OpenAI 応答の生成・回収ファイル
 
 /*
 【今回このファイルで修正したこと】
-Plus / Pro で state_changed=true の回に Compass 欠落を許容していた箇所を、不正として停止する形へ修正しました。
-confirmed payload も片肺状態では生成しないようにそろえました。
+resolvedPlan の型ずれを直し、build error を止めました。
+Compass の唯一の正に関わる判定ロジック自体は変更していません。
 */
