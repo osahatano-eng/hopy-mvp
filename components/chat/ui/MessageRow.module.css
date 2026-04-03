@@ -99,8 +99,8 @@
 }
 
 .txt {
-  font-size: clamp(14px, 1.35vw, 16px);
-  line-height: 1.68;
+  font-size: clamp(15px, 1.4vw, 17px);
+  line-height: 1.72;
 
   color: var(--text);
 
@@ -205,8 +205,8 @@
   }
 
   .txt {
-    font-size: 15px;
-    line-height: 1.66;
+    font-size: 16px;
+    line-height: 1.7;
     letter-spacing: 0.005em;
   }
 
@@ -279,3 +279,16 @@
 .row[data-pending="1"] .txt :global(p) {
   margin: 0;
 }
+
+/*
+このファイルの正式役割
+チャット本文の1行表示におけるレイアウト・文字サイズ・余白・段落リズムを担うスタイル定義ファイル。
+YOU/HOPY の寄せ方、本文の最大幅、本文の可読性、pending 表示の見え方を決める。
+*/
+
+/*
+【今回このファイルで修正したこと】
+通常本文 .txt の文字サイズを clamp(15px, 1.4vw, 17px) に上げ、行間を 1.72 に調整しました。
+SPの .txt も 16px / 1.7 に上げ、本文の可読性を改善しました。
+本文表示の見た目だけを調整し、幅責務・状態表示・送信処理・HOPY唯一の正には触れていません。
+*/
