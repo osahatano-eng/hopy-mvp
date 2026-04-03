@@ -163,6 +163,8 @@ export function extractCompassTextFromParsed(
 
   return (
     readString(confirmedCompass?.text) ||
+    readString(confirmedPayload?.compassText) ||
+    readString(confirmedPayload?.compass_text) ||
     readString(parsed.compassText) ||
     readString(parsed.compass_text) ||
     readString(directCompass?.text) ||
@@ -181,6 +183,8 @@ export function extractCompassPromptFromParsed(
 
   return (
     readString(confirmedCompass?.prompt) ||
+    readString(confirmedPayload?.compassPrompt) ||
+    readString(confirmedPayload?.compass_prompt) ||
     readString(parsed.compassPrompt) ||
     readString(parsed.compass_prompt) ||
     readString(directCompass?.prompt) ||
@@ -286,14 +290,10 @@ assistantText / confirmed_memory_candidates / state / compassText / compassPromp
 
 /*
 【今回このファイルで修正したこと】
-- parsed_json に boolean ではなく、実際に解析できた JSON object を返すように修正した。
-- JSON object が取れない場合だけ parsed_json:null を返すように修正した。
-- これにより openai.ts 側の recoverStateFromParsedJson(...) が、実際の parsed object から state を再救出できるようにした。
-- assistant_state と ui_effects.compass / uiEffects.compass を正式抽出対象に含める構造はそのまま維持した。
+- hopy_confirmed_payload.compass.text / prompt だけでなく、
+  hopy_confirmed_payload.compassText / compass_text / compassPrompt / compass_prompt も正式抽出対象に追加しました。
+- これにより、confirmed payload 内で Compass がオブジェクトではなくフラットキーで返ってきた場合でも、
+  上流 parser で欠落させず下流へ渡せるようにしました。
+- それ以外の parsed_json / state / memory_candidates / reply の抽出順序は変更していません。
 */
 // このファイルの正式役割: OpenAI 生出力から、確定意味ペイロードを抽出する解析ファイル
-
-/* 【今回このファイルで修正したこと】
-- ファイル末尾で重複していた修正履歴コメントを1つに整理しました。
-- ロジック本体、抽出順序、parsed_json / state / compass の返却仕様は変更していません。
-*/
