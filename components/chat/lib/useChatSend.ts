@@ -164,6 +164,68 @@ function mergeConfirmedMeaningFields(
   return next as ChatMsg;
 }
 
+function buildConfirmedAssistantMessage<TState>(args: {
+  message: ChatMsg;
+  payload: ApiResponse<TState>;
+  reply: string;
+  requestLang: Lang;
+  normalizedAssistantState: ConfirmedStatePayload | TState | null;
+  confirmedPayload: ConfirmedMeaningPayload | null;
+  compassText: string | null;
+  compassPrompt: string | null;
+}): ChatMsg {
+  const {
+    message,
+    payload,
+    reply,
+    requestLang,
+    normalizedAssistantState,
+    confirmedPayload,
+    compassText,
+    compassPrompt,
+  } = args;
+
+  let next: ChatMsg = {
+    ...message,
+    content: reply,
+    lang: pickLang(payload, requestLang),
+  };
+
+  try {
+    next = mergeAssistantStateFields(
+      next,
+      normalizedAssistantState
+        ? { ...payload, assistant_state: normalizedAssistantState }
+        : payload
+    );
+  } catch (e) {
+    logWarn("[useChatSend] mergeAssistantStateFields failed", {
+      reason: String((e as any)?.message ?? e ?? ""),
+    });
+  }
+
+  try {
+    next = mergeConfirmedMeaningFields(next, confirmedPayload);
+  } catch (e) {
+    logWarn("[useChatSend] mergeConfirmedMeaningFields failed", {
+      reason: String((e as any)?.message ?? e ?? ""),
+    });
+  }
+
+  try {
+    next = mergeAssistantCompassFields(next, compassText, compassPrompt);
+  } catch (e) {
+    logWarn("[useChatSend] mergeAssistantCompassFields failed", {
+      reason: String((e as any)?.message ?? e ?? ""),
+      hasCompassText: Boolean(compassText),
+      hasCompassPrompt: Boolean(compassPrompt),
+      hasConfirmedPayloadCompass: Boolean(confirmedPayload?.compass),
+    });
+  }
+
+  return next;
+}
+
 export function useChatSend<TState>(params: {
   supabase: SupabaseClient;
   uiLang: Lang;
@@ -429,32 +491,33 @@ export function useChatSend<TState>(params: {
             ? confirmedPayload.state
             : normalizeAssistantStatePayload(payload);
 
-        const compassText = resolveConfirmedCompassText(payload, confirmedPayload);
-        const compassPrompt = resolveConfirmedCompassPrompt(
-          payload,
-          confirmedPayload
-        );
+        let compassText: string | null = null;
+        let compassPrompt: string | null = null;
+
+        try {
+          compassText = resolveConfirmedCompassText(payload, confirmedPayload);
+          compassPrompt = resolveConfirmedCompassPrompt(payload, confirmedPayload);
+        } catch (e) {
+          logWarn("[useChatSend] resolve confirmed compass failed", {
+            reason: String((e as any)?.message ?? e ?? ""),
+            hasPayloadCompass: Boolean(payload.compass),
+            hasConfirmedPayloadCompass: Boolean(confirmedPayload?.compass),
+          });
+        }
 
         setMessages((prev) =>
           prev.map((m) =>
             m.id === pendingId
-              ? mergeAssistantCompassFields(
-                  mergeConfirmedMeaningFields(
-                    mergeAssistantStateFields(
-                      {
-                        ...m,
-                        content: reply,
-                        lang: pickLang(payload, requestLang),
-                      },
-                      normalizedAssistantState
-                        ? { ...payload, assistant_state: normalizedAssistantState }
-                        : payload
-                    ),
-                    confirmedPayload
-                  ),
+              ? buildConfirmedAssistantMessage({
+                  message: m,
+                  payload,
+                  reply,
+                  requestLang,
+                  normalizedAssistantState,
+                  confirmedPayload,
                   compassText,
-                  compassPrompt
-                )
+                  compassPrompt,
+                })
               : m
           )
         );
@@ -795,7 +858,7 @@ export function useChatSend<TState>(params: {
 */
 /*
 【今回このファイルで修正したこと】
-1. auth timeout 用 timer の型を ReturnType<typeof setTimeout> に変更しました。
-2. timer の作成と解放を window 経由ではなく setTimeout / clearTimeout にそろえました。
-3. auth timeout の導入意図、resolveAuthContextForSend 本体、Supabase 設定、API 側、他ファイルには触っていません。
+1. Compass 付き回答の後処理で落ちても送信全体を失敗扱いにしないよう、assistant message 反映を段階ごとに安全化しました。
+2. mergeAssistantStateFields / mergeConfirmedMeaningFields / mergeAssistantCompassFields を個別に try-catch で包み、Compass 反映だけが失敗しても reply 本文までは確実に残るようにしました。
+3. resolveConfirmedCompassText / resolveConfirmedCompassPrompt の取得も保護し、Compass 系の値解決で例外が起きても送信失敗へ直結しないようにしました。
 */
