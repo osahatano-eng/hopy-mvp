@@ -647,19 +647,19 @@ export async function generateAssistantReply(
     speed_audit.compass_resolve_ms += elapsedMs(requiredCompassResolveStartMs);
 
     if (compassRequiredForPlan && !compassText.trim()) {
-      throw new Error(
-        "openai.ts: compassText is required when resolvedPlan is not free and state_changed is true",
-      );
+      openai_error =
+        "openai.ts: compassText is missing when resolvedPlan is not free and state_changed is true";
     }
 
     if (compassRequiredForPlan && !compassPrompt.trim()) {
-      throw new Error(
-        "openai.ts: compassPrompt is required when resolvedPlan is not free and state_changed is true",
-      );
+      openai_error =
+        "openai.ts: compassPrompt is missing when resolvedPlan is not free and state_changed is true";
     }
 
     openai_ok = true;
-    openai_error = null;
+    if (!openai_error) {
+      openai_error = null;
+    }
   } catch (e: unknown) {
     openai_error = String(e ?? "");
     openai_ok = false;
@@ -714,8 +714,8 @@ compassText / compassPrompt / state を抽出して返す。
 
 /*
 【今回このファイルで修正したこと】
-- createJsonForcedCompletion の返り値が stream を含む union 型でも安全に扱えるよう、choices を持つ completion だけを通す型ガードを追加しました。
-- completion.choices?.[0]?.message?.content への直接参照をやめ、getCompletionMessageContent(...) 経由に統一しました。
-- 1回目と2回目の JSON 取得箇所の両方を同じ安全な取得方法へそろえました。
-- それ以外の state 必須条件、Compass 必須条件、confirmed payload 生成、speed_audit の返却構造は触っていません。
+- 状態変化時に compassText / compassPrompt が欠けていても throw せず、回答本文と state は返し続けるように修正しました。
+- 欠落は openai_error に記録するだけにし、assistantText を空へ落とさないようにしました。
+- state 必須、assistantText 必須、speed_audit、confirmed payload 生成の基本構造は触っていません。
 */
+// このファイルの正式役割: OpenAI 応答の生成・回収ファイル
