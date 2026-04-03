@@ -500,7 +500,6 @@ export async function finalizeAuthenticatedPostTurn(
 
   const confirmedTurnWithCompass = {
     ...params.confirmedTurn,
-    stateChanged: resolvedCompass.stateChanged,
     compassText: resolvedCompass.compassText ?? undefined,
     compassPrompt: resolvedCompass.compassPrompt ?? undefined,
     compass:
@@ -510,6 +509,10 @@ export async function finalizeAuthenticatedPostTurn(
             prompt: resolvedCompass.compassPrompt,
           }
         : undefined,
+    canonicalAssistantState: {
+      ...params.confirmedTurn.canonicalAssistantState,
+      state_changed: params.confirmedTurn.stateChanged,
+    },
   } as ConfirmedAssistantTurn;
 
   const finalizedTurnArtifacts = buildFinalizedTurnArtifacts({
@@ -565,8 +568,8 @@ Compass を含む最終 turn artifacts 作成、
 
 /*
 【今回このファイルで修正したこと】
-- selectedStrategy の型を広い string のまま持たず、insertInterventionLog 側の selected_strategy 型へ合わせました。
-- selected_strategy: params.selectedStrategy で Strategy4 不一致になっていた build error だけを対象に修正しました。
-- 実行時の値や strategy の判定ロジックは変えず、このファイル内の型の受け口だけをそろえました。
-- postTurn の実行ロジック、memory / Compass / payload / 状態 1..5 の流れには触っていません。
+- resolvedCompass.stateChanged で confirmedTurn.stateChanged を上書きしていた処理を削除しました。
+- confirmedTurn の唯一の正である stateChanged をそのまま維持したまま、Compass text / prompt だけを後段へ載せる形に修正しました。
+- canonicalAssistantState.state_changed も confirmedTurn.stateChanged に合わせて固定しました。
+- memory / audit / title / payload 組み立ての他の流れには触っていません。
 */
