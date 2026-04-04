@@ -319,6 +319,72 @@ function resolveConfirmedTurnFromTurnRecord(
   return confirmedTurn as ConfirmedAssistantTurn;
 }
 
+function isLowSignalGreeting(userText: string): boolean {
+  const normalized = normalizeOptionalText(userText).toLowerCase();
+  if (!normalized) return false;
+
+  const compact = normalized.replace(/\s+/g, "");
+
+  const exactMatches = new Set([
+    "こんにちは",
+    "こんばんは",
+    "おはよう",
+    "やあ",
+    "どうも",
+    "もしもし",
+    "hi",
+    "hello",
+    "hey",
+    "yo",
+    "sup",
+    "ok",
+    "okay",
+    "thanks",
+    "thankyou",
+    "thankyou!",
+    "yes",
+  ]);
+
+  if (exactMatches.has(compact)) {
+    return true;
+  }
+
+  const greetingPatterns = [
+    /^(こんにちは|こんばんは|おはよう)([!！。ー〜]*)$/,
+    /^(hi|hello|hey)([!！.,]*)$/,
+  ];
+
+  return greetingPatterns.some((pattern) => pattern.test(compact));
+}
+
+function clampConfirmedStateForLowSignalGreeting(params: {
+  userText: string;
+  promptInput: AuthenticatedPromptInput;
+  confirmedPayloadState: CanonicalAssistantState;
+}): CanonicalAssistantState {
+  const { userText, promptInput, confirmedPayloadState } = params;
+
+  if (!isLowSignalGreeting(userText)) {
+    return confirmedPayloadState;
+  }
+
+  if (
+    confirmedPayloadState.state_changed !== true &&
+    confirmedPayloadState.state_level === promptInput.currentStateLevel &&
+    confirmedPayloadState.current_phase === promptInput.currentPhase
+  ) {
+    return confirmedPayloadState;
+  }
+
+  return {
+    current_phase: promptInput.currentPhase,
+    state_level: resolvePromptPhase(promptInput.currentStateLevel),
+    prev_phase: resolvePromptPhase(promptInput.prevPhase),
+    prev_state_level: resolvePromptPhase(promptInput.prevStateLevel),
+    state_changed: false,
+  };
+}
+
 export function resolveConfirmedTurnFromBuiltResult(
   result: RunHopyTurnBuiltResult | null | undefined,
   fallback: ConfirmedStateFallback,
@@ -497,9 +563,15 @@ export function createAuthenticatedTurnDeps(params: {
         );
       }
 
-      const confirmedPayloadState = resolveConfirmedPayloadState(
+      const rawConfirmedPayloadState = resolveConfirmedPayloadState(
         asRecord(confirmedPayload.state),
       );
+
+      const confirmedPayloadState = clampConfirmedStateForLowSignalGreeting({
+        userText: promptInput.userText,
+        promptInput,
+        confirmedPayloadState: rawConfirmedPayloadState,
+      });
 
       const confirmedPayloadCompass = asRecord(confirmedPayload.compass);
       const resolvedCompass = resolveConfirmedCompass({
@@ -508,18 +580,40 @@ export function createAuthenticatedTurnDeps(params: {
         confirmedPayloadCompass,
       });
 
+      const normalizedConfirmedPayload = {
+        ...confirmedPayload,
+        state: confirmedPayloadState,
+        compass:
+          confirmedPayloadState.state_changed === true && resolvedCompass
+            ? {
+                text: resolvedCompass.text,
+                prompt: resolvedCompass.prompt,
+              }
+            : {
+                text: "",
+                prompt: "",
+              },
+      };
+
       return {
         assistantText: confirmedReply,
         openai_ok: authReply.openai_ok,
         openai_error: authReply.openai_error,
         confirmed_memory_candidates: authReply.confirmed_memory_candidates,
         state: confirmedPayloadState,
-        hopy_confirmed_payload: confirmedPayload,
+        hopy_confirmed_payload: normalizedConfirmedPayload,
         reply: confirmedReply,
         ui_effects: null,
-        compass: resolvedCompass,
-        compassText: resolvedCompass?.text ?? "",
-        compassPrompt: resolvedCompass?.prompt ?? "",
+        compass:
+          confirmedPayloadState.state_changed === true ? resolvedCompass : null,
+        compassText:
+          confirmedPayloadState.state_changed === true
+            ? resolvedCompass?.text ?? ""
+            : "",
+        compassPrompt:
+          confirmedPayloadState.state_changed === true
+            ? resolvedCompass?.prompt ?? ""
+            : "",
         speed_audit: speedAudit,
       } as AuthenticatedModelOutput;
     },
@@ -627,9 +721,10 @@ authenticated 経路の runHopyTurn 用 deps 作成ファイル。
 */
 /*
 【今回このファイルで修正したこと】
-- local ConfirmedAssistantTurn 型に canonicalAssistantState を追加しました。
-- turnRecord 経由・confirmed payload 経由の両方で confirmedTurn を作る箇所に、canonicalAssistantState を必ず入れるようにしました。
-- これにより saveAssistantMessageOrError(...) / saveAssistantLearningLogs(...) が要求する confirmedTurn 形へ、このファイル内でそろえました。
-- PromptBundle、callModel の実行ロジック、buildTurnResult、Compass、状態 1..5 の意味、保存フロー自体は変えていません。
+- low signal な挨拶を検知する isLowSignalGreeting(...) を追加した。
+- 低シグナル挨拶で state が過大に跳ねた場合、promptInput 側の現在 state に固定し state_changed=false に戻す clampConfirmedStateForLowSignalGreeting(...) を追加した。
+- callModel(...) で model が返した raw state をそのまま通さず、低シグナル挨拶だけ保守的に正規化した state を使うようにした。
+- clamp 後に compass も連動して空に戻すようにした。
+- それ以外の通常入力・重い相談・説明要求・保存フローには触っていない。
 */
 // このファイルの正式役割: authenticated 経路の runHopyTurn 用 deps 作成ファイル
