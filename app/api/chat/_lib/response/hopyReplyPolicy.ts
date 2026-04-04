@@ -30,6 +30,7 @@ const HOPY_REPLY_POLICY_MAP: Record<HopyStateLevel, HopyReplyPolicy> = {
       "無理に決めさせない",
       "絡まりを少しほどく",
       "ひとまず持ち直しやすくする",
+      "軽い入力では必要以上に重くしない",
     ] as const,
     axis: [
       "否定しない",
@@ -40,6 +41,7 @@ const HOPY_REPLY_POLICY_MAP: Record<HopyStateLevel, HopyReplyPolicy> = {
       "今すぐ答えを出さなくてよい安心を渡しつつ、いま握るものを1つだけ見えやすくする",
       "支えることを優先し、放置された感じを出さない",
       "表現を固定化しすぎず、その場の文脈に合う言い方を選ぶ",
+      "基本は短めに始め、必要時だけ少し厚くする",
     ] as const,
     include: [
       "いろいろなものが重なっていることの可視化",
@@ -56,6 +58,7 @@ const HOPY_REPLY_POLICY_MAP: Record<HopyStateLevel, HopyReplyPolicy> = {
       "こうすべきの圧",
       "受け止めだけで終わり、支えや進みやすさが残らないこと",
       "毎回似た比喩や定型句への固定",
+      "軽い入力でも初手から重い受け止め長文にすること",
     ] as const,
   },
 
@@ -68,6 +71,7 @@ const HOPY_REPLY_POLICY_MAP: Record<HopyStateLevel, HopyReplyPolicy> = {
       "焦点候補を渡す",
       "次に見てよい方向を見つけやすくする",
       "迷いの中でも進み口を作る",
+      "広げすぎず選びやすくする",
     ] as const,
     axis: [
       "可能性を2〜3個程度に絞る",
@@ -77,6 +81,7 @@ const HOPY_REPLY_POLICY_MAP: Record<HopyStateLevel, HopyReplyPolicy> = {
       "迷いをそのまま放置せず、選びやすい方向をやわらかく照らす",
       "必要なら、小さく試せる見方や入り口を自然に添える",
       "表現を固定化しすぎず、その場の文脈に合う言い方を選ぶ",
+      "軽い相談では短〜中程度に保ち、情報を盛りすぎない",
     ] as const,
     include: [
       "小さく整理された選択肢",
@@ -92,6 +97,7 @@ const HOPY_REPLY_POLICY_MAP: Record<HopyStateLevel, HopyReplyPolicy> = {
       "強い断定",
       "視野を広げるだけで終わり、本人が動きやすくならないこと",
       "毎回似た比喩や定型句への固定",
+      "軽い相談でも説明を広げすぎて重くすること",
     ] as const,
   },
 
@@ -113,6 +119,7 @@ const HOPY_REPLY_POLICY_MAP: Record<HopyStateLevel, HopyReplyPolicy> = {
       "必要なら自然な提案を1〜2個まで入れてよい",
       "提案は命令ではなく、試してみやすい形で置く",
       "表現を固定化しすぎず、その場の文脈に合う言い方を選ぶ",
+      "整理で止めず、次に絞りやすくする",
     ] as const,
     include: [
       "見取り図",
@@ -128,6 +135,7 @@ const HOPY_REPLY_POLICY_MAP: Record<HopyStateLevel, HopyReplyPolicy> = {
       "整理だけで止まり、次の収束につながらないこと",
       "提案を大量に並べること",
       "毎回似た比喩や定型句への固定",
+      "軽い入力なのに整理状態だからと厚く書きすぎること",
     ] as const,
   },
 
@@ -148,6 +156,7 @@ const HOPY_REPLY_POLICY_MAP: Record<HopyStateLevel, HopyReplyPolicy> = {
       "必要なら自然な提案を1〜2個まで入れてよい",
       "押しつけずに背中を預けられる形にする",
       "表現を固定化しすぎず、その場の文脈に合う言い方を選ぶ",
+      "広げず、決めやすさを上げる",
     ] as const,
     include: [
       "方針の言語化",
@@ -163,6 +172,7 @@ const HOPY_REPLY_POLICY_MAP: Record<HopyStateLevel, HopyReplyPolicy> = {
       "強引に結論へ押し込むこと",
       "提案を多くしすぎて迷わせること",
       "毎回似た比喩や定型句への固定",
+      "結論直前なのに説明を広げすぎて鈍らせること",
     ] as const,
   },
 
@@ -182,6 +192,7 @@ const HOPY_REPLY_POLICY_MAP: Record<HopyStateLevel, HopyReplyPolicy> = {
       "最初の一歩を具体化する",
       "必要なら自然な提案を1〜2個まで入れてよい",
       "表現を固定化しすぎず、その場の文脈に合う言い方を選ぶ",
+      "実行を始めやすい温度で短〜中程度にまとめる",
     ] as const,
     include: [
       "決意の確認",
@@ -197,6 +208,7 @@ const HOPY_REPLY_POLICY_MAP: Record<HopyStateLevel, HopyReplyPolicy> = {
       "決定のあとに抽象化しすぎること",
       "提案を増やしすぎて散らすこと",
       "毎回似た比喩や定型句への固定",
+      "実行前なのに長文化して勢いを鈍らせること",
     ] as const,
   },
 };
@@ -230,3 +242,18 @@ export function getHopyReplyPolicy(
 export function getAllHopyReplyPolicies(): readonly HopyReplyPolicy[] {
   return HOPY_STATE_LEVELS.map((level) => HOPY_REPLY_POLICY_MAP[level]);
 }
+
+/*
+このファイルの正式役割
+HOPYの5段階状態ごとの回答目的・軸・含める要素・避ける要素を定義し、状態に応じた返答方針の唯一の正を返すファイル。
+*/
+
+/*
+【今回このファイルで修正したこと】
+- 各状態の policy に、軽い入力で長文化しすぎないための短め開始ルールを追加した。
+- 混線 / 模索 / 整理 / 収束 / 決定それぞれで、長文化しやすい避ける事項を追加した。
+- 状態ごとの目的と軸を、テンポと動きやすさを保つ方向へ微調整した。
+- 3段構成や状態遷移を保ちながら、必要時だけ深くする前提へ揃えた。
+*/
+
+/* /app/api/chat/_lib/response/hopyReplyPolicy.ts */
