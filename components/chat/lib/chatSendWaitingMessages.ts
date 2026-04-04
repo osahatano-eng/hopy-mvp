@@ -14,77 +14,63 @@ type WaitingCategory =
 
 const JA_WAITING_MESSAGE_SETS: Record<WaitingCategory, string[]> = {
   friendly: [
-    "HOPYが声をかけてくれて、うれしい気持ちを受け取っています...",
-    "HOPYがこのやさしい流れを受け取っています...",
-    "HOPYがあなたに返す言葉を整えています...",
+    "HOPYが受け取っています...",
+    "HOPYが整えています...",
   ],
   bright: [
-    "HOPYがその明るい流れをうれしく受け取っています...",
-    "HOPYがいまの心地よさを静かに見つめています...",
-    "HOPYがこの空気に合う言葉を整えています...",
+    "HOPYが見つめています...",
+    "HOPYが整えています...",
   ],
   tired: [
-    "HOPYがその疲れをちゃんと受け取っています...",
-    "HOPYがいまの重さを静かに見つめています...",
-    "HOPYがやさしく返せる形に整えています...",
+    "HOPYが受け止めています...",
+    "HOPYが整えています...",
   ],
   anxious: [
-    "HOPYが揺れる気持ちをちゃんと受け取っています...",
-    "HOPYがいまの不安の流れを静かに見つめています...",
-    "HOPYが少し進みやすくなる言葉を整えています...",
+    "HOPYが見つめています...",
+    "HOPYが整理しています...",
   ],
   unsure: [
-    "HOPYが迷っている気持ちを受け止めています...",
-    "HOPYがいまの揺れをゆっくり整理しています...",
-    "HOPYが次につながる言葉を整えています...",
+    "HOPYが整理しています...",
+    "HOPYが整えています...",
   ],
   chat: [
-    "HOPYがこうして来てくれたことをうれしく受け取っています...",
-    "HOPYがいまの自然な流れを見つめています...",
-    "HOPYがあなたに返す言葉を整えています...",
+    "HOPYが受け取っています...",
+    "HOPYが整えています...",
   ],
   fallback: [
-    "HOPYがその気持ちをちゃんと受け取っています...",
-    "HOPYがいまの流れを静かに見つめています...",
-    "HOPYがあなたに合う言葉を整えています...",
+    "HOPYが考えています...",
+    "HOPYが整えています...",
   ],
 };
 
 const EN_WAITING_MESSAGE_SETS: Record<WaitingCategory, string[]> = {
   friendly: [
-    "HOPY is glad you reached out...",
-    "HOPY is receiving the warmth in this moment...",
-    "HOPY is shaping words to return to you...",
+    "HOPY is receiving...",
+    "HOPY is shaping...",
   ],
   bright: [
-    "HOPY is warmly receiving this bright flow...",
-    "HOPY is quietly noticing the ease in this moment...",
-    "HOPY is shaping words that fit this atmosphere...",
+    "HOPY is noticing...",
+    "HOPY is shaping...",
   ],
   tired: [
-    "HOPY is gently receiving that tiredness...",
-    "HOPY is quietly noticing the weight of this moment...",
-    "HOPY is shaping a response with softness...",
+    "HOPY is holding this gently...",
+    "HOPY is shaping...",
   ],
   anxious: [
-    "HOPY is receiving the uncertainty in your feelings...",
-    "HOPY is quietly looking at the flow of that anxiety...",
-    "HOPY is shaping words that help you move a little more easily...",
+    "HOPY is noticing...",
+    "HOPY is organizing...",
   ],
   unsure: [
-    "HOPY is receiving the feeling of not being sure yet...",
-    "HOPY is slowly organizing the sway in this moment...",
-    "HOPY is shaping words that connect to your next step...",
+    "HOPY is organizing...",
+    "HOPY is shaping...",
   ],
   chat: [
-    "HOPY is glad you came by like this...",
-    "HOPY is quietly noticing the natural flow here...",
-    "HOPY is shaping words to return to you...",
+    "HOPY is receiving...",
+    "HOPY is shaping...",
   ],
   fallback: [
-    "HOPY is receiving your feelings carefully...",
-    "HOPY is quietly noticing the flow of this moment...",
-    "HOPY is shaping words that fit you...",
+    "HOPY is thinking...",
+    "HOPY is shaping...",
   ],
 };
 
@@ -272,10 +258,10 @@ export function resolveWaitingMessage(
 
 /*
 【今回このファイルで修正したこと】
-1. すべての待機文に「HOPYが...」「HOPY is ...」の共通形を付けて、通常本文と見分けやすくしました。
-2. 末尾を「...」に統一して、待機中の文だと分かる見え方に寄せました。
-3. fallback 既定文も同じ待機表現にそろえました。
-4. 文言決定責務だけに留めて、状態判定や MessageRow 側の表示構造には触れていません。
+1. 日本語・英語の待機文を全体的に短文化し、読む負荷を下げました。
+2. 各カテゴリの文言数を 3 個から 2 個へ減らし、○アニメーションを主役にしやすくしました。
+3. 意味は残しつつ、「受け取る・見つめる・整理する・整える・考える」の短い動詞中心にそろえました。
+4. 分類ロジック、切替間隔、fallback の構造には触れていません。
 */
 
 /*
