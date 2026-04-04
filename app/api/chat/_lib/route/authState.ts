@@ -5,6 +5,7 @@ import { envInt } from "../env";
 import { errorText } from "../infra/text";
 import type { Lang } from "../router/simpleRouter";
 import { stabilizedDelta } from "../state/score";
+import { updateUserStateFromMessage } from "../state/update";
 
 function clampInt(n: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, n));
@@ -17,7 +18,7 @@ export function normalizePhase(v: unknown): 1 | 2 | 3 | 4 | 5 {
 }
 
 export function toConversationStateLevel(
-  currentPhase: number | null | undefined
+  currentPhase: number | null | undefined,
 ): 1 | 2 | 3 | 4 | 5 {
   return normalizePhase(currentPhase);
 }
@@ -60,7 +61,7 @@ export function normalizeStateForPayload(
   currentStateLevel: 1 | 2 | 3 | 4 | 5,
   prevPhase: 1 | 2 | 3 | 4 | 5,
   prevStateLevel: 1 | 2 | 3 | 4 | 5,
-  stateChanged: boolean
+  stateChanged: boolean,
 ): CanonicalConversationState {
   const canonical = buildCanonicalConversationState({
     currentPhase,
@@ -215,8 +216,12 @@ export type ConversationStateOutcome = {
 function normalizeAssistantStateRow(data: any): ConversationAssistantState {
   if (!data) return null;
 
-  const current_phase = normalizePhase(data.current_phase ?? data.state_level ?? 1);
-  const state_level = normalizePhase(data.state_level ?? data.current_phase ?? current_phase);
+  const current_phase = normalizePhase(
+    data.current_phase ?? data.state_level ?? 1,
+  );
+  const state_level = normalizePhase(
+    data.state_level ?? data.current_phase ?? current_phase,
+  );
   const prev_phase = normalizePhase(data.prev_phase ?? current_phase);
   const prev_state_level = normalizePhase(data.prev_state_level ?? prev_phase);
   const state_changed = !!data.state_changed;
@@ -244,7 +249,9 @@ export async function loadLatestAssistantStateForConversation({
 
   const { data, error } = await supabase
     .from("messages")
-    .select("current_phase, state_level, prev_phase, prev_state_level, state_changed, created_at")
+    .select(
+      "current_phase, state_level, prev_phase, prev_state_level, state_changed, created_at",
+    )
     .eq("conversation_id", cid)
     .eq("role", "assistant")
     .order("created_at", { ascending: false })
@@ -262,7 +269,8 @@ async function updateConversationStateLevel(params: {
   resolvedConversationId: string;
   currentStateLevel: 1 | 2 | 3 | 4 | 5;
 }): Promise<{ ok: true } | { ok: false; error: any }> {
-  const { supabase, authedUserId, resolvedConversationId, currentStateLevel } = params;
+  const { supabase, authedUserId, resolvedConversationId, currentStateLevel } =
+    params;
 
   const cid = String(resolvedConversationId ?? "").trim();
   if (!cid) {
@@ -291,7 +299,8 @@ export async function resolveConversationState(params: {
   uiLang: Lang;
   userText: string;
 }): Promise<ConversationStateOutcome> {
-  const { supabase, authedUserId, resolvedConversationId, uiLang, userText } = params;
+  const { supabase, authedUserId, resolvedConversationId, uiLang, userText } =
+    params;
 
   const conversationStateBefore = await loadLatestAssistantStateForConversation({
     supabase,
@@ -305,27 +314,50 @@ export async function resolveConversationState(params: {
   const prevPhase = normalizePhase(
     conversationStateBefore?.current_phase ??
       conversationStateBefore?.state_level ??
-      1
+      1,
   );
   const prevStateLevel = normalizePhase(
     conversationStateBefore?.state_level ??
       conversationStateBefore?.current_phase ??
-      prevPhase
+      prevPhase,
   );
 
-  const st = computeConversationStateUpdate({
+  const fallbackStateUpdate = computeConversationStateUpdate({
     prevPhase,
     prevUpdatedAt: conversationStateBefore?.created_at ?? null,
     uiLang,
     userText,
   });
 
-  const currentPhase = resolveConversationPhaseFromStateUpdate({
-    prevConversationPhase: prevPhase,
-    stateUpdateResult: st,
+  const userStateUpdate = await updateUserStateFromMessage({
+    supabase,
+    userId: authedUserId,
+    uiLang,
+    text: userText,
   });
+
+  const st = userStateUpdate?.ok ? userStateUpdate : fallbackStateUpdate;
+
+  if (!userStateUpdate?.ok) {
+    stateUpdateOk = false;
+    stateUpdateError = errorText(userStateUpdate?.error);
+  }
+
+  const currentPhase = userStateUpdate?.ok
+    ? normalizePhase(
+        userStateUpdate.state?.current_phase ??
+          userStateUpdate.state?.state_level ??
+          userStateUpdate.applied?.nextPhase ??
+          fallbackStateUpdate.applied.nextPhase,
+      )
+    : resolveConversationPhaseFromStateUpdate({
+        prevConversationPhase: prevPhase,
+        stateUpdateResult: fallbackStateUpdate,
+      });
+
   const currentStateLevel = toConversationStateLevel(currentPhase);
-  const stateChanged = currentPhase !== prevPhase || currentStateLevel !== prevStateLevel;
+  const stateChanged =
+    currentPhase !== prevPhase || currentStateLevel !== prevStateLevel;
 
   const conversationUpdateRes = await updateConversationStateLevel({
     supabase,
@@ -345,7 +377,7 @@ export async function resolveConversationState(params: {
     currentStateLevel,
     prevPhase,
     prevStateLevel,
-    stateChanged
+    stateChanged,
   );
 
   return {
@@ -365,7 +397,13 @@ export async function resolveConversationState(params: {
 /*
 このファイルの正式役割：
 会話ごとの直近 assistant 状態を読み取り、今回の userText に対する会話状態の更新結果を正規化して返す状態決定層。
-
-【今回このファイルで修正したこと】
-normalizeAssistantStateRow 内の created_at を string | null のまま返さず、null のときは undefined に変換して返すよう修正した。
 */
+
+/*
+【今回このファイルで修正したこと】
+- resolveConversationState(...) で user_state を一切触っていなかったため、updateUserStateFromMessage(...) を追加しました。
+- これにより、新規ユーザー送信時にも public.user_state の初回作成経路をこのファイルから通すようにしました。
+- user_state 更新が失敗した場合だけ、既存の会話内 fallback 計算へ戻す形にしているため、会話 state_level 更新の流れは残しています。
+*/
+
+// /app/api/chat/_lib/route/authState.ts
