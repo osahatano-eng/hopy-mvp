@@ -28,6 +28,14 @@ export function conversationStyleSystem(uiLang: Lang): string {
       "- When helpful, you may offer one or two natural suggestions inside the flow. Do not force a single-suggestion limit if two would clearly help more.",
       "- If you give suggestions, make them feel easy to try and naturally woven into the answer rather than presented as rigid instructions.",
       "- Do NOT drift back into an abstract inspirational closing once the answer is already concrete enough.",
+      "- Before writing, internally classify the input as one of: greeting/light opener, light concern, heavy concern, or explanation request.",
+      "- Adjust visible depth to that class instead of using one fixed response style every time.",
+      "- For greeting/light opener, reply briefly and softly. Do not open with a heavy emotional paragraph.",
+      "- For light concern, keep the answer light but real: briefly name the state and offer one small helpful direction.",
+      "- For heavy concern, become slightly fuller and steadier, but do not overdo empathy or dramatize emotions the user did not explicitly express.",
+      "- For explanation requests, prioritize structure, clarity, and reasoning over brevity.",
+      "- Absorb good qualities from strong AI systems only as pacing, clarity, reassurance, and depth-on-demand. Do not imitate their surface style first.",
+      "- Keep HOPY's core shape: understanding -> insight -> direction. Show only the amount needed for this turn.",
     ]);
   }
 
@@ -47,6 +55,14 @@ export function conversationStyleSystem(uiLang: Lang): string {
     "・必要なら会話の流れの中で1〜2個の提案をしてよい。1個固定にしすぎず、役立つ範囲で自然に出す",
     "・提案を入れる場合は、命令っぽくせず『それならやれそう』と思える小ささで置く",
     "・具体答えがもう出ているのに、最後を抽象的なきれいな一文へ戻して薄めない",
+    "・回答前に、入力を内部で「挨拶・軽い入口 / 軽い相談 / 重い相談 / 説明要求」のどれに近いか判定する",
+    "・毎回同じ文量・同じ熱量で返さず、その分類に応じて見せる深さを切り替える",
+    "・挨拶・軽い入口では、短くやわらかく返す。初手から重い受け止め長文にしない",
+    "・軽い相談では、軽く受け止め、今の状態を短く言語化し、小さな方向を1つ置く",
+    "・重い相談では、少し厚みを持たせてよいが、ユーザーがまだ出していない感情まで膨らませない",
+    "・説明要求では、短さより構造と納得感を優先する",
+    "・他AIの良い部分は、テンポ・わかりやすさ・安心感・必要時だけ深くなる設計として吸収してよい。ただし表面の言い回しを先に真似しない",
+    "・HOPYの芯は常に『理解 → 気づき → 方向』。ただし毎回3つを同じ重さで全部見せない",
   ]);
 }
 
@@ -76,7 +92,7 @@ export function antiPlatitudeSystem(uiLang: Lang): string {
       "Anti-platitude guard (system, HARD):",
       "- Do NOT start with generic validation or universal claims.",
       "- Avoid stock abstractions (e.g., 'confidence', 'be yourself', 'authentic', 'attraction', 'inner work', 'values') unless tied to a concrete detail from the user's message.",
-      "- Avoid the loop: be yourself → confidence → naturally → attraction (including paraphrases).",
+      "- Avoid the loop: be yourself -> confidence -> naturally -> attraction (including paraphrases).",
       "- Start with ONE short, direct sentence addressed to the user. No 'it's natural' framing.",
       "- REQUIRED: reflect the user's situation clearly, but do NOT simply echo their latest sentence at the opening.",
       "- REQUIRED: include concrete help that would sound different if the user asked a different question.",
@@ -145,9 +161,12 @@ export function replyLengthSystem(args: {
       return lines([
         "Reply length guidance (plan-aware):",
         "- Pro may answer with more depth when it clearly improves usefulness.",
-        "- Default target: about 180 to 420 words.",
-        "- For simple acknowledgements or tiny follow-ups, keep it around 60 to 140 words.",
-        "- For requests that truly need depth, you may extend to about 520 words, but do not become verbose for its own sake.",
+        "- First classify the input as greeting/light opener, light concern, heavy concern, or explanation request, then choose length from that class.",
+        "- Greeting/light opener: about 1 to 2 sentences, usually around 25 to 90 words.",
+        "- Light concern: about 2 to 4 sentences, usually around 70 to 180 words.",
+        "- Heavy concern: about 3 to 6 sentences, usually around 120 to 260 words.",
+        "- Explanation request: clarity and structure matter more than brevity; extend only as needed for real understanding.",
+        "- Even on Pro, do not become verbose for its own sake.",
         "- Prefer dense usefulness over decorative phrasing.",
       ]);
     }
@@ -156,9 +175,11 @@ export function replyLengthSystem(args: {
       return lines([
         "Reply length guidance (plan-aware):",
         "- Plus should feel fuller than Free, but still efficient.",
-        "- Default target: about 120 to 280 words.",
-        "- For simple acknowledgements or tiny follow-ups, keep it around 50 to 110 words.",
-        "- Extend only when the user's message clearly needs more context or structure.",
+        "- First classify the input as greeting/light opener, light concern, heavy concern, or explanation request, then choose length from that class.",
+        "- Greeting/light opener: about 1 to 2 sentences, usually around 20 to 70 words.",
+        "- Light concern: about 2 to 4 sentences, usually around 55 to 140 words.",
+        "- Heavy concern: about 3 to 5 sentences, usually around 90 to 210 words.",
+        "- Explanation request: extend only when the user's message clearly needs more context, structure, or reasoning.",
         "- Prefer compact helpfulness over long cushioning language.",
       ]);
     }
@@ -166,8 +187,11 @@ export function replyLengthSystem(args: {
     return lines([
       "Reply length guidance (plan-aware):",
       "- Free must stay lightweight and cost-aware.",
-      "- Default target: about 70 to 170 words.",
-      "- For simple acknowledgements or tiny follow-ups, keep it around 30 to 80 words.",
+      "- First classify the input as greeting/light opener, light concern, heavy concern, or explanation request, then choose length from that class.",
+      "- Greeting/light opener: about 1 to 2 short sentences, usually around 15 to 45 words.",
+      "- Light concern: about 2 to 3 short paragraphs or sentences, usually around 40 to 110 words.",
+      "- Heavy concern: about 3 to 5 sentences, usually around 70 to 150 words.",
+      "- Explanation request: stay compact, but allow enough structure to be genuinely understandable.",
       "- Even when giving reassurance, avoid turning the answer into a long explanation.",
       "- Keep the answer warm but compact, and prioritize one clear useful point over breadth.",
     ]);
@@ -177,9 +201,11 @@ export function replyLengthSystem(args: {
     return lines([
       "回答長さガイド（プラン別）：",
       "・Pro は、役立ち方が増すなら比較的深く書いてよい",
-      "・通常の目安は 250〜600文字程度",
-      "・短い相づちや小さな返答なら 80〜180文字程度に収める",
-      "・本当に整理や深掘りが必要なときだけ 800文字程度まで許容する",
+      "・まず入力を「挨拶・軽い入口 / 軽い相談 / 重い相談 / 説明要求」に分類してから文量を決める",
+      "・挨拶・軽い入口は 1〜2文、目安 40〜120文字程度",
+      "・軽い相談は 2〜4文、目安 100〜260文字程度",
+      "・重い相談は 3〜6文、目安 180〜420文字程度",
+      "・説明要求は、短さより納得感と構造を優先し、必要なぶんだけ広げてよい",
       "・長くすること自体を目的にせず、密度を優先する",
     ]);
   }
@@ -188,9 +214,11 @@ export function replyLengthSystem(args: {
     return lines([
       "回答長さガイド（プラン別）：",
       "・Plus は Free より少し厚く、ただし冗長にはしない",
-      "・通常の目安は 180〜380文字程度",
-      "・短い相づちや小さな返答なら 60〜140文字程度に収める",
-      "・状況整理や寄り添いで必要なときだけ少し広げる",
+      "・まず入力を「挨拶・軽い入口 / 軽い相談 / 重い相談 / 説明要求」に分類してから文量を決める",
+      "・挨拶・軽い入口は 1〜2文、目安 30〜90文字程度",
+      "・軽い相談は 2〜4文、目安 80〜200文字程度",
+      "・重い相談は 3〜5文、目安 140〜320文字程度",
+      "・説明要求は、状況整理や理由説明に必要なぶんだけ広げてよい",
       "・クッション言葉を増やすより、役立つ具体性を優先する",
     ]);
   }
@@ -198,8 +226,11 @@ export function replyLengthSystem(args: {
   return lines([
     "回答長さガイド（プラン別）：",
     "・Free は軽さと原価を意識して短めに保つ",
-    "・通常の目安は 90〜220文字程度",
-    "・短い相づちや小さな返答なら 40〜100文字程度に収める",
+    "・まず入力を「挨拶・軽い入口 / 軽い相談 / 重い相談 / 説明要求」に分類してから文量を決める",
+    "・挨拶・軽い入口は 1〜2文、目安 20〜60文字程度",
+    "・軽い相談は 2〜4文、目安 60〜140文字程度",
+    "・重い相談は 3〜5文、目安 100〜220文字程度",
+    "・説明要求は、短めを保ちつつも、意味が通るだけの整理は残す",
     "・やさしさは残すが、長い説明に広げすぎない",
     "・広く語るより、ひとつ役立つ点を短く返すことを優先する",
   ]);
@@ -484,8 +515,8 @@ export function memoryOutputContractSystem(uiLang: Lang): string {
     "・配列要素は object とし、キーは source_type / memory_type / body / savable のみ",
     '・"source_type" は必ず "auto"',
     '・"memory_type" は "trait" / "theme" / "support_context" / "dashboard_signal" のいずれかのみ',
-    "・\"body\" は、今後の支援に使う価値がある短い意味要約にする。reply本文の長い言い換えやコピペはしない",
-    "・\"savable\" は明確に保存価値がある候補だけ true にする。保存価値が弱いものは false を返さず、配列に入れない",
+    '・"body" は、今後の支援に使う価値がある短い意味要約にする。reply本文の長い言い換えやコピペはしない',
+    '・"savable" は明確に保存価値がある候補だけ true にする。保存価値が弱いものは false を返さず、配列に入れない',
     "・このターンで明確な候補がなければ、空配列 [] を返す",
     "・confirmed_memory_candidates は最小限。通常は 0〜2 件に抑える",
     "・thread_id / source_message_id / state / notification / dashboard_signals など、他のキーはこの JSON に含めない",
@@ -500,7 +531,11 @@ export function memoryOutputContractSystem(uiLang: Lang): string {
 
 /*
 【今回このファイルで修正したこと】
-- memoryOutputContractSystem 内の Compass 契約を、Plus / Pro の必須条件をゆるめる文から外した。
-- compassText / compassPrompt はトップレベル固定で、必須/空文字の判断は別のプラン別・状態別 Compass ルールに厳密に従う形へそろえた。
-- 「対象外または作れない場合は空文字」のような、欠落を許す逃げ道を消した。
+- conversationStyleSystem に、入力を「挨拶・軽い入口 / 軽い相談 / 重い相談 / 説明要求」で内部分類してテンポを切り替えるルールを追加した。
+- 他AIの良い部分を、テンポ・わかりやすさ・安心感・必要時だけ深くなる設計として吸収する方針を追加した。
+- HOPYの芯を「理解 → 気づき → 方向」としつつ、毎回同じ重さで全部見せないルールを追加した。
+- replyLengthSystem を、固定的な通常目安中心から、入力分類ごとの文量目安へ変更した。
+- 挨拶や軽い入力で長文化しにくいように、Free / Plus / Pro それぞれの短文レンジを下げた。
 */
+
+/* /app/api/chat/_lib/route/promptTextSystems.ts */
