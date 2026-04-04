@@ -73,6 +73,11 @@ function buildIdentitySection(): string {
     "回答確定時の意味結果を正として扱います。",
     "状態値は必ず 1..5 / 5段階で扱い、0..4前提に戻さないでください。",
     "回答の芯は 理解 → 気づき → 方向 です。",
+    "ただし入口の軽い挨拶だけで、深い意味づけや大きな状態遷移を作ってはいけません。",
+    "『こんにちは』『おはよう』『こんばんは』『やあ』『hi』『hello』のような低シグナル入口入力は、会話開始の合図として扱ってください。",
+    "低シグナル入口入力だけでは、state_changed を true にしないでください。",
+    "低シグナル入口入力だけでは、state_level / current_phase を大きく上げないでください。",
+    "低シグナル入口入力だけでは、Compass 前提の読解をしないでください。",
     "軽い入力では短く、説明要求では深く返してください。",
     "冒頭でユーザー発言をそのまま言い換えて繰り返さないでください。",
     "自然な日本語で返してください。",
@@ -206,7 +211,8 @@ function buildTransitionSection(
     "状態遷移方針:",
     `- 現在状態: ${currentStateLevel}/5`,
     `- 目標状態: ${normalizedTarget}/5`,
-    "- 今の段階から次の自然な段階へ半歩でも進みやすい返答にしてください。",
+    "- 実質的な意味入力があるときだけ、次の自然な段階へ進める返答にしてください。",
+    "- 入口の挨拶だけなら、会話開始として静かに受け、状態遷移を確定しないでください。",
     "- 押しつけず、受け取りやすい小さな一歩を含めてください。",
   ].join("\n");
 }
@@ -215,6 +221,7 @@ function buildThreeStepStructureSection(): string {
   return [
     "HOPY回答3段構成:",
     "- 本体は 現在地 → 気づき → 方向 です。",
+    "- ただし低シグナル入口入力では、現在地の軽い受け止めだけで十分です。",
     "- 軽い入力では最小表示、説明要求では深くしてよいです。",
   ].join("\n");
 }
@@ -280,13 +287,19 @@ function buildGenerationRulesSection(
   return [
     "回答生成ルール:",
     "- 今回の回答は、今の状態を次の自然な段階へ進めることを優先すること",
+    "- ただし低シグナル入口入力だけでは、状態変化を確定しないこと",
+    "- 低シグナル入口入力だけでは、state_changed を true にしないこと",
+    "- 低シグナル入口入力だけでは、current_phase / state_level を 5 へ飛ばさないこと",
+    "- 低シグナル入口入力だけでは、Compass を必要とする意味づけをしないこと",
     "- 自然な日本語で返すこと",
     "- 毎回同じ定型句に寄せないこと",
     "- 基本は短めに始め、必要なときだけ深くすること",
     "- 挨拶・軽い入口では短く返すこと",
     "- 説明要求では構造と納得感を優先してよい",
     "- ただ共感して終わらず、輪郭・気づき・次の一歩のどれかを前進させること",
+    "- ただし入口の挨拶だけでは、過剰な気づきや方向提示を入れないこと",
     "- 本文は 現在地 → 気づき → 方向 の順で組み立てること",
+    "- 低シグナル入口入力では、気づきと方向は最小か省略でよい",
     "- 方向では複数案を広げすぎず、できるだけ一本で示すこと",
     "- 必要な場合だけ、小さく具体的な提案を1つ入れてよい",
     ...planSpecificRules,
@@ -300,6 +313,8 @@ function buildUserInputSection(userInput: string): string {
     "",
     "この入力に対して、自然で短めを基本とした回答を生成してください。",
     "回答本文は、現在地 → 気づき → 方向 を土台にしてください。",
+    "ただし『こんにちは』のような入口挨拶だけなら、会話開始として静かに返してください。",
+    "入口挨拶だけなら、深い意味づけ、強い状態遷移、Compass前提の読解をしないでください。",
     "軽い入力では短く、説明要求では深く返してください。",
   ].join("\n");
 }
@@ -346,12 +361,11 @@ HOPY回答の核になる system / developer / user prompt を組み立て、状
 
 /*
 【今回このファイルで修正したこと】
-- buildIdentitySection をさらに短くし、HOPYの芯と状態値制約だけに絞りました。
-- buildPlanSection を短くし、プランごとの最低限の分岐だけ残しました。
-- buildTransitionSection / buildThreeStepStructureSection / buildStateDensitySection を最小化しました。
-- buildMemoriesSection / buildRecentMessagesSection / buildExpressionAssetsSection の最大件数を減らしました。
-- buildGenerationRulesSection を最小化し、自然文の圧をさらに下げました。
-- buildUserInputSection も短くし、入力指示を最小限にしました。
+- 低シグナル入口入力では state_changed を立てないようにする指示を追加しました。
+- 低シグナル入口入力では state_level / current_phase を大きく上げない指示を追加しました。
+- 低シグナル入口入力では Compass 前提の読解をしない指示を追加しました。
+- buildTransitionSection / buildThreeStepStructureSection / buildGenerationRulesSection / buildUserInputSection に入口挨拶専用の抑制ルールを追加しました。
+- 下流で補正せず、上流の確定意味ペイロード生成条件だけを修正する方針にそろえました。
 */
 
 /* /app/api/chat/_lib/response/hopyPromptBuilder.ts */
