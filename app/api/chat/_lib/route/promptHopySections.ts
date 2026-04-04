@@ -181,30 +181,35 @@ function buildConcreteCompassStateInstruction(args: {
 
   if (resolvedPlan === "free") {
     return [
-      "【今回ターンのCompass判定材料】",
-      `今回の state_changed=${formatStateFactBoolean(stateFacts.stateChanged)}`,
-      `今回の current_phase=${formatStateFactNumber(stateFacts.currentPhase)}`,
-      `今回の prev_phase=${formatStateFactNumber(stateFacts.prevPhase)}`,
-      `今回の state_level=${formatStateFactNumber(stateFacts.stateLevel)}`,
-      `今回の prev_state_level=${formatStateFactNumber(stateFacts.prevStateLevel)}`,
-      "この具体値を今回ターンの正として扱うこと。",
+      "【事前の状態参考情報】",
+      `入力前参考の state_changed=${formatStateFactBoolean(stateFacts.stateChanged)}`,
+      `入力前参考の current_phase=${formatStateFactNumber(stateFacts.currentPhase)}`,
+      `入力前参考の prev_phase=${formatStateFactNumber(stateFacts.prevPhase)}`,
+      `入力前参考の state_level=${formatStateFactNumber(stateFacts.stateLevel)}`,
+      `入力前参考の prev_state_level=${formatStateFactNumber(stateFacts.prevStateLevel)}`,
+      "これらは今回ターンの確定結果ではなく、入力前の参考情報である。",
+      "今回ターンの state_changed / current_phase / state_level / Compass の正を、この参考値から先に確定してはならない。",
+      "HOPY回答○ の唯一の正は、回答確定時の hopy_confirmed_payload.state.state_changed である。",
+      "Compass もその確定結果にのみ従属すること。",
       "Free では Compass は生成しないこと。",
       'Free では compassText と compassPrompt を必ず空文字 "" にすること。',
     ].join("\n");
   }
 
   return [
-    "【今回ターンのCompass判定材料】",
-    `今回の state_changed=${formatStateFactBoolean(stateFacts.stateChanged)}`,
-    `今回の current_phase=${formatStateFactNumber(stateFacts.currentPhase)}`,
-    `今回の prev_phase=${formatStateFactNumber(stateFacts.prevPhase)}`,
-    `今回の state_level=${formatStateFactNumber(stateFacts.stateLevel)}`,
-    `今回の prev_state_level=${formatStateFactNumber(stateFacts.prevStateLevel)}`,
-    "この具体値を今回ターンの正として扱うこと。",
-    "抽象ルールではなく、この値に従って compassText / compassPrompt を判断すること。",
-    "state_changed=true のときだけ Compass 対象ターンとして扱うこと。",
+    "【事前の状態参考情報】",
+    `入力前参考の state_changed=${formatStateFactBoolean(stateFacts.stateChanged)}`,
+    `入力前参考の current_phase=${formatStateFactNumber(stateFacts.currentPhase)}`,
+    `入力前参考の prev_phase=${formatStateFactNumber(stateFacts.prevPhase)}`,
+    `入力前参考の state_level=${formatStateFactNumber(stateFacts.stateLevel)}`,
+    `入力前参考の prev_state_level=${formatStateFactNumber(stateFacts.prevStateLevel)}`,
+    "これらは今回ターンの確定結果ではなく、入力前の参考情報である。",
+    "この参考値を『今回ターンの正』として扱ってはならない。",
+    "今回ターンの state_changed / current_phase / state_level は、今回の回答確定時に新たに決めること。",
+    "HOPY回答○ の唯一の正は、回答確定時の hopy_confirmed_payload.state.state_changed である。",
+    "Compass はその確定結果にのみ従属すること。",
     "state_changed=true なら compassText と compassPrompt を必ず返すこと。",
-    "state_changed=false なら Compass 非対象ターンとして扱い、compassText と compassPrompt は必ず空文字にすること。",
+    'state_changed=false なら compassText と compassPrompt は必ず空文字 "" にすること。',
   ].join("\n");
 }
 
@@ -389,10 +394,10 @@ stateForSystem から今回ターンの状態材料を受け取り、
 
 /*
 【今回このファイルで修正したこと】
-- buildHopyAnswerContract に、入力を「挨拶・軽い入口 / 軽い相談 / 重い相談 / 説明要求」で内部分類して本文の深さを切り替えるルールを追加した。
-- 3段構成を維持しつつ、毎回同じ厚みで全部見せないルールを追加した。
-- 軽い入力で初手から重い受け止め長文にならないように本文契約へ固定した。
-- 他AIの良い部分を、テンポ・わかりやすさ・安心感・必要時だけ深くなる設計として吸収する方針を本文契約へ追加した。
+- buildConcreteCompassStateInstruction の文面を修正し、stateForSystem の値を「今回ターンの正」として扱わせないようにしました。
+- stateForSystem は入力前の参考情報であり、今回ターンの唯一の正は回答確定時の hopy_confirmed_payload.state.state_changed だけで決まると明記しました。
+- Plus / Pro の Compass 生成ルールも、入力前参考値への従属ではなく、今回ターンで新たに確定した state_changed にのみ従属する形へ修正しました。
+- 外から入った誤った state_changed=true / state_level=5 を prompt が再注入して強化しないようにしました。
 */
 
 /* /app/api/chat/_lib/route/promptHopySections.ts */
