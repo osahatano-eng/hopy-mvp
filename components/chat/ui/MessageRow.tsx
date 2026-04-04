@@ -68,6 +68,10 @@ function normalizePendingText(text: string) {
     .toLowerCase();
 }
 
+function startsWithAny(text: string, prefixes: readonly string[]) {
+  return prefixes.some((prefix) => text.startsWith(prefix));
+}
+
 /**
  * ✅ pending判定（UX専用）
  * - assistantのみ対象
@@ -81,30 +85,43 @@ function isPendingMessage(role: "user" | "assistant", text: string, uiLang: Lang
   if (!t) return false;
 
   if (uiLang === "en") {
-    return (
-      t === "thinking" ||
-      t === "thinking..." ||
-      t === "organizing thoughts" ||
-      t === "organizing thoughts..." ||
-      t === "centering" ||
-      t === "centering..." ||
-      t.startsWith("thinking ") ||
-      t.startsWith("organizing thoughts ") ||
-      t.startsWith("centering ")
-    );
+    const exactPatterns = [
+      "thinking",
+      "thinking...",
+      "organizing thoughts",
+      "organizing thoughts...",
+      "centering",
+      "centering...",
+    ] as const;
+
+    const prefixPatterns = [
+      "thinking ",
+      "organizing thoughts ",
+      "centering ",
+      "hopy is ",
+      "hopy's ",
+    ] as const;
+
+    return exactPatterns.includes(t as (typeof exactPatterns)[number]) || startsWithAny(t, prefixPatterns);
   }
 
-  return (
-    t === "考えています" ||
-    t === "考えています..." ||
-    t === "思考を整理しています" ||
-    t === "思考を整理しています..." ||
-    t === "心を整えています" ||
-    t === "心を整えています..." ||
-    t.startsWith("考えています ") ||
-    t.startsWith("思考を整理しています ") ||
-    t.startsWith("心を整えています ")
-  );
+  const exactPatterns = [
+    "考えています",
+    "考えています...",
+    "思考を整理しています",
+    "思考を整理しています...",
+    "心を整えています",
+    "心を整えています...",
+  ] as const;
+
+  const prefixPatterns = [
+    "考えています ",
+    "思考を整理しています ",
+    "心を整えています ",
+    "hopyが",
+  ] as const;
+
+  return exactPatterns.includes(t as (typeof exactPatterns)[number]) || startsWithAny(t, prefixPatterns);
 }
 
 function hasRenderableAssistantStateDot(node: React.ReactNode) {
@@ -127,14 +144,14 @@ function getAssistantStateDotRenderKey(node: React.ReactNode): string {
       typeof el.type === "string"
         ? el.type
         : typeof el.type === "function"
-        ? (() => {
-            const namedType = el.type as React.JSXElementConstructor<any> & {
-              displayName?: string;
-              name?: string;
-            };
-            return namedType.displayName || namedType.name || "fn";
-          })()
-        : "other";
+          ? (() => {
+              const namedType = el.type as React.JSXElementConstructor<any> & {
+                displayName?: string;
+                name?: string;
+              };
+              return namedType.displayName || namedType.name || "fn";
+            })()
+          : "other";
 
     const keyPart = el.key == null ? "nokey" : String(el.key);
     const classNamePart =
@@ -303,7 +320,11 @@ export default MessageRow;
 
 /*
 【今回このファイルで修正したこと】
-1. el.type.displayName を直接参照せず、displayName?: string / name?: string を持つ関数型として明示してから参照するようにしました。
-2. JSXElementConstructor<any> に displayName が無いという TypeScript の型エラーを、このファイル内だけで解消しました。
-3. MessageRow の表示構造、pending判定、assistantStateDot の描画仕様には触れていません。
+1. pending判定に "hopyが" / "hopy is " / "hopy's " の接頭辞を追加し、現在の待機文実装を pending として扱うようにしました。
+2. pending判定の接頭辞比較を startsWithAny に分離し、このファイル内だけで判定の揺れを吸収しやすくしました。
+3. MessageRow の表示構造、assistantStateDot の描画仕様、tone判定には触れていません。
+*/
+
+/*
+// /components/chat/ui/MessageRow.tsx
 */
