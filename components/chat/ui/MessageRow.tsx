@@ -41,6 +41,8 @@ const TONE_MARKER = {
   growth: "\u200B\u200D\u200C",
 } as const;
 
+const PENDING_PHASE_DOTS = [1, 2, 3, 4, 5] as const;
+
 type Tone = "calm" | "growth" | "none";
 
 function detectToneByInvisibleMarker(text: string): Tone {
@@ -102,7 +104,10 @@ function isPendingMessage(role: "user" | "assistant", text: string, uiLang: Lang
       "hopy's ",
     ] as const;
 
-    return exactPatterns.includes(t as (typeof exactPatterns)[number]) || startsWithAny(t, prefixPatterns);
+    return (
+      exactPatterns.includes(t as (typeof exactPatterns)[number]) ||
+      startsWithAny(t, prefixPatterns)
+    );
   }
 
   const exactPatterns = [
@@ -121,7 +126,10 @@ function isPendingMessage(role: "user" | "assistant", text: string, uiLang: Lang
     "hopyが",
   ] as const;
 
-  return exactPatterns.includes(t as (typeof exactPatterns)[number]) || startsWithAny(t, prefixPatterns);
+  return (
+    exactPatterns.includes(t as (typeof exactPatterns)[number]) ||
+    startsWithAny(t, prefixPatterns)
+  );
 }
 
 function hasRenderableAssistantStateDot(node: React.ReactNode) {
@@ -292,6 +300,22 @@ function MessageRowBase({
             <p>{derived.displayText}</p>
           )}
         </div>
+
+        {derived.pending ? (
+          <div
+            className={styles.pendingPhaseDots}
+            aria-hidden="true"
+            data-hopy-pending-phase-dots="1"
+          >
+            {PENDING_PHASE_DOTS.map((dot) => (
+              <span
+                key={dot}
+                className={styles.pendingPhaseDot}
+                data-hopy-pending-phase-dot={String(dot)}
+              />
+            ))}
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -320,9 +344,9 @@ export default MessageRow;
 
 /*
 【今回このファイルで修正したこと】
-1. pending判定に "hopyが" / "hopy is " / "hopy's " の接頭辞を追加し、現在の待機文実装を pending として扱うようにしました。
-2. pending判定の接頭辞比較を startsWithAny に分離し、このファイル内だけで判定の揺れを吸収しやすくしました。
-3. MessageRow の表示構造、assistantStateDot の描画仕様、tone判定には触れていません。
+1. pending のときだけ、待機文の下に 5段階○アニメーション用の最小マークアップを追加しました。
+2. PENDING_PHASE_DOTS をこのファイル内に定義し、表示責務だけで 5個の丸を描画するようにしました。
+3. pending判定、assistantStateDot、tone判定、本文表示の既存構造は壊していません。
 */
 
 /*

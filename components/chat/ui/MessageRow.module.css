@@ -253,7 +253,7 @@
 .row[data-pending="1"] .block {
   width: fit-content;
   max-width: min(100%, 42ch);
-  gap: 2px;
+  gap: 3px;
 }
 
 /* pending の HOPY ラベルは少しだけ控えめ */
@@ -263,16 +263,16 @@
   letter-spacing: 0.08em;
 }
 
-/* pending 本文は本文より明確に一段下げる */
+/* pending 本文は本文より少しだけ抑えつつ、読みにくくしない */
 .pending .txt,
 .row[data-pending="1"] .txt {
   width: fit-content;
   max-width: 100%;
   color: var(--muted);
-  opacity: 0.78;
+  opacity: 0.82;
   font-style: normal;
-  font-size: clamp(13px, 1.15vw, 14px);
-  line-height: 1.45;
+  font-size: clamp(14px, 1.24vw, 15px);
+  line-height: 1.52;
   letter-spacing: 0.01em;
 }
 
@@ -280,6 +280,86 @@
 .pending .txt :global(p),
 .row[data-pending="1"] .txt :global(p) {
   margin: 0;
+}
+
+/* =========================
+   Pending phase dots
+========================= */
+
+.pendingPhaseDots,
+.row[data-pending="1"] [data-hopy-pending-phase-dots="1"] {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  margin-top: 4px;
+  padding-left: 1px;
+}
+
+.pendingPhaseDot,
+.row[data-pending="1"] [data-hopy-pending-phase-dot] {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: currentColor;
+  color: var(--muted);
+  opacity: 0.24;
+  transform: scale(0.92);
+  transform-origin: center;
+  animation-name: hopyPendingPhaseBreath;
+  animation-duration: 2.6s;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  animation-fill-mode: both;
+  will-change: transform, opacity;
+}
+
+.pendingPhaseDot[data-hopy-pending-phase-dot="1"],
+.row[data-pending="1"] [data-hopy-pending-phase-dot="1"] {
+  animation-delay: 0s;
+}
+
+.pendingPhaseDot[data-hopy-pending-phase-dot="2"],
+.row[data-pending="1"] [data-hopy-pending-phase-dot="2"] {
+  animation-delay: 0.18s;
+}
+
+.pendingPhaseDot[data-hopy-pending-phase-dot="3"],
+.row[data-pending="1"] [data-hopy-pending-phase-dot="3"] {
+  animation-delay: 0.36s;
+}
+
+.pendingPhaseDot[data-hopy-pending-phase-dot="4"],
+.row[data-pending="1"] [data-hopy-pending-phase-dot="4"] {
+  animation-delay: 0.54s;
+}
+
+.pendingPhaseDot[data-hopy-pending-phase-dot="5"],
+.row[data-pending="1"] [data-hopy-pending-phase-dot="5"] {
+  animation-delay: 0.72s;
+}
+
+@keyframes hopyPendingPhaseBreath {
+  0% {
+    opacity: 0.20;
+    transform: scale(0.92);
+  }
+  18% {
+    opacity: 0.32;
+    transform: scale(0.98);
+  }
+  38% {
+    opacity: 0.72;
+    transform: scale(1.14);
+  }
+  58% {
+    opacity: 0.34;
+    transform: scale(1.00);
+  }
+  100% {
+    opacity: 0.20;
+    transform: scale(0.92);
+  }
 }
 
 @media (max-width: 640px) {
@@ -290,8 +370,20 @@
 
   .pending .txt,
   .row[data-pending="1"] .txt {
-    font-size: 13px;
-    line-height: 1.42;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .pendingPhaseDots,
+  .row[data-pending="1"] [data-hopy-pending-phase-dots="1"] {
+    gap: 7px;
+    margin-top: 5px;
+  }
+
+  .pendingPhaseDot,
+  .row[data-pending="1"] [data-hopy-pending-phase-dot] {
+    width: 8px;
+    height: 8px;
   }
 }
 
@@ -303,9 +395,13 @@ YOU/HOPY の寄せ方、本文の最大幅、本文の可読性、pending 表示
 
 /*
 【今回このファイルで修正したこと】
-1. pending の下余白を少し詰め、通常回答より軽い行として見えるようにしました。
-2. pending の block を本文幅いっぱいではなく短めの幅に制限し、回答本文とは別物に見えるようにしました。
-3. pending のラベルをさらに控えめにし、本文を主役に見せないようにしました。
-4. pending 本文の色を var(--muted)、文字サイズを小さめ、行間も短めにして、確定回答と明確に差を付けました。
-5. SPでも pending だけさらに小さく見えるように調整しました。
+1. pending本文の文字サイズを少し戻し、小さすぎず読める見え方に調整しました。
+2. pending専用の5段階○表示 `.pendingPhaseDots` / `.pendingPhaseDot` を追加しました。
+3. 5つの○が左から右へ静かに呼吸するように、強すぎない opacity と scale のアニメーションを追加しました。
+4. 跳ねる・回転する・強く発光する演出は入れず、HOPYらしい静かな思考感だけに絞りました。
+5. 既存の通常本文レイアウト、YOU/HOPY寄せ、tone表示には触れていません。
+*/
+
+/*
+// /components/chat/ui/MessageRow.module.css
 */
