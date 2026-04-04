@@ -89,126 +89,150 @@ const EN_WAITING_MESSAGE_SETS: Record<WaitingCategory, string[]> = {
 };
 
 function normalizeWaitingInputText(text: string | null | undefined): string {
-  return String(text ?? "").trim().toLowerCase();
+  return String(text ?? "")
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/[！？!?、。,.…]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
-function includesAny(text: string, patterns: string[]): boolean {
-  return patterns.some((pattern) => text.includes(pattern));
+function includesAny(text: string, patterns: readonly string[]): boolean {
+  return patterns.some((pattern) => text.includes(normalizeWaitingInputText(pattern)));
 }
+
+const FRIENDLY_PATTERNS = [
+  "元気",
+  "おはよう",
+  "こんばんは",
+  "こんにちは",
+  "来たよ",
+  "きたよ",
+  "ねえ",
+  "やっほ",
+  "話しかけ",
+  "hello",
+  "hi",
+  "hey",
+  "good morning",
+  "good evening",
+] as const;
+
+const BRIGHT_PATTERNS = [
+  "調子よさそう",
+  "調子がよさそう",
+  "いい感じ",
+  "元気そう",
+  "うれしい",
+  "楽しい",
+  "最高",
+  "よさそう",
+  "good",
+  "great",
+  "nice",
+  "happy",
+  "excited",
+] as const;
+
+const TIRED_PATTERNS = [
+  "疲れ",
+  "疲れた",
+  "つかれ",
+  "つかれた",
+  "しんど",
+  "へとへと",
+  "眠い",
+  "だるい",
+  "tired",
+  "exhausted",
+  "sleepy",
+  "drained",
+] as const;
+
+const ANXIOUS_PATTERNS = [
+  "不安",
+  "心配",
+  "大丈夫かな",
+  "こわい",
+  "怖い",
+  "うまくいくかわからない",
+  "うまくいくか分からない",
+  "anxious",
+  "anxiety",
+  "worried",
+  "scared",
+  "afraid",
+] as const;
+
+const UNSURE_PATTERNS = [
+  "どうしたらいい",
+  "わからない",
+  "分からない",
+  "迷",
+  "決められない",
+  "どっち",
+  "not sure",
+  "unsure",
+  "can't decide",
+  "cannot decide",
+  "don’t know",
+  "don't know",
+] as const;
+
+const CHAT_PATTERNS = [
+  "話そ",
+  "話そう",
+  "なんとなく",
+  "きた",
+  "来た",
+  "今日なにしてた",
+  "雑談",
+  "chat",
+  "talk",
+  "just came by",
+  "random",
+] as const;
 
 function classifyWaitingCategory(inputText: string | null | undefined): WaitingCategory {
   const normalized = normalizeWaitingInputText(inputText);
 
   if (!normalized) return "fallback";
 
-  if (
-    includesAny(normalized, [
-      "元気",
-      "おはよう",
-      "こんばんは",
-      "こんにちは",
-      "来たよ",
-      "ねえ",
-      "やっほ",
-      "hello",
-      "hi",
-      "hey",
-      "good morning",
-      "good evening",
-    ])
-  ) {
-    return "friendly";
-  }
-
-  if (
-    includesAny(normalized, [
-      "調子よさそう",
-      "いい感じ",
-      "元気そう",
-      "うれしい",
-      "楽しい",
-      "最高",
-      "good",
-      "great",
-      "nice",
-      "happy",
-      "excited",
-    ])
-  ) {
-    return "bright";
-  }
-
-  if (
-    includesAny(normalized, [
-      "疲れ",
-      "つかれ",
-      "しんど",
-      "へとへと",
-      "眠い",
-      "だるい",
-      "tired",
-      "exhausted",
-      "sleepy",
-      "drained",
-    ])
-  ) {
+  if (includesAny(normalized, TIRED_PATTERNS)) {
     return "tired";
   }
 
-  if (
-    includesAny(normalized, [
-      "不安",
-      "心配",
-      "大丈夫かな",
-      "こわい",
-      "怖い",
-      "うまくいくかわからない",
-      "anxious",
-      "anxiety",
-      "worried",
-      "scared",
-      "afraid",
-    ])
-  ) {
+  if (includesAny(normalized, ANXIOUS_PATTERNS)) {
     return "anxious";
   }
 
-  if (
-    includesAny(normalized, [
-      "どうしたらいい",
-      "わからない",
-      "分からない",
-      "迷",
-      "決められない",
-      "どっち",
-      "which",
-      "not sure",
-      "unsure",
-      "can't decide",
-      "cannot decide",
-      "don’t know",
-      "don't know",
-    ])
-  ) {
+  if (includesAny(normalized, UNSURE_PATTERNS)) {
     return "unsure";
   }
 
-  if (
-    includesAny(normalized, [
-      "話そ",
-      "話そう",
-      "なんとなく",
-      "きた",
-      "来た",
-      "今日なにしてた",
-      "雑談",
-      "chat",
-      "talk",
-      "just came by",
-      "random",
-    ])
-  ) {
+  if (includesAny(normalized, BRIGHT_PATTERNS)) {
+    return "bright";
+  }
+
+  if (includesAny(normalized, FRIENDLY_PATTERNS)) {
+    return "friendly";
+  }
+
+  if (includesAny(normalized, CHAT_PATTERNS)) {
     return "chat";
+  }
+
+  if (
+    normalized.includes("元気") ||
+    normalized.includes("疲れた") ||
+    normalized.includes("どうしたらいい") ||
+    normalized.includes("わからない")
+  ) {
+    if (normalized.includes("疲れた")) return "tired";
+    if (normalized.includes("どうしたらいい") || normalized.includes("わからない")) {
+      return "unsure";
+    }
+    return "friendly";
   }
 
   return "fallback";
@@ -218,10 +242,7 @@ function getWaitingMessageSets(lang: Lang): Record<WaitingCategory, string[]> {
   return lang === "en" ? EN_WAITING_MESSAGE_SETS : JA_WAITING_MESSAGE_SETS;
 }
 
-export function getWaitingMessages(
-  lang: Lang,
-  inputText?: string | null,
-): string[] {
+export function getWaitingMessages(lang: Lang, inputText?: string | null): string[] {
   const category = classifyWaitingCategory(inputText);
   const messageSets = getWaitingMessageSets(lang);
   return messageSets[category] ?? messageSets.fallback;
@@ -251,9 +272,8 @@ export function resolveWaitingMessage(
 
 /*
 【今回このファイルで修正したこと】
-1. 待機文の切替間隔を 3000ms から 5000ms に変更しました。
-2. 「前髪」「トイレ」など HOPYらしくない待機文を削除し、受容→整理→返答準備の3文へ置き換えました。
-3. 入力文に応じて friendly / bright / tired / anxious / unsure / chat / fallback に振り分ける簡易判定を追加しました。
-4. 既存呼び出しを壊しにくいように、inputText は optional のまま追加しました。
-5. まだ呼び出し側が inputText を渡していない場合でも、fallback の待機文で安全に動くようにしています。
+1. 入力文の正規化を強化し、NFKC正規化・句読点除去・空白圧縮を追加しました。
+2. 判定語彙を増やし、「ねえねえ、ホピー元気？」「ちょっと疲れた」「どうしたらいいかわからない」のような実入力を拾いやすくしました。
+3. 判定順を tired / anxious / unsure / bright / friendly / chat に整理し、より意味の強いカテゴリを先に返すようにしました。
+4. 末尾に最小限の救済判定を追加し、代表例が fallback に落ちにくいようにしました。
 */
