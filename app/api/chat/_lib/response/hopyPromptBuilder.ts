@@ -88,6 +88,8 @@ function buildIdentitySection(): string {
     "state_level を 5 にしてよいのは、ユーザーが明確な決定、行動開始、方針確定、強い意志表明をしているときだけです。",
     "軽い前向き短文と、明確な決定表明は別物として厳密に分けてください。",
     "Compass を出してよいのは、その回の state_changed が本当に true のときだけです。",
+    "入力前に渡される state や target は参考情報であり、その回の確定状態そのものとして扱ってはいけません。",
+    "入力前の参考 state を見て、その回の state_changed / current_phase / state_level を先取りしないでください。",
     "軽い入力では短く、説明要求では深く返してください。",
     "冒頭でユーザー発言をそのまま言い換えて繰り返さないでください。",
     "自然な日本語で返してください。",
@@ -101,12 +103,14 @@ function buildPolicySection(policy: HopyReplyPolicy): string {
   const avoid = policy.avoid.map((item) => `- ${item}`).join("\n");
 
   return [
-    `現在状態: ${policy.stateName} (${policy.stateLevel}/5)`,
+    `入力前の参考状態: ${policy.stateName} (${policy.stateLevel}/5)`,
+    "- これは今回ターンの確定状態ではなく、返答のトーン調整用の参考情報です。",
+    "- この参考状態だけを根拠に、今回ターンの state_changed や state 5 を先取りしないでください。",
     "",
-    "この状態での回答目的:",
+    "この参考状態での回答目的:",
     purpose,
     "",
-    "この状態での回答の軸:",
+    "この参考状態での回答の軸:",
     axis,
     "",
     "回答に含めるべき要素:",
@@ -219,9 +223,11 @@ function buildTransitionSection(
 
   return [
     "状態遷移方針:",
-    `- 現在状態: ${currentStateLevel}/5`,
-    `- 目標状態: ${normalizedTarget}/5`,
-    "- 目標状態は強制到達先ではなく、意味入力が十分なときだけ近づける上限目安です。",
+    `- 入力前の参考状態: ${currentStateLevel}/5`,
+    `- 参考上限目安: ${normalizedTarget}/5`,
+    "- 上の2値は今回ターンの確定結果ではありません。",
+    "- 参考上限目安は強制到達先ではなく、意味入力が十分なときだけ近づける上限目安です。",
+    "- 入力前の参考状態や参考上限目安だけを見て、その回の state_changed / current_phase / state_level を先取りしないでください。",
     "- 低シグナル入口入力や軽い短文では、状態を進めること自体を目的にしないでください。",
     "- 実質的な意味入力が十分にあり、前進の根拠が明確なときだけ、次の自然な段階へ進める返答にしてください。",
     "- 入口の挨拶だけなら、会話開始として静かに受け、状態遷移を確定しないでください。",
@@ -251,40 +257,46 @@ function buildStateDensitySection(
 ): string {
   if (stateLevel === 1) {
     return [
-      "状態別本文密度:",
-      "- 現在は混線です。",
+      "参考状態別本文密度:",
+      "- 入力前参考状態は混線です。",
+      "- これは今回ターンの確定状態ではありません。",
       "- 慰めだけで終わらせず、優先するものを少し見えやすくしてください。",
     ].join("\n");
   }
 
   if (stateLevel === 2) {
     return [
-      "状態別本文密度:",
-      "- 現在は模索です。",
+      "参考状態別本文密度:",
+      "- 入力前参考状態は模索です。",
+      "- これは今回ターンの確定状態ではありません。",
       "- 選択肢を増やしすぎず、今の流れに合う一本を寄せてください。",
     ].join("\n");
   }
 
   if (stateLevel === 3) {
     return [
-      "状態別本文密度:",
-      "- 現在は整理です。",
+      "参考状態別本文密度:",
+      "- 入力前参考状態は整理です。",
+      "- これは今回ターンの確定状態ではありません。",
       "- 残すものと捨てるものが少し見えるようにしてください。",
     ].join("\n");
   }
 
   if (stateLevel === 4) {
     return [
-      "状態別本文密度:",
-      "- 現在は収束です。",
+      "参考状態別本文密度:",
+      "- 入力前参考状態は収束です。",
+      "- これは今回ターンの確定状態ではありません。",
       "- 余計に広げず、最後の絞り込みや実行準備を示してください。",
     ].join("\n");
   }
 
   return [
-    "状態別本文密度:",
-    "- 現在は決定です。",
+    "参考状態別本文密度:",
+    "- 入力前参考状態は決定です。",
+    "- これは今回ターンの確定状態ではありません。",
     "- 実行・継続・次の確認行動へ落としてください。",
+    "- ただし今回入力に明確な決定根拠がない限り、その回の state 5 や state_changed=true を先取りしないでください。",
   ].join("\n");
 }
 
@@ -329,6 +341,8 @@ function buildGenerationRulesSection(
   return [
     "回答生成ルール:",
     "- 今回の回答は、入力の重さ・深さ・説明要求に合う自然な返答を優先すること",
+    "- 入力前に渡される state や target は参考情報であり、その回の確定 state を意味しないこと",
+    "- 参考 state や参考 target だけを根拠に、その回の state_changed / current_phase / state_level を決め打ちしないこと",
     "- 低シグナル入口入力や軽い短文では、状態前進を作ること自体を目的にしないこと",
     "- ただし低シグナル入口入力だけでは、状態変化を確定しないこと",
     "- 低シグナル入口入力だけでは、state_changed を true にしないこと",
@@ -420,11 +434,11 @@ HOPY回答の核になる system / developer / user prompt を組み立て、状
 
 /*
 【今回このファイルで修正したこと】
-- HOPY回答テンポ切替 プロンプト実装文 v1 を反映し、入力を『挨拶 / 軽い相談 / 重い相談 / 説明要求』へ内部分類する指示を追加しました。
-- buildLengthControlSection を追加し、分類ごとの文量ルールと、短くても冷たくしない・長くても繰り返さない条件を明文化しました。
-- buildTransitionSection と buildGenerationRulesSection の「状態を進める」圧を弱め、軽い入力では状態前進自体を目的にしないよう修正しました。
-- buildThreeStepStructureSection と buildUserInputSection に、3段構成の見せる量を入力ごとに切り替える指示を追加しました。
-- 短文なら短文で返すだけでなく、軽い入力を state 5 / Compass に過大解釈しない方向へ prompt 全体を補強しました。
+- 入力前に渡る state / target を「今回ターンの確定状態」ではなく「参考情報」と明記する方向へ文言を修正しました。
+- buildPolicySection の「現在状態」を「入力前の参考状態」へ変更し、その値だけで state_changed や state 5 を先取りしない指示を追加しました。
+- buildTransitionSection の「現在状態 / 目標状態」を「入力前の参考状態 / 参考上限目安」へ変更し、今回ターンの確定結果ではないことを明記しました。
+- buildStateDensitySection も「参考状態別本文密度」に変更し、決定状態を渡されても今回入力に根拠がなければ state 5 を先取りしないよう補強しました。
+- buildIdentitySection と buildGenerationRulesSection に、参考 state / target を根拠に今回ターンの正を決め打ちしない指示を追加しました。
 */
 
 /* /app/api/chat/_lib/response/hopyPromptBuilder.ts */
