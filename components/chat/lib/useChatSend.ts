@@ -344,7 +344,7 @@ export function useChatSend<TState>(params: {
       const pendingMsg: ChatMsg = {
         id: pendingId,
         role: "assistant",
-        content: resolveWaitingMessage(requestLang, 0),
+        content: resolveWaitingMessage(requestLang, 0, text),
         lang: requestLang,
         created_at: new Date().toISOString(),
       };
@@ -357,7 +357,8 @@ export function useChatSend<TState>(params: {
           ? window.setInterval(() => {
               const nextText = resolveWaitingMessage(
                 requestLang,
-                Date.now() - pendingStartedAt
+                Date.now() - pendingStartedAt,
+                text
               );
 
               setMessages((prev) =>
@@ -856,7 +857,13 @@ export function useChatSend<TState>(params: {
 */
 /*
 【今回このファイルで修正したこと】
-1. sendMessage の入口では isComposingNow() による早期 return を行わないようにしました。
-2. これにより、IME 判定が残留していても送信ボタン押下時に /chat fetch まで到達できるようにしました。
-3. sendCore 側の重複防止・inflight 防止・送信本体の流れは変更していません。
+1. pending初回文言の resolveWaitingMessage に user input の text を渡すようにしました。
+2. 5秒ごとの pending更新時にも resolveWaitingMessage へ user input の text を渡すようにしました。
+3. これにより chatSendWaitingMessages.ts 側の入力適応分類が実際に反映されるようにしました。
+4. 送信本体、API、状態反映、Compass、retry の流れには触れていません。
+*/
+
+/*
+このファイルの正式役割
+送信フロー全体を管理し、pending追加、API送信、assistant message確定反映、state反映、thread反映、retry をつなぐ親ファイル。
 */
