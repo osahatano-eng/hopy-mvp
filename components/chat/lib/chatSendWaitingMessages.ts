@@ -14,77 +14,77 @@ type WaitingCategory =
 
 const JA_WAITING_MESSAGE_SETS: Record<WaitingCategory, string[]> = {
   friendly: [
-    "声をかけてくれて、うれしいです。",
-    "このやさしい流れを受け取っています。",
-    "あなたに返す言葉を整えています。",
+    "HOPYが声をかけてくれて、うれしい気持ちを受け取っています...",
+    "HOPYがこのやさしい流れを受け取っています...",
+    "HOPYがあなたに返す言葉を整えています...",
   ],
   bright: [
-    "その明るい流れをうれしく受け取っています。",
-    "いまの心地よさを静かに見つめています。",
-    "この空気に合う言葉を整えています。",
+    "HOPYがその明るい流れをうれしく受け取っています...",
+    "HOPYがいまの心地よさを静かに見つめています...",
+    "HOPYがこの空気に合う言葉を整えています...",
   ],
   tired: [
-    "その疲れ、ちゃんと受け取っています。",
-    "いまの重さを静かに見つめています。",
-    "やさしく返せる形に整えています。",
+    "HOPYがその疲れをちゃんと受け取っています...",
+    "HOPYがいまの重さを静かに見つめています...",
+    "HOPYがやさしく返せる形に整えています...",
   ],
   anxious: [
-    "揺れる気持ちを、ちゃんと受け取っています。",
-    "いまの不安の流れを静かに見つめています。",
-    "少し進みやすくなる言葉を整えています。",
+    "HOPYが揺れる気持ちをちゃんと受け取っています...",
+    "HOPYがいまの不安の流れを静かに見つめています...",
+    "HOPYが少し進みやすくなる言葉を整えています...",
   ],
   unsure: [
-    "迷っている気持ちを受け止めています。",
-    "いまの揺れをゆっくり整理しています。",
-    "次につながる言葉を整えています。",
+    "HOPYが迷っている気持ちを受け止めています...",
+    "HOPYがいまの揺れをゆっくり整理しています...",
+    "HOPYが次につながる言葉を整えています...",
   ],
   chat: [
-    "こうして来てくれたことを、うれしく受け取っています。",
-    "いまの自然な流れを見つめています。",
-    "あなたに返す言葉を整えています。",
+    "HOPYがこうして来てくれたことをうれしく受け取っています...",
+    "HOPYがいまの自然な流れを見つめています...",
+    "HOPYがあなたに返す言葉を整えています...",
   ],
   fallback: [
-    "その気持ちを、ちゃんと受け取っています。",
-    "いまの流れを静かに見つめています。",
-    "あなたに合う言葉を整えています。",
+    "HOPYがその気持ちをちゃんと受け取っています...",
+    "HOPYがいまの流れを静かに見つめています...",
+    "HOPYがあなたに合う言葉を整えています...",
   ],
 };
 
 const EN_WAITING_MESSAGE_SETS: Record<WaitingCategory, string[]> = {
   friendly: [
-    "I’m glad you reached out.",
-    "I’m receiving the warmth in this moment.",
-    "I’m shaping words to return to you.",
+    "HOPY is glad you reached out...",
+    "HOPY is receiving the warmth in this moment...",
+    "HOPY is shaping words to return to you...",
   ],
   bright: [
-    "I’m warmly receiving this bright flow.",
-    "I’m quietly noticing the ease in this moment.",
-    "I’m shaping words that fit this atmosphere.",
+    "HOPY is warmly receiving this bright flow...",
+    "HOPY is quietly noticing the ease in this moment...",
+    "HOPY is shaping words that fit this atmosphere...",
   ],
   tired: [
-    "I’m gently receiving that tiredness.",
-    "I’m quietly noticing the weight of this moment.",
-    "I’m shaping a response with softness.",
+    "HOPY is gently receiving that tiredness...",
+    "HOPY is quietly noticing the weight of this moment...",
+    "HOPY is shaping a response with softness...",
   ],
   anxious: [
-    "I’m receiving the uncertainty in your feelings.",
-    "I’m quietly looking at the flow of that anxiety.",
-    "I’m shaping words that help you move a little more easily.",
+    "HOPY is receiving the uncertainty in your feelings...",
+    "HOPY is quietly looking at the flow of that anxiety...",
+    "HOPY is shaping words that help you move a little more easily...",
   ],
   unsure: [
-    "I’m receiving the feeling of not being sure yet.",
-    "I’m slowly organizing the sway in this moment.",
-    "I’m shaping words that connect to your next step.",
+    "HOPY is receiving the feeling of not being sure yet...",
+    "HOPY is slowly organizing the sway in this moment...",
+    "HOPY is shaping words that connect to your next step...",
   ],
   chat: [
-    "I’m glad you came by like this.",
-    "I’m quietly noticing the natural flow here.",
-    "I’m shaping words to return to you.",
+    "HOPY is glad you came by like this...",
+    "HOPY is quietly noticing the natural flow here...",
+    "HOPY is shaping words to return to you...",
   ],
   fallback: [
-    "I’m receiving your feelings carefully.",
-    "I’m quietly noticing the flow of this moment.",
-    "I’m shaping words that fit you.",
+    "HOPY is receiving your feelings carefully...",
+    "HOPY is quietly noticing the flow of this moment...",
+    "HOPY is shaping words that fit you...",
   ],
 };
 
@@ -256,7 +256,7 @@ export function resolveWaitingMessage(
   const messages = getWaitingMessages(lang, inputText);
 
   if (!messages.length) {
-    return lang === "en" ? "Thinking…" : "考えています…";
+    return lang === "en" ? "HOPY is thinking..." : "HOPYが考えています...";
   }
 
   const step = Math.max(0, Math.floor(elapsedMs / WAITING_MESSAGE_INTERVAL_MS));
@@ -272,8 +272,12 @@ export function resolveWaitingMessage(
 
 /*
 【今回このファイルで修正したこと】
-1. 入力文の正規化を強化し、NFKC正規化・句読点除去・空白圧縮を追加しました。
-2. 判定語彙を増やし、「ねえねえ、ホピー元気？」「ちょっと疲れた」「どうしたらいいかわからない」のような実入力を拾いやすくしました。
-3. 判定順を tired / anxious / unsure / bright / friendly / chat に整理し、より意味の強いカテゴリを先に返すようにしました。
-4. 末尾に最小限の救済判定を追加し、代表例が fallback に落ちにくいようにしました。
+1. すべての待機文に「HOPYが...」「HOPY is ...」の共通形を付けて、通常本文と見分けやすくしました。
+2. 末尾を「...」に統一して、待機中の文だと分かる見え方に寄せました。
+3. fallback 既定文も同じ待機表現にそろえました。
+4. 文言決定責務だけに留めて、状態判定や MessageRow 側の表示構造には触れていません。
+*/
+
+/*
+/components/chat/lib/chatSendWaitingMessages.ts
 */
