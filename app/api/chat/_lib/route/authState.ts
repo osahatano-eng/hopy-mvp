@@ -346,7 +346,6 @@ export async function resolveConversationState(params: {
   const currentPhase = userStateUpdate?.ok
     ? normalizePhase(
         userStateUpdate.state?.current_phase ??
-          userStateUpdate.state?.state_level ??
           userStateUpdate.applied?.nextPhase ??
           fallbackStateUpdate.applied.nextPhase,
       )
@@ -403,6 +402,7 @@ export async function resolveConversationState(params: {
 【今回このファイルで修正したこと】
 - resolveConversationState(...) で user_state を一切触っていなかったため、updateUserStateFromMessage(...) を追加しました。
 - これにより、新規ユーザー送信時にも public.user_state の初回作成経路をこのファイルから通すようにしました。
+- user_state 更新結果の参照は current_phase のみに絞り、UserState 型に存在しない state_level 参照を削除しました。
 - user_state 更新が失敗した場合だけ、既存の会話内 fallback 計算へ戻す形にしているため、会話 state_level 更新の流れは残しています。
 */
 
