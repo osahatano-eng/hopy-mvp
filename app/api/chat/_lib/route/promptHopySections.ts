@@ -44,16 +44,6 @@ function pickStateBoolean(...values: unknown[]): boolean | null {
 }
 
 function detectHopyStateFacts(stateForSystem: any): HopyStateFacts {
-  const stateLevel =
-    pickStateNumber(
-      stateForSystem?.state_level,
-      stateForSystem?.current_phase,
-      stateForSystem?.stateLevel,
-      stateForSystem?.currentPhase,
-      stateForSystem?.phase,
-      stateForSystem?.level,
-    ) ?? 1;
-
   const currentPhase = pickStateNumber(
     stateForSystem?.current_phase,
     stateForSystem?.currentPhase,
@@ -69,6 +59,20 @@ function detectHopyStateFacts(stateForSystem: any): HopyStateFacts {
     stateForSystem?.prev_state_level,
     stateForSystem?.prevStateLevel,
   );
+
+  const explicitStateLevel = pickStateNumber(
+    stateForSystem?.state_level,
+    stateForSystem?.stateLevel,
+    stateForSystem?.level,
+  );
+
+  const stateLevel =
+    pickStateNumber(
+      explicitStateLevel,
+      currentPhase,
+      prevStateLevel,
+      prevPhase,
+    ) ?? 1;
 
   const stateChanged = pickStateBoolean(
     stateForSystem?.state_changed,
@@ -394,10 +398,9 @@ stateForSystem から今回ターンの状態材料を受け取り、
 
 /*
 【今回このファイルで修正したこと】
-- buildConcreteCompassStateInstruction の文面を修正し、stateForSystem の値を「今回ターンの正」として扱わせないようにしました。
-- stateForSystem は入力前の参考情報であり、今回ターンの唯一の正は回答確定時の hopy_confirmed_payload.state.state_changed だけで決まると明記しました。
-- Plus / Pro の Compass 生成ルールも、入力前参考値への従属ではなく、今回ターンで新たに確定した state_changed にのみ従属する形へ修正しました。
-- 外から入った誤った state_changed=true / state_level=5 を prompt が再注入して強化しないようにしました。
+- detectHopyStateFacts の stateLevel 決定順を修正し、current 系が薄いときでも prev_state_level / prev_phase を参考にできるようにしました。
+- stateForSystem に current 系が欠けただけで即 1 を採用しないようにし、前回確定状態がある場合に prompt が混線1へ戻しやすくなる揺れを減らしました。
+- それ以外の Compass 生成ルール、本文契約、Free / Plus / Pro 分岐は触っていません。
 */
 
 /* /app/api/chat/_lib/route/promptHopySections.ts */
