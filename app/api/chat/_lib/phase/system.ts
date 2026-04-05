@@ -85,15 +85,17 @@ export function stateCore(state: ConversationStateLike) {
   const prevPhase = normalizePhase5(
     state.prev_state_level ?? state.prev_phase ?? phase,
   );
-  const changed =
-    typeof state.state_changed === "boolean"
-      ? state.state_changed
-      : phase !== prevPhase;
+
+  if (typeof state.state_changed !== "boolean") {
+    throw new Error(
+      "phase/system.ts: state.state_changed must come from confirmed payload and is required",
+    );
+  }
 
   return {
     phase,
     prevPhase,
-    changed,
+    changed: state.state_changed,
   };
 }
 
@@ -531,3 +533,19 @@ export function buildPhaseSystem(params: {
 
   return clampPrompt(system, SYSTEM_MAX_CHARS);
 }
+
+/*
+このファイルの正式役割
+phase system の内部指示を組み立てるファイル。
+入力前の会話状態をもとに、今回ターンで使う内部向けの phase / angle / stabilize 指示を作る。
+ただし HOPY回答○ の唯一の正を再計算する層ではなく、確定済みの state_changed をそのまま参照する補助層である。
+*/
+
+/*
+【今回このファイルで修正したこと】
+- stateCore(...) で state.state_changed を phase !== prevPhase から再計算しないように修正しました。
+- state.state_changed が boolean でない場合は throw するようにし、唯一の正が欠けたまま prompt へ流れないようにしました。
+- これにより、この層で changed を勝手に補完・再解釈せず、confirmed payload / conversation state の state_changed だけを使うように戻しました。
+*/
+
+/* /app/api/chat/_lib/phase/system.ts */
