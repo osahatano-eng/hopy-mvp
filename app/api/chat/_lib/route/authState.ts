@@ -217,11 +217,11 @@ function normalizeAssistantStateRow(data: any): ConversationAssistantState {
   if (!data) return null;
 
   const normalizedCurrent = normalizePhase(
-    data.state_level ?? data.current_phase ?? 1,
+    data.current_phase ?? data.state_level ?? 1,
   );
 
   const normalizedPrev = normalizePhase(
-    data.prev_state_level ?? data.prev_phase ?? normalizedCurrent,
+    data.prev_phase ?? data.prev_state_level ?? normalizedCurrent,
   );
 
   const state_changed = !!data.state_changed;
@@ -311,14 +311,12 @@ export async function resolveConversationState(params: {
   let stateUpdateOk = true;
   let stateUpdateError: string | null = null;
 
-  const prevState = normalizePhase(
-    conversationStateBefore?.state_level ??
-      conversationStateBefore?.current_phase ??
+  const prevPhase = normalizePhase(
+    conversationStateBefore?.current_phase ??
+      conversationStateBefore?.state_level ??
       1,
   );
-
-  const prevPhase = prevState;
-  const prevStateLevel = prevState;
+  const prevStateLevel = prevPhase;
 
   const fallbackStateUpdate = computeConversationStateUpdate({
     prevPhase,
@@ -339,11 +337,11 @@ export async function resolveConversationState(params: {
     stateUpdateError = errorText(userStateUpdate?.error);
   }
 
-  const st = fallbackStateUpdate;
+  const st = userStateUpdate?.ok ? userStateUpdate : fallbackStateUpdate;
 
   const currentPhase = resolveConversationPhaseFromStateUpdate({
     prevConversationPhase: prevPhase,
-    stateUpdateResult: fallbackStateUpdate,
+    stateUpdateResult: st,
   });
 
   const currentStateLevel = toConversationStateLevel(currentPhase);
@@ -392,10 +390,11 @@ export async function resolveConversationState(params: {
 
 /*
 【今回このファイルで修正したこと】
-- normalizeAssistantStateRow(...) で current_phase / state_level を別々に採らず、1つの正規化済み current 値に統一しました。
-- normalizeAssistantStateRow(...) で prev_phase / prev_state_level も別々に採らず、1つの正規化済み prev 値に統一しました。
-- resolveConversationState(...) でも prevPhase / prevStateLevel を別々に採らず、直近 assistant 状態から1つの prevState を作って両方へ使うように修正しました。
-- これにより、prev_phase=3 / prev_state_level=2 のようなズレをこのファイル内で発生させないようにしました。
+- normalizeAssistantStateRow(...) で current_phase を優先して current 値を正規化するように修正しました。
+- normalizeAssistantStateRow(...) で prev_phase を優先して prev 値を正規化するように修正しました。
+- resolveConversationState(...) で prevPhase / prevStateLevel の起点を直近 assistant の current 状態に固定しました。
+- resolveConversationState(...) で今回ターンの state update 結果として fallbackStateUpdate 固定ではなく、updateUserStateFromMessage(...) の実更新結果を優先採用するように修正しました。
+- これにより、今回ターンの prev/current が fallback 側で潰れて 3→3 になる経路をこのファイル内で止めました。
 */
 
 /* /app/api/chat/_lib/route/authState.ts */
