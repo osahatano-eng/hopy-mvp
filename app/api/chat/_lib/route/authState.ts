@@ -336,23 +336,17 @@ export async function resolveConversationState(params: {
     text: userText,
   });
 
-  const st = userStateUpdate?.ok ? userStateUpdate : fallbackStateUpdate;
-
   if (!userStateUpdate?.ok) {
     stateUpdateOk = false;
     stateUpdateError = errorText(userStateUpdate?.error);
   }
 
-  const currentPhase = userStateUpdate?.ok
-    ? normalizePhase(
-        userStateUpdate.state?.current_phase ??
-          userStateUpdate.applied?.nextPhase ??
-          fallbackStateUpdate.applied.nextPhase,
-      )
-    : resolveConversationPhaseFromStateUpdate({
-        prevConversationPhase: prevPhase,
-        stateUpdateResult: fallbackStateUpdate,
-      });
+  const st = fallbackStateUpdate;
+
+  const currentPhase = resolveConversationPhaseFromStateUpdate({
+    prevConversationPhase: prevPhase,
+    stateUpdateResult: fallbackStateUpdate,
+  });
 
   const currentStateLevel = toConversationStateLevel(currentPhase);
   const stateChanged =
@@ -400,10 +394,10 @@ export async function resolveConversationState(params: {
 
 /*
 【今回このファイルで修正したこと】
-- resolveConversationState(...) で user_state を一切触っていなかったため、updateUserStateFromMessage(...) を追加しました。
-- これにより、新規ユーザー送信時にも public.user_state の初回作成経路をこのファイルから通すようにしました。
-- user_state 更新結果の参照は current_phase のみに絞り、UserState 型に存在しない state_level 参照を削除しました。
-- user_state 更新が失敗した場合だけ、既存の会話内 fallback 計算へ戻す形にしているため、会話 state_level 更新の流れは残しています。
+- resolveConversationState(...) で、user_state 更新結果を会話 state の currentPhase 決定へ使わないように修正しました。
+- 会話 state の prev/current は、同一 conversation の直近 assistant 状態と fallbackStateUpdate だけで決めるように戻しました。
+- updateUserStateFromMessage(...) は user_state 初回作成・更新の副作用としてだけ残し、会話ごとの唯一の正を汚染しないようにしました。
+- これにより、global な user_state や profile 側の揺れで、スレッド state が 1 に戻ったり 5 に飛んだりしにくくしました。
 */
 
 // /app/api/chat/_lib/route/authState.ts
