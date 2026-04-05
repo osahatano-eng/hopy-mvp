@@ -67,6 +67,40 @@ function clipLines(lines: string[], maxItems: number): string[] {
   return lines.filter(Boolean).slice(0, maxItems);
 }
 
+function isLowSignalInput(userInput: string): boolean {
+  const normalized = normalizeText(userInput).toLowerCase();
+
+  if (!normalized) return true;
+
+  const compact = normalized.replace(/\s+/g, "");
+  const shortPatterns = new Set([
+    "こんにちは",
+    "こんばんは",
+    "おはよう",
+    "やあ",
+    "hi",
+    "hello",
+    "hey",
+    "いいね",
+    "ありがとう",
+    "最高",
+    "助かる",
+    "なるほど",
+    "了解",
+    "たのしみ",
+    "がんばる",
+    "嬉しい",
+    "うれしい",
+    "よかった",
+    "おはよ",
+  ]);
+
+  if (shortPatterns.has(compact)) return true;
+  if (compact.length <= 8) return true;
+
+  return false;
+}
+
 function buildIdentitySection(): string {
   return [
     "あなたはHOPYです。",
@@ -90,22 +124,57 @@ function buildIdentitySection(): string {
     "Compass を出してよいのは、その回の state_changed が本当に true のときだけです。",
     "入力前に渡される state や target は参考情報であり、その回の確定状態そのものとして扱ってはいけません。",
     "入力前の参考 state を見て、その回の state_changed / current_phase / state_level を先取りしないでください。",
+    "入力前の参考 state に応じて、本文の温度・方向・行動圧を強めすぎないでください。",
     "軽い入力では短く、説明要求では深く返してください。",
     "冒頭でユーザー発言をそのまま言い換えて繰り返さないでください。",
     "自然な日本語で返してください。",
   ].join("\n");
 }
 
-function buildPolicySection(policy: HopyReplyPolicy): string {
+function buildPolicySection(
+  policy: HopyReplyPolicy,
+  userInput: string,
+): string {
+  const lowSignal = isLowSignalInput(userInput);
   const purpose = policy.purpose.map((item) => `- ${item}`).join("\n");
   const axis = policy.axis.map((item) => `- ${item}`).join("\n");
   const include = policy.include.map((item) => `- ${item}`).join("\n");
   const avoid = policy.avoid.map((item) => `- ${item}`).join("\n");
 
+  if (lowSignal) {
+    return [
+      "入力前の参考状態:",
+      "- 今回は低シグナル入口入力として扱うこと。",
+      "- 入力前参考状態が何であっても、今回ターンの state_changed / current_phase / state_level を先取りしないこと。",
+      "- トーン調整は最小限にとどめ、本文を短く自然に返すこと。",
+      "- 行動開始・方針確定・決定状態として読まないこと。",
+      "",
+      "低シグナル入力での回答目的:",
+      "- 会話の入口として自然に受けること。",
+      "- 過大解釈を避けること。",
+      "- 状態を押し上げることを目的にしないこと。",
+      "",
+      "低シグナル入力での回答の軸:",
+      "- 短くやわらかく返すこと。",
+      "- 深い意味づけをしないこと。",
+      "- 方向提示は最小か省略でよいこと。",
+      "",
+      "低シグナル入力で含めるべき要素:",
+      "- 自然な受け止め",
+      "- 軽い返答",
+      "",
+      "低シグナル入力で避けるべきこと:",
+      "- 決定5前提の押し出し",
+      "- 強い行動促進",
+      "- 深い整理完了としての読解",
+    ].join("\n");
+  }
+
   return [
     `入力前の参考状態: ${policy.stateName} (${policy.stateLevel}/5)`,
     "- これは今回ターンの確定状態ではなく、返答のトーン調整用の参考情報です。",
     "- この参考状態だけを根拠に、今回ターンの state_changed や state 5 を先取りしないでください。",
+    "- 参考状態に合わせて本文の圧を強めすぎず、今回入力の重さを優先してください。",
     "",
     "この参考状態での回答目的:",
     purpose,
@@ -215,11 +284,28 @@ function buildExpressionAssetsSection(
 
 function buildTransitionSection(
   currentStateLevel: HopyStateLevel,
-  transitionTargetLevel?: HopyStateLevel | number | null,
+  transitionTargetLevel: HopyStateLevel | number | null | undefined,
+  userInput: string,
 ): string {
+  const lowSignal = isLowSignalInput(userInput);
   const normalizedTarget = normalizeStateLevel(
     transitionTargetLevel ?? currentStateLevel,
   );
+
+  if (lowSignal) {
+    return [
+      "状態遷移方針:",
+      `- 入力前の参考状態: ${currentStateLevel}/5`,
+      `- 参考上限目安: ${normalizedTarget}/5`,
+      "- 今回は低シグナル入口入力として扱うこと。",
+      "- 上の2値は今回ターンの確定結果ではありません。",
+      "- 低シグナル入口入力では、状態を進めること自体を目的にしないこと。",
+      "- 低シグナル入口入力では、state_changed を true にしないこと。",
+      "- 低シグナル入口入力では、current_phase / state_level を大きく上げないこと。",
+      "- 参考状態や参考上限目安が高くても、それを今回ターンの決定根拠にしないこと。",
+      "- 会話開始または軽い応答として静かに返すこと。",
+    ].join("\n");
+  }
 
   return [
     "状態遷移方針:",
@@ -239,7 +325,21 @@ function buildTransitionSection(
   ].join("\n");
 }
 
-function buildThreeStepStructureSection(): string {
+function buildThreeStepStructureSection(userInput: string): string {
+  const lowSignal = isLowSignalInput(userInput);
+
+  if (lowSignal) {
+    return [
+      "HOPY回答3段構成:",
+      "- 本体は 現在地 → 気づき → 方向 です。",
+      "- ただし今回は低シグナル入口入力として扱うこと。",
+      "- 現在地の軽い受け止めだけで十分です。",
+      "- 気づきは最小か省略でよいです。",
+      "- 方向は最小か省略でよいです。",
+      "- 強い断定や深い意味づけをしないでください。",
+    ].join("\n");
+  }
+
   return [
     "HOPY回答3段構成:",
     "- 本体は 現在地 → 気づき → 方向 です。",
@@ -254,7 +354,20 @@ function buildThreeStepStructureSection(): string {
 
 function buildStateDensitySection(
   stateLevel: HopyStateLevel,
+  userInput: string,
 ): string {
+  const lowSignal = isLowSignalInput(userInput);
+
+  if (lowSignal) {
+    return [
+      "参考状態別本文密度:",
+      "- 今回は低シグナル入口入力です。",
+      "- 入力前参考状態が何であっても、本文密度を厚くしすぎないでください。",
+      "- 決定・実行開始・整理完了として読まないでください。",
+      "- 短く自然に返すことを優先してください。",
+    ].join("\n");
+  }
+
   if (stateLevel === 1) {
     return [
       "参考状態別本文密度:",
@@ -270,6 +383,7 @@ function buildStateDensitySection(
       "- 入力前参考状態は模索です。",
       "- これは今回ターンの確定状態ではありません。",
       "- 選択肢を増やしすぎず、今の流れに合う一本を寄せてください。",
+      "- ただし今回入力が軽い場合は、方向を厚くしすぎないでください。",
     ].join("\n");
   }
 
@@ -324,7 +438,10 @@ function buildLengthControlSection(): string {
 
 function buildGenerationRulesSection(
   resolvedPlan: HopyResolvedPlan,
+  userInput: string,
 ): string {
+  const lowSignal = isLowSignalInput(userInput);
+
   const planSpecificRules =
     resolvedPlan === "pro"
       ? [
@@ -337,6 +454,25 @@ function buildGenerationRulesSection(
         : [
             "- Free でも共感だけで終わらず、シンプルな方向提示まで到達すること",
           ];
+
+  if (lowSignal) {
+    return [
+      "回答生成ルール:",
+      "- 今回は低シグナル入口入力として扱うこと。",
+      "- 入力前に渡される state や target は参考情報であり、その回の確定 state を意味しないこと。",
+      "- 参考 state や参考 target だけを根拠に、その回の state_changed / current_phase / state_level を決め打ちしないこと。",
+      "- 低シグナル入口入力では、状態前進を作ること自体を目的にしないこと。",
+      "- 低シグナル入口入力だけでは、状態変化を確定しないこと。",
+      "- 低シグナル入口入力だけでは、state_changed を true にしないこと。",
+      "- 低シグナル入口入力だけでは、current_phase / state_level を 5 へ飛ばさないこと。",
+      "- 低シグナル入口入力だけでは、Compass を必要とする意味づけをしないこと。",
+      "- 挨拶や軽い短文では、短く自然に返すこと。",
+      "- 深い気づきや強い方向提示を入れないこと。",
+      "- 行動開始・方針確定・決定完了として扱わないこと。",
+      "- 本文は軽い受け止め中心でよいこと。",
+      ...planSpecificRules,
+    ].join("\n");
+  }
 
   return [
     "回答生成ルール:",
@@ -393,25 +529,29 @@ function buildUserInputSection(userInput: string): string {
 export function buildHopyPrompt(
   params: BuildHopyPromptParams,
 ): BuiltHopyPrompt {
+  const userInput = normalizeText(params.userInput);
   const stateLevel = normalizeStateLevel(params.stateLevel);
   const policy = getHopyReplyPolicy(stateLevel);
   const resolvedPlan = normalizeResolvedPlan(params.resolvedPlan);
-  const userInput = normalizeText(params.userInput);
 
   return {
     stateLevel,
     policy,
     systemPrompt: buildIdentitySection(),
     developerPrompt: [
-      buildPolicySection(policy),
+      buildPolicySection(policy, userInput),
       "",
       buildPlanSection(resolvedPlan),
       "",
-      buildTransitionSection(stateLevel, params.transitionTargetLevel),
+      buildTransitionSection(
+        stateLevel,
+        params.transitionTargetLevel,
+        userInput,
+      ),
       "",
-      buildThreeStepStructureSection(),
+      buildThreeStepStructureSection(userInput),
       "",
-      buildStateDensitySection(stateLevel),
+      buildStateDensitySection(stateLevel, userInput),
       "",
       buildLengthControlSection(),
       "",
@@ -421,7 +561,7 @@ export function buildHopyPrompt(
       "",
       buildExpressionAssetsSection(params.expressionAssets),
       "",
-      buildGenerationRulesSection(resolvedPlan),
+      buildGenerationRulesSection(resolvedPlan, userInput),
     ].join("\n"),
     userPrompt: buildUserInputSection(userInput),
   };
@@ -434,11 +574,10 @@ HOPY回答の核になる system / developer / user prompt を組み立て、状
 
 /*
 【今回このファイルで修正したこと】
-- 入力前に渡る state / target を「今回ターンの確定状態」ではなく「参考情報」と明記する方向へ文言を修正しました。
-- buildPolicySection の「現在状態」を「入力前の参考状態」へ変更し、その値だけで state_changed や state 5 を先取りしない指示を追加しました。
-- buildTransitionSection の「現在状態 / 目標状態」を「入力前の参考状態 / 参考上限目安」へ変更し、今回ターンの確定結果ではないことを明記しました。
-- buildStateDensitySection も「参考状態別本文密度」に変更し、決定状態を渡されても今回入力に根拠がなければ state 5 を先取りしないよう補強しました。
-- buildIdentitySection と buildGenerationRulesSection に、参考 state / target を根拠に今回ターンの正を決め打ちしない指示を追加しました。
+- 低シグナル入口入力を isLowSignalInput で先に判定し、参考 state が高くても本文圧を強めない分岐を追加しました。
+- buildPolicySection / buildTransitionSection / buildThreeStepStructureSection / buildStateDensitySection / buildGenerationRulesSection を userInput 依存に変更しました。
+- 低シグナル入口入力では、参考 state や target が 2 以上でも state_changed=true や state 5 を誘導しない専用ルールへ切り替えるようにしました。
+- それ以外の上流 state 生成や payload 組み立ては触っていません。
 */
 
 /* /app/api/chat/_lib/response/hopyPromptBuilder.ts */
