@@ -195,6 +195,11 @@ function buildConcreteCompassStateInstruction(args: {
       "今回ターンの state_changed / current_phase / state_level / Compass の正を、この参考値から先に確定してはならない。",
       "HOPY回答○ の唯一の正は、回答確定時の hopy_confirmed_payload.state.state_changed である。",
       "Compass もその確定結果にのみ従属すること。",
+      "今回ターンの prev_phase には、入力前参考の current_phase をそのまま入れること。",
+      "今回ターンの prev_state_level には、入力前参考の state_level をそのまま入れること。",
+      "current_phase と state_level は今回ターンの確定結果として新たに決めること。",
+      "state_changed は、今回ターンの current_phase と prev_phase、または state_level と prev_state_level のどちらかが変わったときだけ true にすること。",
+      "current_phase と prev_phase が同じ、かつ state_level と prev_state_level も同じなら、state_changed は必ず false にすること。",
       "Free では Compass は生成しないこと。",
       'Free では compassText と compassPrompt を必ず空文字 "" にすること。',
     ].join("\n");
@@ -209,9 +214,13 @@ function buildConcreteCompassStateInstruction(args: {
     `入力前参考の prev_state_level=${formatStateFactNumber(stateFacts.prevStateLevel)}`,
     "これらは今回ターンの確定結果ではなく、入力前の参考情報である。",
     "この参考値を『今回ターンの正』として扱ってはならない。",
-    "今回ターンの state_changed / current_phase / state_level は、今回の回答確定時に新たに決めること。",
+    "今回ターンの prev_phase には、入力前参考の current_phase をそのまま入れること。",
+    "今回ターンの prev_state_level には、入力前参考の state_level をそのまま入れること。",
+    "今回ターンの current_phase と state_level は、今回の回答確定時に新たに決めること。",
     "HOPY回答○ の唯一の正は、回答確定時の hopy_confirmed_payload.state.state_changed である。",
     "Compass はその確定結果にのみ従属すること。",
+    "state_changed は、今回ターンの current_phase と prev_phase、または state_level と prev_state_level のどちらかが変わったときだけ true にすること。",
+    "current_phase と prev_phase が同じ、かつ state_level と prev_state_level も同じなら、state_changed は必ず false にすること。",
     "state_changed=true なら compassText と compassPrompt を必ず返すこと。",
     'state_changed=false なら compassText と compassPrompt は必ず空文字 "" にすること。',
   ].join("\n");
@@ -398,9 +407,10 @@ stateForSystem から今回ターンの状態材料を受け取り、
 
 /*
 【今回このファイルで修正したこと】
-- detectHopyStateFacts の stateLevel 決定順を修正し、current 系が薄いときでも prev_state_level / prev_phase を参考にできるようにしました。
-- stateForSystem に current 系が欠けただけで即 1 を採用しないようにし、前回確定状態がある場合に prompt が混線1へ戻しやすくなる揺れを減らしました。
-- それ以外の Compass 生成ルール、本文契約、Free / Plus / Pro 分岐は触っていません。
+- buildConcreteCompassStateInstruction(...) に、prev_phase は入力前参考の current_phase をそのまま使うこと、prev_state_level は入力前参考の state_level をそのまま使うことを明記しました。
+- 同じ箇所に、state_changed は current/prev の差分があるときだけ true、両方同じなら必ず false とする正式算出ルールを明記しました。
+- これにより、短文回答化の影響で今回ターンの current を prev に潰してしまい、state_changed=false に倒れる揺れを防ぐ狙いです。
+- それ以外の本文契約、Compass 構造、Free / Plus / Pro 分岐は触っていません。
 */
 
 /* /app/api/chat/_lib/route/promptHopySections.ts */
