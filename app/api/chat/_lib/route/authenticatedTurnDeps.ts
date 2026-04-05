@@ -321,7 +321,7 @@ function resolveConfirmedTurnFromTurnRecord(
 
 export function resolveConfirmedTurnFromBuiltResult(
   result: RunHopyTurnBuiltResult | null | undefined,
-  fallback: ConfirmedStateFallback,
+  _fallback: ConfirmedStateFallback,
 ): ConfirmedAssistantTurn {
   const resolvedFromTurnRecord = resolveConfirmedTurnFromTurnRecord(result);
   if (resolvedFromTurnRecord) {
@@ -627,9 +627,9 @@ authenticated 経路の runHopyTurn 用 deps 作成ファイル。
 */
 /*
 【今回このファイルで修正したこと】
-- local ConfirmedAssistantTurn 型に canonicalAssistantState を追加しました。
-- turnRecord 経由・confirmed payload 経由の両方で confirmedTurn を作る箇所に、canonicalAssistantState を必ず入れるようにしました。
-- これにより saveAssistantMessageOrError(...) / saveAssistantLearningLogs(...) が要求する confirmedTurn 形へ、このファイル内でそろえました。
-- PromptBundle、callModel の実行ロジック、buildTurnResult、Compass、状態 1..5 の意味、保存フロー自体は変えていません。
+- resolveConfirmedTurnFromTurnRecord(...) で prevPhase / prevStateLevel を fallback ではなく turnRecord.canonicalAssistantState から採るように修正しました。
+- resolveConfirmedTurnFromBuiltResult(...) で prevPhase / prevStateLevel を fallback ではなく hopy_confirmed_payload.state から採るように修正しました。
+- これにより、confirmed payload / turnRecord の確定済み state をそのまま通し、下流で prev を差し替えないように戻しました。
+- state_changed と compass の厳格検証はそのまま維持しています。
 */
-// このファイルの正式役割: authenticated 経路の runHopyTurn 用 deps 作成ファイル
+// このファイルの正式役割: /app/api/chat/_lib/route/authenticatedTurnDeps.ts
