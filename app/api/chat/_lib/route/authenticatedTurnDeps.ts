@@ -323,67 +323,67 @@ export function resolveConfirmedTurnFromBuiltResult(
   result: RunHopyTurnBuiltResult | null | undefined,
   _fallback: ConfirmedStateFallback,
 ): ConfirmedAssistantTurn {
+  const confirmedPayload = asRecord(result?.hopy_confirmed_payload);
+  if (confirmedPayload) {
+    const confirmedPayloadState = resolveConfirmedPayloadState(
+      asRecord(confirmedPayload.state),
+    );
+
+    const assistantText = normalizeOptionalText(confirmedPayload.reply);
+
+    if (!assistantText) {
+      throw new Error(
+        "authenticatedTurnDeps: result.hopy_confirmed_payload.reply is required",
+      );
+    }
+
+    const confirmedTurn = buildConfirmedAssistantTurn({
+      assistantText,
+      currentPhase: confirmedPayloadState.current_phase,
+      currentStateLevel: confirmedPayloadState.state_level,
+      stateChanged: confirmedPayloadState.state_changed,
+      prevPhase: confirmedPayloadState.prev_phase,
+      prevStateLevel: confirmedPayloadState.prev_state_level,
+    }) as ConfirmedAssistantTurn & {
+      compassText?: string;
+      compassPrompt?: string;
+    };
+
+    confirmedTurn.canonicalAssistantState = buildCanonicalAssistantState({
+      currentPhase: confirmedPayloadState.current_phase,
+      currentStateLevel: confirmedPayloadState.state_level,
+      prevPhase: confirmedPayloadState.prev_phase,
+      prevStateLevel: confirmedPayloadState.prev_state_level,
+      stateChanged: confirmedPayloadState.state_changed,
+    });
+
+    const confirmedPayloadCompass = asRecord(confirmedPayload.compass);
+    const resolvedCompassText = normalizeOptionalText(
+      confirmedPayloadCompass?.text,
+    );
+    const resolvedCompassPrompt = normalizeOptionalText(
+      confirmedPayloadCompass?.prompt,
+    );
+
+    if (resolvedCompassText) {
+      confirmedTurn.compassText = resolvedCompassText;
+    }
+
+    if (resolvedCompassPrompt) {
+      confirmedTurn.compassPrompt = resolvedCompassPrompt;
+    }
+
+    return confirmedTurn as ConfirmedAssistantTurn;
+  }
+
   const resolvedFromTurnRecord = resolveConfirmedTurnFromTurnRecord(result);
   if (resolvedFromTurnRecord) {
     return resolvedFromTurnRecord;
   }
 
-  const confirmedPayload = asRecord(result?.hopy_confirmed_payload);
-  if (!confirmedPayload) {
-    throw new Error(
-      "authenticatedTurnDeps: confirmedTurn cannot be resolved without turnRecord or hopy_confirmed_payload",
-    );
-  }
-
-  const confirmedPayloadState = resolveConfirmedPayloadState(
-    asRecord(confirmedPayload.state),
+  throw new Error(
+    "authenticatedTurnDeps: confirmedTurn cannot be resolved without hopy_confirmed_payload or turnRecord",
   );
-
-  const assistantText = normalizeOptionalText(confirmedPayload.reply);
-
-  if (!assistantText) {
-    throw new Error(
-      "authenticatedTurnDeps: result.hopy_confirmed_payload.reply is required",
-    );
-  }
-
-  const confirmedTurn = buildConfirmedAssistantTurn({
-    assistantText,
-    currentPhase: confirmedPayloadState.current_phase,
-    currentStateLevel: confirmedPayloadState.state_level,
-    stateChanged: confirmedPayloadState.state_changed,
-    prevPhase: confirmedPayloadState.prev_phase,
-    prevStateLevel: confirmedPayloadState.prev_state_level,
-  }) as ConfirmedAssistantTurn & {
-    compassText?: string;
-    compassPrompt?: string;
-  };
-
-  confirmedTurn.canonicalAssistantState = buildCanonicalAssistantState({
-    currentPhase: confirmedPayloadState.current_phase,
-    currentStateLevel: confirmedPayloadState.state_level,
-    prevPhase: confirmedPayloadState.prev_phase,
-    prevStateLevel: confirmedPayloadState.prev_state_level,
-    stateChanged: confirmedPayloadState.state_changed,
-  });
-
-  const confirmedPayloadCompass = asRecord(confirmedPayload.compass);
-  const resolvedCompassText = normalizeOptionalText(
-    confirmedPayloadCompass?.text,
-  );
-  const resolvedCompassPrompt = normalizeOptionalText(
-    confirmedPayloadCompass?.prompt,
-  );
-
-  if (resolvedCompassText) {
-    confirmedTurn.compassText = resolvedCompassText;
-  }
-
-  if (resolvedCompassPrompt) {
-    confirmedTurn.compassPrompt = resolvedCompassPrompt;
-  }
-
-  return confirmedTurn as ConfirmedAssistantTurn;
 }
 
 export function createAuthenticatedTurnDeps(params: {
@@ -627,9 +627,9 @@ authenticated 経路の runHopyTurn 用 deps 作成ファイル。
 */
 /*
 【今回このファイルで修正したこと】
-- resolveConfirmedTurnFromTurnRecord(...) で prevPhase / prevStateLevel を fallback ではなく turnRecord.canonicalAssistantState から採るように修正しました。
-- resolveConfirmedTurnFromBuiltResult(...) で prevPhase / prevStateLevel を fallback ではなく hopy_confirmed_payload.state から採るように修正しました。
-- これにより、confirmed payload / turnRecord の確定済み state をそのまま通し、下流で prev を差し替えないように戻しました。
+- resolveConfirmedTurnFromBuiltResult(...) で turnRecord より先に hopy_confirmed_payload を優先採用するように修正しました。
+- これにより、唯一の正である hopy_confirmed_payload.state を、下流で turnRecord 側の値で上書きしないように戻しました。
+- hopy_confirmed_payload がないときだけ turnRecord を fallback として使う順序に修正しました。
 - state_changed と compass の厳格検証はそのまま維持しています。
 */
 // このファイルの正式役割: /app/api/chat/_lib/route/authenticatedTurnDeps.ts
