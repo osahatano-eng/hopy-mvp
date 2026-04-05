@@ -185,42 +185,46 @@ function buildConcreteCompassStateInstruction(args: {
 
   if (resolvedPlan === "free") {
     return [
-      "【事前の状態参考情報】",
-      `入力前参考の state_changed=${formatStateFactBoolean(stateFacts.stateChanged)}`,
-      `入力前参考の current_phase=${formatStateFactNumber(stateFacts.currentPhase)}`,
-      `入力前参考の prev_phase=${formatStateFactNumber(stateFacts.prevPhase)}`,
-      `入力前参考の state_level=${formatStateFactNumber(stateFacts.stateLevel)}`,
-      `入力前参考の prev_state_level=${formatStateFactNumber(stateFacts.prevStateLevel)}`,
-      "これらは今回ターンの確定結果ではなく、入力前の参考情報である。",
-      "今回ターンの state_changed / current_phase / state_level / Compass の正を、この参考値から先に確定してはならない。",
+      "【今回ターンの状態材料】",
+      `サーバ計算済みの state_changed=${formatStateFactBoolean(stateFacts.stateChanged)}`,
+      `サーバ計算済みの current_phase=${formatStateFactNumber(stateFacts.currentPhase)}`,
+      `直前確定の prev_phase=${formatStateFactNumber(stateFacts.prevPhase)}`,
+      `サーバ計算済みの state_level=${formatStateFactNumber(stateFacts.stateLevel)}`,
+      `直前確定の prev_state_level=${formatStateFactNumber(stateFacts.prevStateLevel)}`,
+      "これらは今回ターンでサーバが渡した正式な状態材料である。",
+      "特に current_phase と state_level は、今回ターンで既にサーバが計算した値であり、モデルが別の値へ振り直してはならない。",
+      "prev_phase と prev_state_level は直前確定状態であり、今回ターンで書き換えてはならない。",
       "HOPY回答○ の唯一の正は、回答確定時の hopy_confirmed_payload.state.state_changed である。",
-      "Compass もその確定結果にのみ従属すること。",
-      "今回ターンの prev_phase には、入力前参考の current_phase をそのまま入れること。",
-      "今回ターンの prev_state_level には、入力前参考の state_level をそのまま入れること。",
-      "current_phase と state_level は今回ターンの確定結果として新たに決めること。",
-      "state_changed は、今回ターンの current_phase と prev_phase、または state_level と prev_state_level のどちらかが変わったときだけ true にすること。",
-      "current_phase と prev_phase が同じ、かつ state_level と prev_state_level も同じなら、state_changed は必ず false にすること。",
+      "ただし今回ターンの hopy_confirmed_payload.state.current_phase / state_level / prev_phase / prev_state_level は、このサーバ計算済み材料と一致させること。",
+      "今回ターンの current_phase は current_phase 参考値をそのまま使うこと。",
+      "今回ターンの state_level は state_level 参考値をそのまま使うこと。",
+      "今回ターンの prev_phase は prev_phase 参考値をそのまま使うこと。",
+      "今回ターンの prev_state_level は prev_state_level 参考値をそのまま使うこと。",
+      "state_changed は、サーバ計算済みの state_changed 参考値と一致させること。",
+      "current_phase / state_level / prev_phase / prev_state_level / state_changed を、本文内容や雰囲気から再判定してはならない。",
       "Free では Compass は生成しないこと。",
       'Free では compassText と compassPrompt を必ず空文字 "" にすること。',
     ].join("\n");
   }
 
   return [
-    "【事前の状態参考情報】",
-    `入力前参考の state_changed=${formatStateFactBoolean(stateFacts.stateChanged)}`,
-    `入力前参考の current_phase=${formatStateFactNumber(stateFacts.currentPhase)}`,
-    `入力前参考の prev_phase=${formatStateFactNumber(stateFacts.prevPhase)}`,
-    `入力前参考の state_level=${formatStateFactNumber(stateFacts.stateLevel)}`,
-    `入力前参考の prev_state_level=${formatStateFactNumber(stateFacts.prevStateLevel)}`,
-    "これらは今回ターンの確定結果ではなく、入力前の参考情報である。",
-    "この参考値を『今回ターンの正』として扱ってはならない。",
-    "今回ターンの prev_phase には、入力前参考の current_phase をそのまま入れること。",
-    "今回ターンの prev_state_level には、入力前参考の state_level をそのまま入れること。",
-    "今回ターンの current_phase と state_level は、今回の回答確定時に新たに決めること。",
+    "【今回ターンの状態材料】",
+    `サーバ計算済みの state_changed=${formatStateFactBoolean(stateFacts.stateChanged)}`,
+    `サーバ計算済みの current_phase=${formatStateFactNumber(stateFacts.currentPhase)}`,
+    `直前確定の prev_phase=${formatStateFactNumber(stateFacts.prevPhase)}`,
+    `サーバ計算済みの state_level=${formatStateFactNumber(stateFacts.stateLevel)}`,
+    `直前確定の prev_state_level=${formatStateFactNumber(stateFacts.prevStateLevel)}`,
+    "これらは今回ターンでサーバが渡した正式な状態材料である。",
+    "特に current_phase と state_level は、今回ターンで既にサーバが計算した値であり、モデルが別の値へ振り直してはならない。",
+    "prev_phase と prev_state_level は直前確定状態であり、今回ターンで書き換えてはならない。",
     "HOPY回答○ の唯一の正は、回答確定時の hopy_confirmed_payload.state.state_changed である。",
-    "Compass はその確定結果にのみ従属すること。",
-    "state_changed は、今回ターンの current_phase と prev_phase、または state_level と prev_state_level のどちらかが変わったときだけ true にすること。",
-    "current_phase と prev_phase が同じ、かつ state_level と prev_state_level も同じなら、state_changed は必ず false にすること。",
+    "ただし今回ターンの hopy_confirmed_payload.state.current_phase / state_level / prev_phase / prev_state_level は、このサーバ計算済み材料と一致させること。",
+    "今回ターンの current_phase は current_phase 参考値をそのまま使うこと。",
+    "今回ターンの state_level は state_level 参考値をそのまま使うこと。",
+    "今回ターンの prev_phase は prev_phase 参考値をそのまま使うこと。",
+    "今回ターンの prev_state_level は prev_state_level 参考値をそのまま使うこと。",
+    "state_changed は、サーバ計算済みの state_changed 参考値と一致させること。",
+    "current_phase / state_level / prev_phase / prev_state_level / state_changed を、本文内容や雰囲気から再判定してはならない。",
     "state_changed=true なら compassText と compassPrompt を必ず返すこと。",
     'state_changed=false なら compassText と compassPrompt は必ず空文字 "" にすること。',
   ].join("\n");
@@ -407,10 +411,11 @@ stateForSystem から今回ターンの状態材料を受け取り、
 
 /*
 【今回このファイルで修正したこと】
-- buildConcreteCompassStateInstruction(...) に、prev_phase は入力前参考の current_phase をそのまま使うこと、prev_state_level は入力前参考の state_level をそのまま使うことを明記しました。
-- 同じ箇所に、state_changed は current/prev の差分があるときだけ true、両方同じなら必ず false とする正式算出ルールを明記しました。
-- これにより、短文回答化の影響で今回ターンの current を prev に潰してしまい、state_changed=false に倒れる揺れを防ぐ狙いです。
-- それ以外の本文契約、Compass 構造、Free / Plus / Pro 分岐は触っていません。
+- buildConcreteCompassStateInstruction(...) の文言を修正し、stateForSystem.current_phase / state_level を「入力前参考」ではなく「今回ターンでサーバが計算済みの正式な状態材料」として扱うように戻しました。
+- 同じ箇所で、「今回ターンの current_phase と state_level は新たに決めること」という誤指示を削除し、サーバ計算済み current/state をそのまま hopy_confirmed_payload.state に一致させるよう明記しました。
+- prev_phase / prev_state_level も、直前確定状態としてそのまま一致させることを明記しました。
+- state_changed もサーバ計算済みの参考値と一致させることを明記し、本文内容や雰囲気から再判定しないよう固定しました。
+- これにより、5→4 のはずの current_phase/state_level をモデルが 1 に振り直す経路をこのファイル内で止めます。
 */
 
 /* /app/api/chat/_lib/route/promptHopySections.ts */
