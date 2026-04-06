@@ -85,6 +85,10 @@ export type RunHopyTurnOutput = {
   result: RunHopyTurnBuiltResult;
 };
 
+type RunHopyTurnResponseConfirmedPayload = NonNullable<
+  Parameters<typeof buildChatResponse>[0]["hopy_confirmed_payload"]
+>;
+
 function ensureDeps(deps: RunHopyTurnDeps): RunHopyTurnDeps {
   if (!deps || typeof deps !== "object") {
     throw new Error("runHopyTurn: deps is required");
@@ -120,6 +124,43 @@ function resolveConfirmedPayloadRecord(
 
   const payload = result.hopy_confirmed_payload;
   return isRecord(payload) ? payload : null;
+}
+
+function resolveResponseConfirmedPayload(
+  result: RunHopyTurnBuiltResult,
+): RunHopyTurnResponseConfirmedPayload | null {
+  const confirmedPayload = resolveConfirmedPayloadRecord(result);
+  if (!confirmedPayload) {
+    return null;
+  }
+
+  const rawState = isRecord(confirmedPayload.state)
+    ? confirmedPayload.state
+    : null;
+  const rawCompass = isRecord(confirmedPayload.compass)
+    ? confirmedPayload.compass
+    : null;
+
+  return {
+    reply: confirmedPayload.reply,
+    state: rawState
+      ? {
+          current_phase: rawState.current_phase,
+          state_level: rawState.state_level,
+          prev_phase: rawState.prev_phase,
+          prev_state_level: rawState.prev_state_level,
+          state_changed: rawState.state_changed,
+          label: rawState.label,
+          prev_label: rawState.prev_label,
+        }
+      : null,
+    compass: rawCompass
+      ? {
+          text: rawCompass.text,
+          prompt: rawCompass.prompt,
+        }
+      : null,
+  };
 }
 
 function resolveResponseState(
@@ -338,7 +379,7 @@ export async function runHopyTurn(
 
   const response = buildChatResponse({
     ok: true,
-    hopy_confirmed_payload: result.hopy_confirmed_payload,
+    hopy_confirmed_payload: resolveResponseConfirmedPayload(result),
     reply: result.reply,
     state: resolveResponseState(result),
     notification: result.notification,
@@ -374,10 +415,9 @@ hopy_confirmed_payload.compass を唯一の正としてそのまま載せる。
 
 /*
 【今回このファイルで修正したこと】
-- 成功系の buildChatResponse(...) に hopy_confirmed_payload を明示的に渡すように修正しました。
-- response の state は hopy_confirmed_payload.state 優先のまま維持しています。
-- response の compass は hopy_confirmed_payload.compass のみから解決するまま維持しています。
-- state_changed の再計算や fallback 補完は追加していません。
+- buildChatResponse(...) が要求する hopy_confirmed_payload 用の型に合わせるため、response 用の resolveResponseConfirmedPayload(...) を追加しました。
+- 成功系の buildChatResponse(...) には result.hopy_confirmed_payload をそのまま渡さず、このファイル内で shape を崩さずに狭めた値だけを渡すようにしました。
+- state_changed の再計算、Compass の fallback 補完、HOPY唯一の正の作り直しはしていません。
 */
 
 /* /app/api/chat/_lib/route/runHopyTurn.ts */
