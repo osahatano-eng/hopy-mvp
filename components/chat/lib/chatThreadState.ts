@@ -76,6 +76,17 @@ export function readStateLike(source: any) {
   return null;
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+function readConfirmedPayloadStateFromMessage(msg: ChatMsg): Record<string, unknown> | null {
+  const raw = asRecord(msg);
+  const confirmedPayload = asRecord(raw?.hopy_confirmed_payload);
+  return asRecord(confirmedPayload?.state);
+}
+
 export function mergeThreadStatePatch(thread: Thread, patch: any): Thread {
   const prevRaw = thread as any;
   const patchRaw = patch as any;
@@ -224,7 +235,10 @@ export function mergeThreadStatePatch(thread: Thread, patch: any): Thread {
 }
 
 export function mergeThreadStateFromMessage(thread: Thread, msg: ChatMsg): Thread {
-  return mergeThreadStatePatch(thread, msg);
+  const confirmedState = readConfirmedPayloadStateFromMessage(msg);
+  if (!confirmedState) return thread;
+
+  return mergeThreadStatePatch(thread, confirmedState);
 }
 
 export function mergeThreadStateFromUserState(thread: Thread, userState: HopyState | null): Thread {
@@ -257,3 +271,18 @@ export function readActiveThreadStateLevel(thread: Thread | null): number | unde
     )
   );
 }
+
+/*
+このファイルの正式役割
+thread 用の状態読み取り・状態マージファイル。
+thread 自体の state 読み取りと、message / patch から thread へ状態を反映する責務だけを持つ。
+*/
+
+/*
+【今回このファイルで修正したこと】
+1. mergeThreadStateFromMessage(...) が msg 全体の state / assistant_state / hopy_state を広く読むのをやめました。
+2. message から thread へ反映するときは、hopy_confirmed_payload.state だけを読むように固定しました。
+3. これにより、左カラム側の thread state merge でも HOPY唯一の正へ寄せました。
+4. mergeThreadStatePatch(...) 自体の汎用動作と readActiveThreadStateLevel(...) には触っていません。
+*/
+/* /components/chat/lib/chatThreadState.ts */

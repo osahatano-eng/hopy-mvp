@@ -224,21 +224,31 @@ export async function resolveConversationState(params: {
 
   const st = userStateUpdate;
 
-  const rawCurrentPhase =
-    userStateUpdate?.state?.current_phase ??
-    userStateUpdate?.applied?.nextPhase ??
-    prevPhase;
+  /**
+   * HOPY回答○ の唯一の正は回答確定後の hopy_confirmed_payload.state.state_changed。
+   * そのため、この前段層では userText だけで current/state_changed を進めない。
+   * prompt / deps へ渡す会話状態は、直近 assistant 確定状態をそのまま保持する。
+   */
+  const currentPhase = prevPhase;
+  const currentStateLevel = prevStateLevel;
+  const stateChanged = false;
 
-  const currentPhase = normalizePhase(rawCurrentPhase);
-  const currentStateLevel = currentPhase;
-  const stateChanged = currentPhase !== prevPhase;
+  /**
+   * 回答確定前に conversation.state_level を先回り更新しない。
+   * この層では DB の会話状態を動かさず、確定後の assistant 結果に委ねる。
+   */
+  let conversationUpdateRes: { ok: true } | { ok: false; error: any } = {
+    ok: true,
+  };
 
-  const conversationUpdateRes = await updateConversationStateLevel({
-    supabase,
-    authedUserId,
-    resolvedConversationId,
-    currentStateLevel,
-  });
+  if (currentStateLevel !== prevStateLevel) {
+    conversationUpdateRes = await updateConversationStateLevel({
+      supabase,
+      authedUserId,
+      resolvedConversationId,
+      currentStateLevel,
+    });
+  }
 
   if (!conversationUpdateRes.ok) {
     stateUpdateOk = false;
@@ -275,16 +285,16 @@ export async function resolveConversationState(params: {
 この層は DB保存済みの直近 assistant 状態と
 updateUserStateFromMessage(...) の結果を受け取り、
 確定意味ペイロードへ渡す state の土台を整える。
+ただし HOPY回答○ の唯一の正そのものは作らない。
 */
 
-/*
+ /*
 【今回このファイルで修正したこと】
-- resolveConversationState(...) で UserState 型に存在しない state_level 参照を削除しました。
-- updateUserStateFromMessage(...) の返却値は current_phase を優先し、なければ applied.nextPhase を使う形にそろえました。
-- state値は 1..5 / 5段階 のまま normalizePhase(...) で統一しています。
-- HOPY回答○ の唯一の正そのものはこのファイルで再定義せず、前段の型エラーだけを止めました。
+- resolveConversationState(...) で userText から currentPhase を先に進める処理をやめました。
+- resolveConversationState(...) で stateChanged = currentPhase !== prevPhase を前段で作る処理をやめました。
+- この前段層では currentPhase/currentStateLevel を直近 assistant の確定状態のまま保持し、stateChanged は false 固定にしました。
+- 回答確定前に conversations.state_level を先回り更新しないようにしました。
+- updateUserStateFromMessage(...) の呼び出し自体は残しつつ、HOPY回答○ の唯一の正には使わないように切り離しました。
 */
 
-/*
-/app/api/chat/_lib/route/authState.ts
-*/
+/* /app/api/chat/_lib/route/authState.ts */

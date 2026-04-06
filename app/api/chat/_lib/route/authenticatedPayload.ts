@@ -99,27 +99,38 @@ function normalizeRequiredAssistantState(
   return value;
 }
 
-function normalizeOptionalCompass(
-  confirmedTurn: ConfirmedAssistantTurn,
-):
+function normalizeOptionalCompass(params: {
+  confirmedTurn: ConfirmedAssistantTurn;
+  stateChanged: boolean;
+}):
   | {
       text: string;
       prompt: string | null;
     }
   | undefined {
-  const rawCompassText = (
-    confirmedTurn as ConfirmedAssistantTurn & { compassText?: unknown }
-  ).compassText;
+  const { confirmedTurn, stateChanged } = params;
 
-  const rawCompassPrompt = (
-    confirmedTurn as ConfirmedAssistantTurn & { compassPrompt?: unknown }
-  ).compassPrompt;
+  if (stateChanged !== true) {
+    return undefined;
+  }
+
+  const rawCompass = (
+    confirmedTurn as ConfirmedAssistantTurn & { compass?: unknown }
+  ).compass;
+
+  if (!rawCompass || typeof rawCompass !== "object" || Array.isArray(rawCompass)) {
+    return undefined;
+  }
 
   const generatedCompassText =
-    typeof rawCompassText === "string" ? rawCompassText.trim() : "";
+    typeof (rawCompass as { text?: unknown }).text === "string"
+      ? (rawCompass as { text: string }).text.trim()
+      : "";
 
   const generatedCompassPrompt =
-    typeof rawCompassPrompt === "string" ? rawCompassPrompt.trim() : "";
+    typeof (rawCompass as { prompt?: unknown }).prompt === "string"
+      ? (rawCompass as { prompt: string }).prompt.trim()
+      : "";
 
   if (generatedCompassText.length === 0) {
     return undefined;
@@ -170,7 +181,10 @@ export function buildAuthenticatedChatPayload(params: {
     prev_state_level,
   } = assistantState;
 
-  const resolvedCompass = normalizeOptionalCompass(confirmedTurn);
+  const resolvedCompass = normalizeOptionalCompass({
+    confirmedTurn,
+    stateChanged: state_changed,
+  });
 
   const payload: AuthenticatedChatPayloadWithConfirmedCompass = {
     ok: true,
@@ -227,9 +241,10 @@ payload.compass と hopy_confirmed_payload.compass にそのまま載せる。
 
 /*
 【今回このファイルで修正したこと】
-- reply 未確定のまま ok:true payload を返さないように、assistantText の必須チェックを追加しました。
-- state 未確定や 1..5 以外の値を通さないように、canonicalAssistantState の runtime 検証を追加しました。
-- payload と hopy_confirmed_payload の reply を、trim 後の確定済み assistantReply に統一しました。
-- Compass は confirmedTurn の確定済み値だけをそのまま載せるままにし、ここで生成しない構造を維持しました。
+- Compass を payload へ載せる条件に state_changed === true を追加しました。
+- confirmedTurn に Compass 文言があっても、state_changed !== true の回では payload.compass / hopy_confirmed_payload.compass を載せないようにしました。
+- Compass の参照元を confirmedTurn.compass の正式shape に寄せました。
+- reply / state の必須検証、状態 1..5 の検証、payload 本体の構造は変えていません。
 */
-// このファイルの正式役割: authenticated 最終 payload 組み立てファイル
+
+/* /app/api/chat/_lib/route/authenticatedPayload.ts */

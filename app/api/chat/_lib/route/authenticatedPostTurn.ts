@@ -352,6 +352,39 @@ export async function finalizeAuthenticatedPostTurn(
     };
   }
 
+  const resolvedCompass = resolveConfirmedCompassArtifacts({
+    resolvedPlan: params.resolvedPlan,
+    runTurnResult: params.runTurnResult,
+    confirmedTurn: params.confirmedTurn,
+  });
+
+  const stateCompassInvariantError = resolvePostTurnStateCompassInvariant({
+    resolvedPlan: params.resolvedPlan,
+    confirmedTurn: params.confirmedTurn,
+    resolvedCompass,
+  });
+
+  if (stateCompassInvariantError !== null) {
+    return {
+      payload: {
+        ok: false,
+        error: stateCompassInvariantError,
+      },
+      memoryWrite: createDefaultMemoryWriteDebug("not_attempted"),
+      confirmedMemoryCandidates: [],
+      usedHeuristicConfirmedMemoryCandidates:
+        params.usedHeuristicConfirmedMemoryCandidates,
+      learning_save_attempted: null,
+      learning_save_inserted: null,
+      learning_save_reason: null,
+      learning_save_error: null,
+      mem_write_ok: null,
+      mem_write_error: null,
+      audit_ok: null,
+      audit_error: null,
+    };
+  }
+
   const resolvedFinalConfirmedMemories =
     await resolveConfirmedMemoryCandidatesWithTimeout({
       runTurnResult: params.runTurnResult,
@@ -528,38 +561,6 @@ export async function finalizeAuthenticatedPostTurn(
       String(resolvedTitle ?? "").trim() || fallbackThreadTitleForPayload;
   } catch {}
 
-  const resolvedCompass = resolveConfirmedCompassArtifacts({
-    resolvedPlan: params.resolvedPlan,
-    runTurnResult: params.runTurnResult,
-    confirmedTurn: params.confirmedTurn,
-  });
-
-  const stateCompassInvariantError = resolvePostTurnStateCompassInvariant({
-    resolvedPlan: params.resolvedPlan,
-    confirmedTurn: params.confirmedTurn,
-    resolvedCompass,
-  });
-
-  if (stateCompassInvariantError !== null) {
-    return {
-      payload: {
-        ok: false,
-        error: stateCompassInvariantError,
-      },
-      memoryWrite,
-      confirmedMemoryCandidates,
-      usedHeuristicConfirmedMemoryCandidates,
-      learning_save_attempted,
-      learning_save_inserted,
-      learning_save_reason,
-      learning_save_error,
-      mem_write_ok,
-      mem_write_error,
-      audit_ok,
-      audit_error,
-    };
-  }
-
   const confirmedTurnWithCompass = {
     ...params.confirmedTurn,
     compassText: normalizeCompassText(resolvedCompass.compassText) ?? undefined,
@@ -633,8 +634,9 @@ Compass を含む最終 turn artifacts 作成、
 
 /*
 【今回このファイルで修正したこと】
-- resolvedCompass と confirmedTurn.stateChanged の整合を検証する関数を追加しました。
-- stateChanged=false なのに compass が存在する不正を、このファイルで即エラー停止するようにしました。
+- Compass 不正停止を memory / learning / audit / title 解決より前へ移動しました。
+- state_changed と Compass の整合が壊れている turn は、保存系へ進む前に即エラー停止するようにしました。
+- state_changed=false なのに compass が存在する不正を、このファイルで即エラー停止するようにしました。
 - Plus / Pro で stateChanged=true なのに compassText がない不正を、このファイルで即エラー停止するようにしました。
 - state_changed の値自体は再計算せず、confirmedTurn.stateChanged をそのまま唯一の正として維持しました。
 - compassText / compassPrompt は正規化だけに留め、fallback 文字列で補っていません。

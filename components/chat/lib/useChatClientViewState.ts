@@ -5,9 +5,7 @@ import { useEffect, useMemo, useRef } from "react";
 import type { ChatMsg, Thread } from "./chatTypes";
 import type { HopyState } from "./stateBadge";
 import { useRenderMessages } from "./useRenderMessages";
-import {
-  pickLatestAssistantStateMessage,
-} from "./chatMessageState";
+import { pickLatestAssistantStateMessage } from "./chatMessageState";
 import {
   mergeThreadStateFromMessage,
   readActiveThreadStateLevel,
@@ -193,12 +191,7 @@ export function useChatClientViewState({
 
     const msgAny = latestAssistantStateMsg as any;
 
-    return (
-      toCanonicalState(msgAny?.assistant_state) ??
-      toCanonicalState(msgAny?.state) ??
-      toCanonicalState(msgAny?.hopy_confirmed_payload?.state) ??
-      null
-    );
+    return toCanonicalState(msgAny?.hopy_confirmed_payload?.state) ?? null;
   }, [latestAssistantStateMsg]);
 
   const viewActiveThread = useMemo<Thread | null>(() => {
@@ -227,9 +220,9 @@ export function useChatClientViewState({
     if (!displayLoggedIn) return null;
     if (isDraftLikeActiveThread) return null;
 
-    if (latestAssistantCanonicalState) return latestAssistantCanonicalState;
-
-    if (messages.length <= 0) return null;
+    if (messages.length > 0) {
+      return latestAssistantCanonicalState ?? null;
+    }
 
     if (viewActiveThread) {
       const threadState = toCanonicalState(viewActiveThread);
@@ -240,8 +233,8 @@ export function useChatClientViewState({
   }, [
     displayLoggedIn,
     isDraftLikeActiveThread,
-    latestAssistantCanonicalState,
     messages.length,
+    latestAssistantCanonicalState,
     viewActiveThread,
   ]);
 
@@ -372,7 +365,9 @@ messages を useRenderMessages(...) に渡し、
 
 /*
 【今回このファイルで修正したこと】
-1. viewUserState を resolvedViewUserState のみで返すのをやめ、元の userState に含まれる追加情報を残したまま、状態だけを上書きする形へ変更しました。
-2. これにより、状態の唯一の正は resolvedViewUserState 側で維持しつつ、Google アカウント情報や public.profiles.plan 候補を LeftRail 側へ渡せるようにしました。
-3. 状態の再判定、state_changed の再計算、0..4 前提への変換は一切追加していません。
+1. latestAssistantCanonicalState の参照元を hopy_confirmed_payload.state のみに固定しました。
+2. assistant_state / state を優先して読む分離経路をこのファイル内で止めました。
+3. messages が存在する場合の表示用 state は、latestAssistantCanonicalState のみを正として扱うように戻しました。
+4. これにより、本文の HOPY○ と表示用 state が別ソースを読む不整合を、このファイル内で止めました。
 */
+/* /components/chat/lib/useChatClientViewState.ts */

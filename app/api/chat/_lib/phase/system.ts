@@ -250,6 +250,18 @@ function isAckLike(t: string, uiLang: Lang) {
   return list.some((w) => s === w || s === w.replace(/\s/g, ""));
 }
 
+function isPhase1LightAck(params: {
+  uiLang: Lang;
+  phase: 1 | 2 | 3 | 4 | 5;
+  userText: string;
+}) {
+  const { uiLang, phase, userText } = params;
+  if (phase !== 1) return false;
+
+  const compact = String(userText ?? "").trim().replace(/\s/g, "");
+  return isAckLike(compact, uiLang);
+}
+
 function pickOneAngle(params: {
   kind: ConversationKind;
   uiLang: Lang;
@@ -257,12 +269,22 @@ function pickOneAngle(params: {
   userText: string;
   conversationId?: string;
 }): Angle | null {
-  const { kind, uiLang, userText, conversationId } = params;
+  const { kind, uiLang, userText, conversationId, phase } = params;
   const cands = angleCandidates(kind);
   if (!cands.length) return null;
 
   const t = String(userText ?? "").trim();
   const compact = t.replace(/\s/g, "");
+
+  if (
+    isPhase1LightAck({
+      uiLang,
+      phase,
+      userText,
+    })
+  ) {
+    return null;
+  }
 
   const kindAllowsRandom = kind === "emotion" || kind === "casual";
   const allowRandom =
@@ -315,6 +337,16 @@ function formatAngleBlock(params: {
   conversationId?: string;
 }) {
   const { kind, uiLang, phase, userText, conversationId } = params;
+
+  if (
+    isPhase1LightAck({
+      uiLang,
+      phase,
+      userText,
+    })
+  ) {
+    return "";
+  }
 
   const chosen = pickOneAngle({
     kind,
@@ -407,6 +439,16 @@ function formatStabilizeRule(params: {
 
   if (phase > 1) return "";
 
+  if (
+    isPhase1LightAck({
+      uiLang,
+      phase,
+      userText,
+    })
+  ) {
+    return "";
+  }
+
   const kind = pickStabilizeKind({ uiLang, phase, userText, conversationId });
 
   if (uiLang === "en") {
@@ -485,6 +527,14 @@ function phaseGuide(uiLang: Lang, phase: 1 | 2 | 3 | 4 | 5): string {
   return "状態5（内部）: 決定を圧で押さない。明確で落ち着いた支え方にする。説教や大げさな締めはしない。";
 }
 
+function phaseGuideForLightAck(uiLang: Lang): string {
+  if (uiLang === "en") {
+    return "State1 (internal): for brief acknowledgements, keep the reply light. Do not force stabilization, reframing, or forward movement, and do not infer a state shift from the wording alone.";
+  }
+
+  return "状態1（内部）: 短い相づち・お礼では返答を軽く保つ。安定化・言い換え・前進誘導を強制せず、文面だけで状態変化を推測しない。";
+}
+
 export function buildPhaseSystem(params: {
   uiLang: Lang;
   state: ConversationStateLike;
@@ -495,6 +545,11 @@ export function buildPhaseSystem(params: {
   const { phase, prevPhase, changed } = stateCore(state);
 
   const kind: ConversationKind = detectConversationKind(userText, uiLang);
+  const lightAck = isPhase1LightAck({
+    uiLang,
+    phase,
+    userText,
+  });
 
   const stateLine =
     uiLang === "en"
@@ -524,7 +579,7 @@ export function buildPhaseSystem(params: {
 
   const system = [
     stateLine,
-    phaseGuide(uiLang, phase),
+    lightAck ? phaseGuideForLightAck(uiLang) : phaseGuide(uiLang, phase),
     stabilizeRule,
     angleBlock,
   ]
@@ -543,9 +598,11 @@ phase system の内部指示を組み立てるファイル。
 
 /*
 【今回このファイルで修正したこと】
-- stateCore(...) で state.state_changed を phase !== prevPhase から再計算しないように修正しました。
-- state.state_changed が boolean でない場合は throw するようにし、唯一の正が欠けたまま prompt へ流れないようにしました。
-- これにより、この層で changed を勝手に補完・再解釈せず、confirmed payload / conversation state の state_changed だけを使うように戻しました。
+- 状態1の短い相づち・お礼を isPhase1LightAck(...) で明示判定するようにしました。
+- 状態1の短い相づち・お礼では、angle 指示を出さないようにしました。
+- 状態1の短い相づち・お礼では、stabilize 指示を出さないようにしました。
+- 状態1の短い相づち・お礼では、通常の phaseGuide ではなく「軽く返す・文面だけで状態変化を推測しない」専用ガイドを使うようにしました。
+- state_changed の唯一の正そのものはこのファイルで再計算せず、confirmed payload から来た値をそのまま使う構造は維持しています。
 */
 
 /* /app/api/chat/_lib/phase/system.ts */

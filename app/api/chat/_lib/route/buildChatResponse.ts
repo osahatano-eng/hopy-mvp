@@ -487,10 +487,7 @@ function assertCompassEquals(params: {
 
   if (!topLevel || !confirmed) return;
 
-  if (
-    topLevel.text !== confirmed.text ||
-    topLevel.prompt !== confirmed.prompt
-  ) {
+  if (topLevel.text !== confirmed.text || topLevel.prompt !== confirmed.prompt) {
     throw new Error(
       "buildChatResponse: compass must match hopy_confirmed_payload.compass",
     );
@@ -613,11 +610,9 @@ top-level reply / state / compass がある場合のみ一致検証し、
 
 /*
 【今回このファイルで修正したこと】
-- ok:true の成功系で hopy_confirmed_payload を唯一の正として必須のまま維持しました。
-- top-level reply / state / thread を成功系の必須入力から外しました。
-- top-level reply / state / compass は「ある場合だけ一致検証する」形へ変更しました。
-- thread は top-level state を必須にせず、hopy_confirmed_payload.state から最終値を組み立てる形へ変更しました。
-- これにより、下流整形層で top-level 値不足だけを理由に唯一の正まで巻き添えで止める不正経路を止めました。
+- 下流で prev/current から state_changed を再判定していた assertStateTransitionConsistency を削除しました。
+- buildChatResponse は唯一の正を再計算せず、受け取った hopy_confirmed_payload.state.state_changed をそのまま運ぶ役割に戻しました。
+- top-level と confirmed payload の一致検証だけを残し、下流の責務を「運ぶ・整える・一致確認」に限定しました。
 */
 
 /* /app/api/chat/_lib/route/buildChatResponse.ts */

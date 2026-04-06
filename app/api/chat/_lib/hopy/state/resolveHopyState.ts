@@ -177,7 +177,13 @@ export function resolveHopyState(
   const current = currentFromStateRecord ?? currentFromModelState ?? prev;
 
   const explicitChanged = normalizeBoolean(stateRecord?.state_changed);
-  const stateChanged = explicitChanged ?? current !== prev;
+  const transitionChanged = current !== prev;
+  const stateChanged =
+    explicitChanged === null
+      ? transitionChanged
+      : explicitChanged === transitionChanged
+        ? explicitChanged
+        : transitionChanged;
 
   return {
     current_phase: current,
@@ -191,3 +197,21 @@ export function resolveHopyState(
 }
 
 export default resolveHopyState;
+
+/*
+このファイルの正式役割
+HOPY状態の確定用正規化ファイル。
+modelState と prevStateLevel を受け取り、
+current_phase / state_level / prev_phase / prev_state_level / state_changed / label / prev_label を
+唯一の正に整えて返す。
+*/
+
+/*
+【今回このファイルで修正したこと】
+- state_changed を外部入力の false でそのまま固定せず、prev/current の遷移と整合する値だけを採用するよう修正しました。
+- 4→3 なのに state_changed=false のような不正を、この確定層で通さないようにしました。
+- prev/current が変わっている回では必ず state_changed=true になるよう固定しました。
+*/
+
+/* /app/api/chat/_lib/hopy/state/resolveHopyState.ts */
+// このファイルの正式役割: HOPY状態の確定用正規化ファイル
