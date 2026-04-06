@@ -113,6 +113,28 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
+function resolveConfirmedPayloadRecord(
+  result: RunHopyTurnBuiltResult,
+): Record<string, unknown> | null {
+  if (!isRecord(result)) return null;
+
+  const payload = result.hopy_confirmed_payload;
+  return isRecord(payload) ? payload : null;
+}
+
+function resolveResponseState(
+  result: RunHopyTurnBuiltResult,
+): RunHopyTurnState {
+  const confirmedPayload = resolveConfirmedPayloadRecord(result);
+  const confirmedState = confirmedPayload?.state;
+
+  if (isRecord(confirmedState)) {
+    return confirmedState as RunHopyTurnState;
+  }
+
+  return null;
+}
+
 function resolveResponseCompass(
   result: RunHopyTurnBuiltResult,
 ):
@@ -121,17 +143,34 @@ function resolveResponseCompass(
       prompt: string;
     }
   | undefined {
-  if (result.state?.state_changed !== true) {
+  const confirmedPayload = resolveConfirmedPayloadRecord(result);
+  if (!confirmedPayload) {
     return undefined;
   }
 
-  const compassText = result.compassText;
-  if (typeof compassText !== "string") {
+  const confirmedState = confirmedPayload.state;
+  if (!isRecord(confirmedState) || confirmedState.state_changed !== true) {
     return undefined;
   }
 
-  const compassPrompt = result.compassPrompt;
-  if (typeof compassPrompt !== "string") {
+  const confirmedCompass = confirmedPayload.compass;
+  if (!isRecord(confirmedCompass)) {
+    return undefined;
+  }
+
+  const compassText =
+    typeof confirmedCompass.text === "string"
+      ? confirmedCompass.text.trim()
+      : "";
+  if (!compassText) {
+    return undefined;
+  }
+
+  const compassPrompt =
+    typeof confirmedCompass.prompt === "string"
+      ? confirmedCompass.prompt.trim()
+      : "";
+  if (!compassPrompt) {
     return undefined;
   }
 
@@ -299,8 +338,9 @@ export async function runHopyTurn(
 
   const response = buildChatResponse({
     ok: true,
+    hopy_confirmed_payload: result.hopy_confirmed_payload,
     reply: result.reply,
-    state: result.state,
+    state: resolveResponseState(result),
     notification: result.notification,
     thread: result.threadPatch,
     compass: resolveResponseCompass(result),
@@ -326,17 +366,19 @@ context 読み込み → promptInput 作成 → model 呼び出し → builtResu
 builtResult 専用ファイルへ normalize / finalize / validation を委譲 →
 persistence → buildChatResponse(...) による response 化
 までをまとめる。
+
+この層は HOPY回答○ の唯一の正を新規生成しない。
+response 化では、hopy_confirmed_payload.state と
+hopy_confirmed_payload.compass を唯一の正としてそのまま載せる。
 */
 
 /*
 【今回このファイルで修正したこと】
-- persistThreadPatch の呼び出し条件に result.threadPatch の存在確認を追加しました。
-- threadPatch がない場合は persistThreadPatch を呼ばないようにし、RunHopyTurnThreadPatch 必須引数へ undefined が入る build error をこのファイル内で止めました。
-- それ以外の runHopyTurn の実行順序、他 persist、response 組み立ては触っていません。
+- 成功系の buildChatResponse(...) に hopy_confirmed_payload を明示的に渡すように修正しました。
+- response の state は hopy_confirmed_payload.state 優先のまま維持しています。
+- response の compass は hopy_confirmed_payload.compass のみから解決するまま維持しています。
+- state_changed の再計算や fallback 補完は追加していません。
 */
+
+/* /app/api/chat/_lib/route/runHopyTurn.ts */
 // このファイルの正式役割: runHopyTurn の共通実行本体
-
-/*
-【今回このファイルで修正したこと】
-persistThreadPatch 呼び出し前に result.threadPatch の存在確認を追加しました。
-*/

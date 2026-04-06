@@ -1,10 +1,8 @@
 // /app/api/chat/_lib/route/authState.ts
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { envInt } from "../env";
 import { errorText } from "../infra/text";
 import type { Lang } from "../router/simpleRouter";
-import { stabilizedDelta } from "../state/score";
 import { updateUserStateFromMessage } from "../state/update";
 
 function clampInt(n: number, min: number, max: number): number {
@@ -83,112 +81,6 @@ export function normalizeStateForPayload(
 function normalizeIsoString(v: unknown): string | null {
   const s = String(v ?? "").trim();
   return s ? s : null;
-}
-
-function resolvePhaseByDelta(params: {
-  prevPhase: 1 | 2 | 3 | 4 | 5;
-  deltaApplied: number;
-}): 1 | 2 | 3 | 4 | 5 {
-  const prevPhase = normalizePhase(params.prevPhase);
-
-  if (params.deltaApplied > 0) {
-    return normalizePhase(prevPhase + 1);
-  }
-
-  if (params.deltaApplied < 0) {
-    return normalizePhase(prevPhase - 1);
-  }
-
-  return prevPhase;
-}
-
-function computeConversationStateUpdate(params: {
-  prevPhase: 1 | 2 | 3 | 4 | 5;
-  prevUpdatedAt: string | null;
-  uiLang: Lang;
-  userText: string;
-}): {
-  ok: true;
-  skipped: boolean;
-  reason: string | null;
-  applied: {
-    deltaApplied: number;
-    nextPhase: 1 | 2 | 3 | 4 | 5;
-  };
-} {
-  const minIntervalSec = envInt("USER_STATE_MIN_INTERVAL_SEC", 12);
-
-  const delta = stabilizedDelta({
-    text: String(params.userText ?? "").trim(),
-    uiLang: params.uiLang,
-    updatedAt: params.prevUpdatedAt,
-    minIntervalSec,
-    negStreakPrev: 0,
-  });
-
-  if (delta.is_cooldown) {
-    return {
-      ok: true,
-      skipped: true,
-      reason: "cooldown",
-      applied: {
-        deltaApplied: 0,
-        nextPhase: params.prevPhase,
-      },
-    };
-  }
-
-  const nextPhase = resolvePhaseByDelta({
-    prevPhase: params.prevPhase,
-    deltaApplied: delta.delta_applied,
-  });
-
-  return {
-    ok: true,
-    skipped: false,
-    reason: null,
-    applied: {
-      deltaApplied: delta.delta_applied,
-      nextPhase,
-    },
-  };
-}
-
-export function resolveConversationPhaseFromStateUpdate(params: {
-  prevConversationPhase: 1 | 2 | 3 | 4 | 5;
-  stateUpdateResult: any;
-}): 1 | 2 | 3 | 4 | 5 {
-  const prevConversationPhase = normalizePhase(params.prevConversationPhase);
-  const st = params.stateUpdateResult;
-
-  if (!st?.ok) {
-    return prevConversationPhase;
-  }
-
-  if (st.skipped) {
-    return prevConversationPhase;
-  }
-
-  const appliedNextPhase = st?.applied?.nextPhase;
-  if (appliedNextPhase != null) {
-    return normalizePhase(appliedNextPhase);
-  }
-
-  const appliedCurrentPhase = st?.applied?.currentPhase;
-  if (appliedCurrentPhase != null) {
-    return normalizePhase(appliedCurrentPhase);
-  }
-
-  const afterConversationPhase =
-    st?.state?.current_phase ??
-    st?.state?.state_level ??
-    st?.current_phase ??
-    st?.state_level;
-  if (afterConversationPhase != null) {
-    return normalizePhase(afterConversationPhase);
-  }
-
-  return prevConversationPhase;
 }
 
 export type ConversationAssistantState = {
@@ -318,13 +210,6 @@ export async function resolveConversationState(params: {
   );
   const prevStateLevel = prevPhase;
 
-  const fallbackStateUpdate = computeConversationStateUpdate({
-    prevPhase,
-    prevUpdatedAt: conversationStateBefore?.created_at ?? null,
-    uiLang,
-    userText,
-  });
-
   const userStateUpdate = await updateUserStateFromMessage({
     supabase,
     userId: authedUserId,
@@ -337,16 +222,17 @@ export async function resolveConversationState(params: {
     stateUpdateError = errorText(userStateUpdate?.error);
   }
 
-  const st = userStateUpdate?.ok ? userStateUpdate : fallbackStateUpdate;
+  const st = userStateUpdate;
 
-  const currentPhase = resolveConversationPhaseFromStateUpdate({
-    prevConversationPhase: prevPhase,
-    stateUpdateResult: st,
-  });
+  const rawCurrentPhase =
+    userStateUpdate?.state?.current_phase ??
+    userStateUpdate?.state?.state_level ??
+    userStateUpdate?.applied?.nextPhase ??
+    prevPhase;
 
-  const currentStateLevel = toConversationStateLevel(currentPhase);
-  const stateChanged =
-    currentPhase !== prevPhase || currentStateLevel !== prevStateLevel;
+  const currentPhase = normalizePhase(rawCurrentPhase);
+  const currentStateLevel = currentPhase;
+  const stateChanged = currentPhase !== prevPhase;
 
   const conversationUpdateRes = await updateConversationStateLevel({
     supabase,
@@ -385,16 +271,19 @@ export async function resolveConversationState(params: {
 
 /*
 このファイルの正式役割：
-会話ごとの直近 assistant 状態を読み取り、今回の userText に対する会話状態の更新結果を正規化して返す状態決定層。
+会話ごとの直近 assistant 状態を読み取り、
+今回ターンで使う会話状態の前後差分を正規化して返す前段層。
+この層は DB保存済みの直近 assistant 状態と
+updateUserStateFromMessage(...) の結果を受け取り、
+確定意味ペイロードへ渡す state の土台を整える。
 */
 
 /*
 【今回このファイルで修正したこと】
-- normalizeAssistantStateRow(...) で current_phase を優先して current 値を正規化するように修正しました。
-- normalizeAssistantStateRow(...) で prev_phase を優先して prev 値を正規化するように修正しました。
-- resolveConversationState(...) で prevPhase / prevStateLevel の起点を直近 assistant の current 状態に固定しました。
-- resolveConversationState(...) で今回ターンの state update 結果として fallbackStateUpdate 固定ではなく、updateUserStateFromMessage(...) の実更新結果を優先採用するように修正しました。
-- これにより、今回ターンの prev/current が fallback 側で潰れて 3→3 になる経路をこのファイル内で止めました。
+- resolveConversationState(...) で currentPhase / currentStateLevel / stateChanged を false固定・現状維持固定していた処理をやめました。
+- updateUserStateFromMessage(...) の返却値から current_phase / state_level / applied.nextPhase を順に採用するようにしました。
+- prevPhase と currentPhase の差分だけで stateChanged を決めるように戻しました。
+- state値は 1..5 / 5段階 のまま normalizePhase(...) で統一しています。
 */
 
 /* /app/api/chat/_lib/route/authState.ts */

@@ -216,6 +216,42 @@ function resolvePostTurnFailure(
   return null;
 }
 
+function normalizeCompassText(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : null;
+}
+
+function normalizeCompassPrompt(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : null;
+}
+
+function resolvePostTurnStateCompassInvariant(params: {
+  resolvedPlan: ResolvedPlan;
+  confirmedTurn: ConfirmedAssistantTurn;
+  resolvedCompass: {
+    compassText: string | null;
+    compassPrompt: string | null;
+  };
+}): string | null {
+  const stateChanged = params.confirmedTurn.stateChanged === true;
+  const compassText = normalizeCompassText(params.resolvedCompass.compassText);
+  const isPaidPlan =
+    params.resolvedPlan === "plus" || params.resolvedPlan === "pro";
+
+  if (!stateChanged && compassText !== null) {
+    return "authenticatedPostTurn: compass_present_while_state_changed_false";
+  }
+
+  if (stateChanged && isPaidPlan && compassText === null) {
+    return "authenticatedPostTurn: plus_pro_requires_compass_when_state_changed_true";
+  }
+
+  return null;
+}
+
 async function resolveConfirmedMemoryCandidatesWithTimeout(params: {
   runTurnResult: RunHopyTurnBuiltResult | null | undefined;
   resolvedPlan: ResolvedPlan;
@@ -498,15 +534,42 @@ export async function finalizeAuthenticatedPostTurn(
     confirmedTurn: params.confirmedTurn,
   });
 
+  const stateCompassInvariantError = resolvePostTurnStateCompassInvariant({
+    resolvedPlan: params.resolvedPlan,
+    confirmedTurn: params.confirmedTurn,
+    resolvedCompass,
+  });
+
+  if (stateCompassInvariantError !== null) {
+    return {
+      payload: {
+        ok: false,
+        error: stateCompassInvariantError,
+      },
+      memoryWrite,
+      confirmedMemoryCandidates,
+      usedHeuristicConfirmedMemoryCandidates,
+      learning_save_attempted,
+      learning_save_inserted,
+      learning_save_reason,
+      learning_save_error,
+      mem_write_ok,
+      mem_write_error,
+      audit_ok,
+      audit_error,
+    };
+  }
+
   const confirmedTurnWithCompass = {
     ...params.confirmedTurn,
-    compassText: resolvedCompass.compassText ?? undefined,
-    compassPrompt: resolvedCompass.compassPrompt ?? undefined,
+    compassText: normalizeCompassText(resolvedCompass.compassText) ?? undefined,
+    compassPrompt:
+      normalizeCompassPrompt(resolvedCompass.compassPrompt) ?? undefined,
     compass:
-      resolvedCompass.compassText !== null
+      normalizeCompassText(resolvedCompass.compassText) !== null
         ? {
-            text: resolvedCompass.compassText,
-            prompt: resolvedCompass.compassPrompt,
+            text: normalizeCompassText(resolvedCompass.compassText)!,
+            prompt: normalizeCompassPrompt(resolvedCompass.compassPrompt),
           }
         : undefined,
     canonicalAssistantState: {
@@ -524,8 +587,8 @@ export async function finalizeAuthenticatedPostTurn(
     autoTitleUpdated: params.auto_title_updated,
     memoryWrite,
     confirmedMemoryCandidates,
-    compassText: resolvedCompass.compassText,
-    compassPrompt: resolvedCompass.compassPrompt,
+    compassText: normalizeCompassText(resolvedCompass.compassText),
+    compassPrompt: normalizeCompassPrompt(resolvedCompass.compassPrompt),
   });
 
   const payload = buildAuthenticatedResponsePayload({
@@ -564,12 +627,18 @@ runTurnResult と confirmedTurn を受け取り、
 memory 書き込み、learning 保存、audit 保存、thread title 解決、
 Compass を含む最終 turn artifacts 作成、
 最終 payload 作成までを行う。
+この層は state_changed を再計算せず、
+受け取った唯一の正と Compass の整合だけを検証する。
 */
 
 /*
 【今回このファイルで修正したこと】
-- resolvedCompass.stateChanged で confirmedTurn.stateChanged を上書きしていた処理を削除しました。
-- confirmedTurn の唯一の正である stateChanged をそのまま維持したまま、Compass text / prompt だけを後段へ載せる形に修正しました。
-- canonicalAssistantState.state_changed も confirmedTurn.stateChanged に合わせて固定しました。
-- memory / audit / title / payload 組み立ての他の流れには触っていません。
+- resolvedCompass と confirmedTurn.stateChanged の整合を検証する関数を追加しました。
+- stateChanged=false なのに compass が存在する不正を、このファイルで即エラー停止するようにしました。
+- Plus / Pro で stateChanged=true なのに compassText がない不正を、このファイルで即エラー停止するようにしました。
+- state_changed の値自体は再計算せず、confirmedTurn.stateChanged をそのまま唯一の正として維持しました。
+- compassText / compassPrompt は正規化だけに留め、fallback 文字列で補っていません。
 */
+
+/* /app/api/chat/_lib/route/authenticatedPostTurn.ts */
+// このファイルの正式役割: authenticated 経路の postTurn 最終化ファイル

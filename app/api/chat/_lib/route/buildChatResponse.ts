@@ -86,7 +86,7 @@ export type ChatResponseShape =
         prompt: string | null;
       };
       debug?: unknown;
-      hopy_confirmed_payload?: {
+      hopy_confirmed_payload: {
         reply: string;
         state: {
           current_phase: HopyStateLevel;
@@ -259,12 +259,16 @@ function normalizeStrictState(
 
   const currentPhase = normalizeStateLevelStrict(value.current_phase);
   if (currentPhase === null) {
-    throw new Error(`buildChatResponse: ${fieldPrefix}.current_phase is required`);
+    throw new Error(
+      `buildChatResponse: ${fieldPrefix}.current_phase is required`,
+    );
   }
 
   const stateLevel = normalizeStateLevelStrict(value.state_level);
   if (stateLevel === null) {
-    throw new Error(`buildChatResponse: ${fieldPrefix}.state_level is required`);
+    throw new Error(
+      `buildChatResponse: ${fieldPrefix}.state_level is required`,
+    );
   }
 
   const prevPhase = normalizeStateLevelStrict(value.prev_phase);
@@ -281,7 +285,9 @@ function normalizeStrictState(
 
   const stateChanged = normalizeBooleanStrict(value.state_changed);
   if (stateChanged === null) {
-    throw new Error(`buildChatResponse: ${fieldPrefix}.state_changed is required`);
+    throw new Error(
+      `buildChatResponse: ${fieldPrefix}.state_changed is required`,
+    );
   }
 
   const label =
@@ -311,12 +317,16 @@ function normalizeStrictThread(
 
   const currentPhase = normalizeStateLevelStrict(value.current_phase);
   if (currentPhase === null) {
-    throw new Error(`buildChatResponse: ${fieldPrefix}.current_phase is required`);
+    throw new Error(
+      `buildChatResponse: ${fieldPrefix}.current_phase is required`,
+    );
   }
 
   const stateLevel = normalizeStateLevelStrict(value.state_level);
   if (stateLevel === null) {
-    throw new Error(`buildChatResponse: ${fieldPrefix}.state_level is required`);
+    throw new Error(
+      `buildChatResponse: ${fieldPrefix}.state_level is required`,
+    );
   }
 
   const prevPhase = normalizeStateLevelStrict(value.prev_phase);
@@ -333,7 +343,9 @@ function normalizeStrictThread(
 
   const stateChanged = normalizeBooleanStrict(value.state_changed);
   if (stateChanged === null) {
-    throw new Error(`buildChatResponse: ${fieldPrefix}.state_changed is required`);
+    throw new Error(
+      `buildChatResponse: ${fieldPrefix}.state_changed is required`,
+    );
   }
 
   return {
@@ -372,10 +384,12 @@ function normalizeStrictCompass(
   };
 }
 
-function normalizeConfirmedPayload(
+function normalizeConfirmedPayloadRequired(
   value: BuildChatResponseInput["hopy_confirmed_payload"],
-): NormalizedConfirmedPayload | undefined {
-  if (!value) return undefined;
+): NormalizedConfirmedPayload {
+  if (!value) {
+    throw new Error("buildChatResponse: hopy_confirmed_payload is required");
+  }
 
   const normalizedState = normalizeStrictState(
     value.state ?? null,
@@ -399,12 +413,33 @@ function normalizeConfirmedPayload(
   };
 }
 
+function buildThreadFromConfirmedState(params: {
+  thread: BuildChatResponseInput["thread"];
+  confirmed: NormalizedState;
+}) {
+  const { thread, confirmed } = params;
+
+  return {
+    id: normalizeString(thread?.id),
+    title: normalizeString(thread?.title),
+    state_level: confirmed.state_level,
+    current_phase: confirmed.current_phase,
+    state_changed: confirmed.state_changed,
+    prev_phase: confirmed.prev_phase,
+    prev_state_level: confirmed.prev_state_level,
+    updated_at: normalizeIsoDatetime(thread?.updated_at),
+    last_assistant_at: normalizeIsoDatetime(thread?.last_assistant_at),
+  };
+}
+
 function assertStateEquals(params: {
   fieldName: string;
-  topLevel: NormalizedState;
+  topLevel: NormalizedState | null;
   confirmed: NormalizedState;
 }) {
   const { fieldName, topLevel, confirmed } = params;
+
+  if (!topLevel) return;
 
   if (
     topLevel.current_phase !== confirmed.current_phase ||
@@ -420,10 +455,12 @@ function assertStateEquals(params: {
 }
 
 function assertReplyEquals(params: {
-  topLevel: string;
+  topLevel: string | null;
   confirmed: string;
 }) {
   const { topLevel, confirmed } = params;
+  if (topLevel === null) return;
+
   if (topLevel !== confirmed) {
     throw new Error(
       "buildChatResponse: reply must match hopy_confirmed_payload.reply",
@@ -439,6 +476,8 @@ function assertCompassEquals(params: {
 
   const hasTopLevel = !!topLevel;
   const hasConfirmed = !!confirmed;
+
+  if (!hasTopLevel && !hasConfirmed) return;
 
   if (hasTopLevel !== hasConfirmed) {
     throw new Error(
@@ -475,69 +514,57 @@ export function buildChatResponse(
 
   const notificationInput = input.notification ?? null;
 
-  const normalizedConfirmedPayload = normalizeConfirmedPayload(
+  const normalizedConfirmedPayload = normalizeConfirmedPayloadRequired(
     input.hopy_confirmed_payload ?? null,
   );
 
-  const normalizedTopLevelState = normalizeStrictState(
-    input.state ?? null,
-    "state",
-  );
-  const normalizedThread = normalizeStrictThread(input.thread ?? null, "thread");
-  const normalizedTopLevelReply = normalizeRequiredString(input.reply, "reply");
+  const normalizedTopLevelState = input.state
+    ? normalizeStrictState(input.state, "state")
+    : null;
+  const normalizedTopLevelReply =
+    typeof input.reply === "undefined" || input.reply === null
+      ? null
+      : normalizeRequiredString(input.reply, "reply");
   const normalizedTopLevelCompass = normalizeStrictCompass(
     input.compass ?? null,
     "compass",
   );
 
-  if (normalizedConfirmedPayload) {
-    assertReplyEquals({
-      topLevel: normalizedTopLevelReply,
-      confirmed: normalizedConfirmedPayload.reply,
-    });
+  assertReplyEquals({
+    topLevel: normalizedTopLevelReply,
+    confirmed: normalizedConfirmedPayload.reply,
+  });
 
-    assertStateEquals({
-      fieldName: "state",
-      topLevel: normalizedTopLevelState,
-      confirmed: normalizedConfirmedPayload.state,
-    });
+  assertStateEquals({
+    fieldName: "state",
+    topLevel: normalizedTopLevelState,
+    confirmed: normalizedConfirmedPayload.state,
+  });
 
-    assertCompassEquals({
-      topLevel: normalizedTopLevelCompass,
-      confirmed: normalizedConfirmedPayload.compass,
-    });
-  }
-
-  const responseReply = normalizedConfirmedPayload
-    ? normalizedConfirmedPayload.reply
-    : normalizedTopLevelReply;
-
-  const responseState = normalizedConfirmedPayload
-    ? normalizedConfirmedPayload.state
-    : normalizedTopLevelState;
-
-  const responseCompass = normalizedConfirmedPayload
-    ? normalizedConfirmedPayload.compass
-    : normalizedTopLevelCompass;
+  assertCompassEquals({
+    topLevel: normalizedTopLevelCompass,
+    confirmed: normalizedConfirmedPayload.compass,
+  });
 
   return {
     ok: true,
-    reply: responseReply,
-    state: responseState,
+    reply: normalizedConfirmedPayload.reply,
+    state: normalizedConfirmedPayload.state,
     notification: {
       unread_count: normalizeCount(notificationInput?.unread_count, 0),
       updated_at: normalizeIsoDatetime(notificationInput?.updated_at),
     },
-    thread: normalizedThread,
-    ...(responseCompass
+    thread: buildThreadFromConfirmedState({
+      thread: input.thread ?? null,
+      confirmed: normalizedConfirmedPayload.state,
+    }),
+    ...(normalizedConfirmedPayload.compass
       ? {
-          compass: responseCompass,
+          compass: normalizedConfirmedPayload.compass,
         }
       : {}),
     ...(typeof input.debug === "undefined" ? {} : { debug: input.debug }),
-    ...(normalizedConfirmedPayload
-      ? { hopy_confirmed_payload: normalizedConfirmedPayload }
-      : {}),
+    hopy_confirmed_payload: normalizedConfirmedPayload,
   };
 }
 
@@ -579,12 +606,19 @@ Compass 観点でこのファイルの意味
 state_changed を見て Compass を消すこともしない。
 受け取った値を検証し、唯一の正と一致するものだけをそのまま返す。
 失敗系では成功系の必須値検証をしない。
+成功系では hopy_confirmed_payload を唯一の正として必須化し、
+top-level reply / state / compass がある場合のみ一致検証し、
+最終 response は hopy_confirmed_payload 由来の値だけを返す。
 */
 
 /*
 【今回このファイルで修正したこと】
-- ok:false の失敗系レスポンス用に error を正式入力として追加した。
-- ok:false のときは error だけを必須とし、reply / state / thread の成功系必須検証へ入らないように修正した。
-- ok:true の成功系だけが従来どおり厳密検証される順序に固定した。
+- ok:true の成功系で hopy_confirmed_payload を唯一の正として必須のまま維持しました。
+- top-level reply / state / thread を成功系の必須入力から外しました。
+- top-level reply / state / compass は「ある場合だけ一致検証する」形へ変更しました。
+- thread は top-level state を必須にせず、hopy_confirmed_payload.state から最終値を組み立てる形へ変更しました。
+- これにより、下流整形層で top-level 値不足だけを理由に唯一の正まで巻き添えで止める不正経路を止めました。
 */
+
+/* /app/api/chat/_lib/route/buildChatResponse.ts */
 // このファイルの正式役割: 最終 API レスポンスの正規化ファイル

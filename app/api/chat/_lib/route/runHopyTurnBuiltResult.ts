@@ -107,114 +107,78 @@ function normalizeReply(value: unknown): string | null {
   return s.length > 0 ? s : null;
 }
 
-function resolveCompassTextFromSource(
-  source: Record<string, unknown> | null,
-): string | null {
-  if (!source) return null;
+function resolveConfirmedPayloadRecord(
+  value: unknown,
+): Record<string, unknown> | null {
+  if (!isRecord(value)) return null;
 
-  const directCompass = isRecord(source.compass) ? source.compass : null;
-  const directTurnRecord = isRecord(source.turnRecord) ? source.turnRecord : null;
-  const directTurnRecordCompass = isRecord(directTurnRecord?.compass)
-    ? directTurnRecord.compass
-    : null;
-
-  const uiEffects = isRecord(source.ui_effects)
-    ? source.ui_effects
-    : isRecord(source.uiEffects)
-      ? source.uiEffects
-      : null;
-  const uiEffectsCompass = isRecord(uiEffects?.compass) ? uiEffects.compass : null;
-
-  const confirmedPayload = isRecord(source.hopy_confirmed_payload)
-    ? source.hopy_confirmed_payload
-    : isRecord(source.hopyConfirmedPayload)
-      ? source.hopyConfirmedPayload
-      : null;
-  const confirmedCompass = isRecord(confirmedPayload?.compass)
-    ? confirmedPayload.compass
-    : null;
-  const confirmedUiEffects = isRecord(confirmedPayload?.ui_effects)
-    ? confirmedPayload.ui_effects
-    : isRecord(confirmedPayload?.uiEffects)
-      ? confirmedPayload.uiEffects
-      : null;
-  const confirmedUiEffectsCompass = isRecord(confirmedUiEffects?.compass)
-    ? confirmedUiEffects.compass
-    : null;
-
-  return (
-    normalizeCompassString(source.compassText) ??
-    normalizeCompassString(source.compass_text) ??
-    normalizeCompassString(directCompass?.text) ??
-    normalizeCompassString(directTurnRecord?.compassText) ??
-    normalizeCompassString(directTurnRecord?.compass_text) ??
-    normalizeCompassString(directTurnRecordCompass?.text) ??
-    normalizeCompassString(uiEffectsCompass?.text) ??
-    normalizeCompassString(confirmedPayload?.compassText) ??
-    normalizeCompassString(confirmedPayload?.compass_text) ??
-    normalizeCompassString(confirmedCompass?.text) ??
-    normalizeCompassString(confirmedUiEffectsCompass?.text)
-  );
+  const payload = value.hopy_confirmed_payload;
+  return isRecord(payload) ? payload : null;
 }
 
-function resolveCompassPromptFromSource(
+function resolveConfirmedPayloadState(
+  source: Record<string, unknown> | null,
+): RunHopyTurnState {
+  if (!source) return null;
+
+  const confirmedPayload = resolveConfirmedPayloadRecord(source);
+  if (!confirmedPayload) return null;
+
+  return normalizeState(confirmedPayload.state);
+}
+
+function resolveConfirmedPayloadReply(
   source: Record<string, unknown> | null,
 ): string | null {
   if (!source) return null;
 
-  const directCompass = isRecord(source.compass) ? source.compass : null;
-  const directTurnRecord = isRecord(source.turnRecord) ? source.turnRecord : null;
-  const directTurnRecordCompass = isRecord(directTurnRecord?.compass)
-    ? directTurnRecord.compass
-    : null;
+  const confirmedPayload = resolveConfirmedPayloadRecord(source);
+  if (!confirmedPayload) return null;
 
-  const uiEffects = isRecord(source.ui_effects)
-    ? source.ui_effects
-    : isRecord(source.uiEffects)
-      ? source.uiEffects
-      : null;
-  const uiEffectsCompass = isRecord(uiEffects?.compass) ? uiEffects.compass : null;
+  return normalizeReply(confirmedPayload.reply);
+}
 
-  const confirmedPayload = isRecord(source.hopy_confirmed_payload)
-    ? source.hopy_confirmed_payload
-    : isRecord(source.hopyConfirmedPayload)
-      ? source.hopyConfirmedPayload
-      : null;
-  const confirmedCompass = isRecord(confirmedPayload?.compass)
+function resolveCompassTextFromConfirmedPayload(
+  source: Record<string, unknown> | null,
+): string | null {
+  if (!source) return null;
+
+  const confirmedPayload = resolveConfirmedPayloadRecord(source);
+  if (!confirmedPayload) return null;
+
+  const confirmedCompass = isRecord(confirmedPayload.compass)
     ? confirmedPayload.compass
     : null;
-  const confirmedUiEffects = isRecord(confirmedPayload?.ui_effects)
-    ? confirmedPayload.ui_effects
-    : isRecord(confirmedPayload?.uiEffects)
-      ? confirmedPayload.uiEffects
-      : null;
-  const confirmedUiEffectsCompass = isRecord(confirmedUiEffects?.compass)
-    ? confirmedUiEffects.compass
+
+  return normalizeCompassString(confirmedCompass?.text);
+}
+
+function resolveCompassPromptFromConfirmedPayload(
+  source: Record<string, unknown> | null,
+): string | null {
+  if (!source) return null;
+
+  const confirmedPayload = resolveConfirmedPayloadRecord(source);
+  if (!confirmedPayload) return null;
+
+  const confirmedCompass = isRecord(confirmedPayload.compass)
+    ? confirmedPayload.compass
     : null;
 
-  return (
-    normalizeCompassString(source.compassPrompt) ??
-    normalizeCompassString(source.compass_prompt) ??
-    normalizeCompassString(directCompass?.prompt) ??
-    normalizeCompassString(directTurnRecord?.compassPrompt) ??
-    normalizeCompassString(directTurnRecord?.compass_prompt) ??
-    normalizeCompassString(directTurnRecordCompass?.prompt) ??
-    normalizeCompassString(uiEffectsCompass?.prompt) ??
-    normalizeCompassString(confirmedPayload?.compassPrompt) ??
-    normalizeCompassString(confirmedPayload?.compass_prompt) ??
-    normalizeCompassString(confirmedCompass?.prompt) ??
-    normalizeCompassString(confirmedUiEffectsCompass?.prompt)
-  );
+  return normalizeCompassString(confirmedCompass?.prompt);
 }
 
 export function normalizeBuiltResult(
   value: RunHopyTurnBuiltResult | null | undefined,
 ): RunHopyTurnBuiltResult {
   const source = isRecord(value) ? value : {};
+  const confirmedPayloadRecord = resolveConfirmedPayloadRecord(source);
+  const confirmedReply = resolveConfirmedPayloadReply(source);
+  const confirmedState = resolveConfirmedPayloadState(source);
 
   return {
-    reply: source.reply,
-    state: normalizeState(source.state),
+    reply: confirmedReply,
+    state: confirmedState,
     threadPatch: normalizeThreadPatch(source.threadPatch),
     notification: normalizeNotification(source.notification),
     debug: source.debug,
@@ -223,10 +187,10 @@ export function normalizeBuiltResult(
     dashboardSignalRows: source.dashboardSignalRows,
     expressionCandidateRows: source.expressionCandidateRows,
     confirmed_memory_candidates: source.confirmed_memory_candidates,
-    state_changed: source.state_changed,
-    compassPrompt: resolveCompassPromptFromSource(source),
-    compassText: resolveCompassTextFromSource(source),
-    hopy_confirmed_payload: source.hopy_confirmed_payload,
+    state_changed: confirmedState?.state_changed ?? false,
+    compassPrompt: resolveCompassPromptFromConfirmedPayload(source),
+    compassText: resolveCompassTextFromConfirmedPayload(source),
+    hopy_confirmed_payload: confirmedPayloadRecord,
     speed_audit: normalizeSpeedAudit(source.speed_audit),
   };
 }
@@ -275,10 +239,54 @@ function mergeThreadPatchWithState(
   };
 }
 
+function assertStateMatchesConfirmedPayload(params: {
+  state: RunHopyTurnState;
+  confirmedState: RunHopyTurnState;
+}): string | null {
+  const { state, confirmedState } = params;
+
+  if (!state || !confirmedState) {
+    return null;
+  }
+
+  if (
+    state.current_phase !== confirmedState.current_phase ||
+    state.state_level !== confirmedState.state_level ||
+    state.prev_phase !== confirmedState.prev_phase ||
+    state.prev_state_level !== confirmedState.prev_state_level ||
+    state.state_changed !== confirmedState.state_changed
+  ) {
+    return "runHopyTurn: built result state must match hopy_confirmed_payload.state";
+  }
+
+  return null;
+}
+
+function assertReplyMatchesConfirmedPayload(params: {
+  reply: string | null;
+  confirmedReply: string | null;
+}): string | null {
+  const { reply, confirmedReply } = params;
+
+  if (!reply || !confirmedReply) {
+    return null;
+  }
+
+  if (reply !== confirmedReply) {
+    return "runHopyTurn: built result reply must match hopy_confirmed_payload.reply";
+  }
+
+  return null;
+}
+
 export function finalizeBuiltResult(
   result: RunHopyTurnBuiltResult,
 ): RunHopyTurnBuiltResult {
-  const confirmedState = result.state ?? null;
+  const source = isRecord(result) ? result : null;
+  const confirmedPayloadRecord = resolveConfirmedPayloadRecord(source);
+  const confirmedState = resolveConfirmedPayloadState(source);
+  const confirmedReply = resolveConfirmedPayloadReply(source);
+
   const persistedThreadPatch = mergeThreadPatchWithState(
     result.threadPatch ?? null,
     confirmedState,
@@ -286,8 +294,13 @@ export function finalizeBuiltResult(
 
   return {
     ...result,
+    reply: confirmedReply,
     state: confirmedState,
     threadPatch: persistedThreadPatch,
+    hopy_confirmed_payload: confirmedPayloadRecord,
+    state_changed: confirmedState?.state_changed ?? false,
+    compassText: resolveCompassTextFromConfirmedPayload(source),
+    compassPrompt: resolveCompassPromptFromConfirmedPayload(source),
   };
 }
 
@@ -320,6 +333,11 @@ function hasConfirmedPayloadStateShape(payload: unknown): boolean {
   return hasCanonicalStateShape(normalizeState(payload.state));
 }
 
+function hasConfirmedPayloadReplyShape(payload: unknown): boolean {
+  if (!isRecord(payload)) return false;
+  return normalizeReply(payload.reply) !== null;
+}
+
 export function resolveBuiltResultFailure(
   result: RunHopyTurnBuiltResult,
 ): string | null {
@@ -327,6 +345,15 @@ export function resolveBuiltResultFailure(
   const confirmedState = result.state ?? null;
   const hasCompassText = result.compassText !== null;
   const hasCompassPrompt = result.compassPrompt !== null;
+  const confirmedPayload = resolveConfirmedPayloadRecord(
+    isRecord(result) ? result : null,
+  );
+  const confirmedPayloadState = normalizeState(confirmedPayload?.state);
+  const confirmedPayloadReply = normalizeReply(confirmedPayload?.reply);
+
+  if (!hasConfirmedPayloadReplyShape(result.hopy_confirmed_payload)) {
+    return "runHopyTurn: built result hopy_confirmed_payload.reply is required";
+  }
 
   if (!reply) {
     return "runHopyTurn: built result reply is required";
@@ -342,6 +369,22 @@ export function resolveBuiltResultFailure(
 
   if (!confirmedState) {
     return "runHopyTurn: built result state is required";
+  }
+
+  const replyMismatchError = assertReplyMatchesConfirmedPayload({
+    reply,
+    confirmedReply: confirmedPayloadReply,
+  });
+  if (replyMismatchError) {
+    return replyMismatchError;
+  }
+
+  const stateMismatchError = assertStateMatchesConfirmedPayload({
+    state: confirmedState,
+    confirmedState: confirmedPayloadState,
+  });
+  if (stateMismatchError) {
+    return stateMismatchError;
   }
 
   if (hasCompassText !== hasCompassPrompt) {
@@ -384,35 +427,20 @@ buildTurnResult から返された結果を normalizeBuiltResult で正規化し
 finalizeBuiltResult で state と threadPatch の整合を補完し、
 resolveBuiltResultFailure で回答成立条件を検証し、
 buildFailedRunHopyTurnResult で失敗時の標準結果を返す。
-*/
 
-/*
-このファイルの正式役割
-runHopyTurn における builtResult の整形・補完・検証をまとめる責務ファイル。
-buildTurnResult から返された結果を normalizeBuiltResult で正規化し、
-finalizeBuiltResult で state と threadPatch の整合を補完し、
-resolveBuiltResultFailure で回答成立条件を検証し、
-buildFailedRunHopyTurnResult で失敗時の標準結果を返す。
+この層は HOPY回答○ の唯一の正を生成しない。
+hopy_confirmed_payload.state と hopy_confirmed_payload.compass を
+唯一の正として受け取り、そのまま整形・検証だけを行う。
 */
 
 /*
 【今回このファイルで修正したこと】
-- runHopyTurn.ts 内にあった builtResult の normalize / finalize / validation / failed result 生成責務を、この新規ファイルへ切り出しました。
-- Compass 参照元の吸い上げロジックもこの責務へ移し、親ファイルから builtResult 整形本体を外せる受け皿にしました。
-- HOPY唯一の正である state / confirmed payload の意味生成は増やさず、受け取った値の整形・検証だけに限定しています。
-- finalizeBuiltResult() で result.threadPatch ?? null を渡すようにし、undefined のまま mergeThreadPatchWithState() へ入る build error を止めました。
-- resolveBuiltResultFailure() で result.state ?? null を confirmedState に受け直し、undefined のまま hasCanonicalStateShape() へ入る build error を止めました。
-- confirmedState の null 可能性を残したまま state_changed を読まないように、null 明示ガードを追加しました。
-- state_changed=true のときに Compass を無条件必須としていた判定をやめ、Compass が存在する場合だけ text/prompt の片方欠落を失敗扱いにするよう修正しました。
+- normalizeBuiltResult(...) で reply / state / state_changed を hopy_confirmed_payload のみから確定する形に固定しました。
+- source.reply / source.state への fallback を削除しました。
+- finalizeBuiltResult(...) でも最終 reply / state / state_changed を hopy_confirmed_payload 起点に固定しました。
+- resolveBuiltResultFailure(...) に hopy_confirmed_payload.reply 必須検証と reply 一致検証を追加しました。
+- これにより、唯一の正が欠けた builtResult を見かけ上だけ成立させて後段へ流す経路を止めました。
 */
 
-/*
-このファイルの正式役割
-runHopyTurn における builtResult の整形・補完・検証をまとめる責務ファイル。
-*/
-
-/*
-【今回このファイルで修正したこと】
-Freeでも state_changed=true になりうるのに、Compass を無条件必須にしていた失敗判定をやめました。
-Compass がある場合だけ text/prompt の整合を確認する形へ変更しました。
-*/
+/* /app/api/chat/_lib/route/runHopyTurnBuiltResult.ts */
+// このファイルの正式役割: runHopyTurn における builtResult の整形・補完・検証をまとめる責務ファイル
