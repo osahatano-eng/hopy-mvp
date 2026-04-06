@@ -79,13 +79,26 @@ const SYSTEM_CORE_LIKE_RULE =
 const PROJECT_POLICY_LIKE_RULE =
   /差分NG|全文回答|全文貼り付け|フルパス|このチャットを新規チャットに引き継ぎます|現在のフェーズ|やること|何％\/100%中|修正不要/;
 const PREFERENCE_LIKE_RULE = /呼び方|呼称|表記|～で呼ばない|おまえ/;
+const JA_MEMORY_NARRATION_PREFIX_RULE = /^(?:ユーザーは[、,\s]*)+/;
+const EN_MEMORY_NARRATION_PREFIX_RULE =
+  /^(?:(?:the )?user(?: is)?[,:]?\s*)+/i;
 
 export function norm(value: unknown): string {
   return String(value ?? "").replace(/\s+/g, " ").trim();
 }
 
+export function normalizeMemoryContent(value: unknown): string {
+  let text = norm(value);
+  if (!text) return "";
+
+  text = text.replace(JA_MEMORY_NARRATION_PREFIX_RULE, "");
+  text = text.replace(EN_MEMORY_NARRATION_PREFIX_RULE, "");
+
+  return norm(text);
+}
+
 export function clampText(value: unknown, max = 180): string {
-  const text = norm(value);
+  const text = normalizeMemoryContent(value);
   if (!text) return "";
   return text.length > max ? text.slice(0, max) : text;
 }
@@ -135,7 +148,7 @@ export function normalizeStatus(value: unknown): MemoryStatus {
 export function mapRowToSavedMemory(row: RawMemoryRow): SavedMemory | null {
   const id = norm(row.id);
   const userId = norm(row.user_id);
-  const body = norm(row.body ?? row.content);
+  const body = normalizeMemoryContent(row.body ?? row.content);
   const sourceType = normalizeSourceType(row.source_type);
   const memoryType = normalizeMemoryType(row.memory_type);
   const status = normalizeStatus(row.status);
@@ -173,7 +186,7 @@ export function dedupeCandidatesKeepMaxImportance(items: MemoryItem[]) {
   >();
 
   for (const item of items) {
-    const content = norm(item.content ?? item.body);
+    const content = normalizeMemoryContent(item.content ?? item.body);
     if (!content) continue;
 
     const importance = clampImportance(item.importance);
@@ -202,7 +215,7 @@ export function dedupeByMeaning(
   const out: { content: string; importance: number }[] = [];
 
   for (const item of list) {
-    const content = norm(item.content);
+    const content = normalizeMemoryContent(item.content);
     if (!content) continue;
 
     const key = content
@@ -235,7 +248,7 @@ export function dedupePromptRowsKeepMaxImportance(items: PromptMemoryRow[]) {
   const map = new Map<string, PromptMemoryRow>();
 
   for (const item of items) {
-    const content = norm(item.content);
+    const content = normalizeMemoryContent(item.content);
     if (!content) continue;
 
     const prev = map.get(content);
@@ -255,7 +268,7 @@ export function dedupePromptRowsKeepMaxImportance(items: PromptMemoryRow[]) {
 export function buildPromptMemoryRows(rows: RawMemoryRow[]): PromptMemoryRow[] {
   return rows
     .map((row) => {
-      const content = norm(row.body ?? row.content);
+      const content = normalizeMemoryContent(row.body ?? row.content);
       if (!content) return null;
 
       return {
@@ -272,7 +285,7 @@ export function isGenericNoise(
   content: string,
   uiLang: "ja" | "en" = "ja",
 ) {
-  const s = norm(content);
+  const s = normalizeMemoryContent(content);
   if (!s) return true;
 
   if (uiLang === "ja") {
@@ -304,7 +317,7 @@ export function isFormatStyleRule(
   content: string,
   uiLang: "ja" | "en",
 ) {
-  const s = norm(content);
+  const s = normalizeMemoryContent(content);
   if (!s) return true;
 
   if (uiLang === "ja") {
@@ -319,7 +332,7 @@ export function isFormatLockingRule(
   content: string,
   uiLang: "ja" | "en",
 ) {
-  const s = norm(content);
+  const s = normalizeMemoryContent(content);
   if (!s) return false;
 
   if (uiLang === "ja") {
@@ -349,7 +362,7 @@ export function isWorkflowOrDevOpsRule(
   content: string,
   uiLang: "ja" | "en",
 ) {
-  const s = norm(content);
+  const s = normalizeMemoryContent(content);
   if (!s) return true;
 
   if (uiLang === "ja") {
@@ -366,21 +379,21 @@ export function isWorkflowOrDevOpsRule(
 }
 
 export function isSystemCoreLike(content: string) {
-  const s = norm(content);
+  const s = normalizeMemoryContent(content);
   if (!s) return true;
 
   return SYSTEM_CORE_LIKE_RULE.test(s);
 }
 
 export function isProjectPolicyLike(content: string) {
-  const s = norm(content);
+  const s = normalizeMemoryContent(content);
   if (!s) return true;
 
   return PROJECT_POLICY_LIKE_RULE.test(s);
 }
 
 export function isPreferenceLike(content: string) {
-  const s = norm(content);
+  const s = normalizeMemoryContent(content);
   if (!s) return false;
 
   return PREFERENCE_LIKE_RULE.test(s);
@@ -390,7 +403,7 @@ export function isPolluted(
   content: string,
   uiLang: "ja" | "en",
 ) {
-  const s = norm(content);
+  const s = normalizeMemoryContent(content);
   if (!s) return true;
 
   if (isGenericNoise(s, uiLang)) return true;
@@ -461,3 +474,16 @@ export function buildPromptText(params: {
 
   return blocks.filter(Boolean).join("\n\n");
 }
+
+/*
+このファイルの正式役割
+MEMORIES本文の正規化・汚染判定・重複除去・プロンプト用整形を担うフィルタ層。
+*/
+
+/*
+【今回このファイルで修正したこと】
+MEMORY本文先頭の「ユーザーは / The user is」を落とす normalizeMemoryContent を追加し、
+保存表示・重複除去・prompt行生成・汚染判定の入口でこの正規化を通すように修正。
+*/
+
+// /app/api/chat/_lib/db/memoriesFilters.ts
