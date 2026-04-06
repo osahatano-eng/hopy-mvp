@@ -4,9 +4,9 @@ import type { MetadataRoute } from "next";
 export default function manifest(): MetadataRoute.Manifest {
   return {
     id: "/",
-    name: "HOPY AI",
+    name: "HOPY",
     short_name: "HOPY",
-    description: "内なるOSを設計する。",
+    description: "思考に静かに寄り添うAI",
     start_url: "/",
     scope: "/",
     display: "standalone",
