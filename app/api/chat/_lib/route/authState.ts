@@ -226,7 +226,6 @@ export async function resolveConversationState(params: {
 
   const rawCurrentPhase =
     userStateUpdate?.state?.current_phase ??
-    userStateUpdate?.state?.state_level ??
     userStateUpdate?.applied?.nextPhase ??
     prevPhase;
 
@@ -280,10 +279,12 @@ updateUserStateFromMessage(...) の結果を受け取り、
 
 /*
 【今回このファイルで修正したこと】
-- resolveConversationState(...) で currentPhase / currentStateLevel / stateChanged を false固定・現状維持固定していた処理をやめました。
-- updateUserStateFromMessage(...) の返却値から current_phase / state_level / applied.nextPhase を順に採用するようにしました。
-- prevPhase と currentPhase の差分だけで stateChanged を決めるように戻しました。
+- resolveConversationState(...) で UserState 型に存在しない state_level 参照を削除しました。
+- updateUserStateFromMessage(...) の返却値は current_phase を優先し、なければ applied.nextPhase を使う形にそろえました。
 - state値は 1..5 / 5段階 のまま normalizePhase(...) で統一しています。
+- HOPY回答○ の唯一の正そのものはこのファイルで再定義せず、前段の型エラーだけを止めました。
 */
 
-/* /app/api/chat/_lib/route/authState.ts */
+/*
+/app/api/chat/_lib/route/authState.ts
+*/
