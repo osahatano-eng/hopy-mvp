@@ -1,6 +1,6 @@
 // /public/sw.js
 
-const HOPY_SW_VERSION = "hopy-sw-v1";
+const HOPY_SW_VERSION = "hopy-sw-v2";
 const HOPY_CACHE_PREFIXES = ["hopy-", "workbox-", "next-pwa-"];
 const HOPY_CLIENT_MESSAGE = {
   ACTIVATED: "HOPY_SW_ACTIVATED",
@@ -32,10 +32,6 @@ async function notifyAllClients(message) {
   );
 }
 
-self.addEventListener("install", (event) => {
-  event.waitUntil(self.skipWaiting());
-});
-
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     (async () => {
@@ -66,17 +62,22 @@ self.addEventListener("message", (event) => {
   }
 });
 
-// /public/sw.js
-
-/* このファイルの正式役割
+/*
+このファイルの正式役割:
 PWA更新の反映責務を一元管理する唯一の service worker 本体。
 新しい版の受け入れ、古い cache の整理、既存クライアントへの制御引き継ぎだけを担当する。
 */
 
-/*【今回このファイルで修正したこと】
-1. /public/sw.js を新規作成した
-2. install 時に skipWaiting() を使って waiting の滞留を減らした
-3. activate 時に旧 cache を削除し、clients.claim() で既存クライアントへ新版を反映しやすくした
-4. クライアント通知用の postMessage を追加した
-5. 後続の更新通知UIから使える message 受信口を追加した
+/*
+【今回このファイルで修正したこと】
+1. install 時の即時 skipWaiting() を削除した
+2. 更新通知UIが waiting を検知できる運用へ戻した
+3. service worker version を hopy-sw-v2 に更新した
+4. activate 時の旧 cache 削除、clients.claim()、ACTIVATED 通知は維持した
+5. HOPY唯一の正、状態表示、Compass、本文系ロジックには触れていない
+*/
+
+/*
+このファイルのフルパス:
+/public/sw.js
 */
