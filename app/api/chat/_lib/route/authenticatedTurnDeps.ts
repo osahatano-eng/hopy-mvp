@@ -78,6 +78,13 @@ type ConfirmedAssistantTurn = {
   compassPrompt?: string;
 };
 
+export type ConfirmedStateFallback = {
+  currentPhase: Phase5;
+  currentStateLevel: Phase5;
+  prevPhase: Phase5;
+  prevStateLevel: Phase5;
+};
+
 function normalizeOptionalText(value: unknown): string {
   if (typeof value !== "string") return "";
   return value.trim();
@@ -308,6 +315,7 @@ export function createAuthenticatedTurnDeps(params: {
   userText: string;
   resolvedPlan: ResolvedPlan;
   resolvedConversationId: string;
+  confirmedStateFallback: ConfirmedStateFallback;
   promptBundle: PromptBundle;
   ctxRes: { ok: boolean; items: any[] };
   currentPhase: number;
@@ -539,9 +547,9 @@ turnRecord は唯一の正の fallback に使わない。
 */
 /*
 【今回このファイルで修正したこと】
-- resolveConfirmedTurnFromBuiltResult(...) の未使用 fallback 引数を削除しました。
-- createAuthenticatedTurnDeps(...) の params から confirmedStateFallback を削除しました。
-- persistTurn 内の resolveConfirmedTurnFromBuiltResult(...) 呼び出しも、唯一の正だけを渡す形に揃えました。
-- これにより、このファイル内で fallback 経路がまだ残っているように見える状態を解消し、confirmedTurn は hopy_confirmed_payload からのみ復元する形に固定しました。
+- authenticated.ts が import している ConfirmedStateFallback 型を export し直しました。
+- createAuthenticatedTurnDeps(...) の params に confirmedStateFallback を戻し、既存呼び出し側との型整合を回復しました。
+- ただし confirmedTurn の復元は引き続き hopy_confirmed_payload のみを使い、fallback で唯一の正を再生成しないままにしています。
+- これにより build error だけを止め、唯一の正の流れはこのファイル内で増やしていません。
 */
-// このファイルの正式役割: /app/api/chat/_lib/route/authenticatedTurnDeps.ts
+/* /app/api/chat/_lib/route/authenticatedTurnDeps.ts */
