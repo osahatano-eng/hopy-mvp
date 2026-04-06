@@ -578,7 +578,6 @@ export async function handleAuthenticatedChat(
 
   const resolvedConfirmedTurn = resolveConfirmedTurnFromBuiltResult(
     runTurn.result,
-    confirmedStateFallback,
   );
   const confirmedTurn = buildFinalizeConfirmedTurn(resolvedConfirmedTurn);
 
@@ -858,8 +857,10 @@ authenticated 側の中継本体である。
 */
 
 /* 【今回このファイルで修正したこと】
-- buildPromptBundle(...) の戻り値を AuthenticatedTurnDepsPromptBundle へ直接 cast していた箇所を、unknown を経由する境界に変更しました。
-- これにより、TypeScript の「型の重なりが足りないため変換ミスの可能性がある」という build error を、このファイルだけで止める形にしました。
-- 直したのは authenticated.ts 側の promptBundle 型境界だけで、buildPromptBundle(...) の中身、runHopyTurn、authenticatedTurnDeps.ts、Compass、memory、状態 1..5 の実行ロジックには触っていません。
+- resolveConfirmedTurnFromBuiltResult(...) の呼び出しを 2引数 から 1引数 に修正しました。
+- これにより authenticated.ts:581 の「Expected 1 arguments, but got 2.」をこのファイルだけで止めました。
+- confirmedStateFallback の定義自体は残し、他の state 受け渡しや HOPY唯一の正、Compass、postTurn、DB 保存処理には触れていません。
 */
+
+/* /app/api/chat/_lib/route/authenticated.ts */
 // このファイルの正式役割: authenticated ユーザー用のチャット処理本体
