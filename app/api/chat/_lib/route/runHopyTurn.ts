@@ -85,9 +85,28 @@ export type RunHopyTurnOutput = {
   result: RunHopyTurnBuiltResult;
 };
 
-type RunHopyTurnResponseConfirmedPayload = NonNullable<
-  Parameters<typeof buildChatResponse>[0]["hopy_confirmed_payload"]
->;
+type RunHopyTurnResponseConfirmedPayload = {
+  reply?: unknown;
+  state?:
+    | {
+        current_phase?: unknown;
+        state_level?: unknown;
+        prev_phase?: unknown;
+        prev_state_level?: unknown;
+        state_changed?: unknown;
+        label?: unknown;
+        prev_label?: unknown;
+      }
+    | null
+    | undefined;
+  compass?:
+    | {
+        text?: unknown;
+        prompt?: unknown;
+      }
+    | null
+    | undefined;
+};
 
 function ensureDeps(deps: RunHopyTurnDeps): RunHopyTurnDeps {
   if (!deps || typeof deps !== "object") {
@@ -415,9 +434,9 @@ hopy_confirmed_payload.compass を唯一の正としてそのまま載せる。
 
 /*
 【今回このファイルで修正したこと】
-- buildChatResponse(...) が要求する hopy_confirmed_payload 用の型に合わせるため、response 用の resolveResponseConfirmedPayload(...) を追加しました。
-- 成功系の buildChatResponse(...) には result.hopy_confirmed_payload をそのまま渡さず、このファイル内で shape を崩さずに狭めた値だけを渡すようにしました。
-- state_changed の再計算、Compass の fallback 補完、HOPY唯一の正の作り直しはしていません。
+- Parameters<typeof buildChatResponse>[0]["hopy_confirmed_payload"] の型取り出しをやめ、このファイル内でだけ使う response 用 confirmed payload 型を明示定義に置き換えました。
+- これにより buildChatResponse の第1引数が optional でも、このファイル側の型参照が壊れないようにしました。
+- hopy_confirmed_payload の中身の意味、state_changed の唯一の正、Compass の解決条件、response 化の流れには触っていません。
 */
 
 /* /app/api/chat/_lib/route/runHopyTurn.ts */
