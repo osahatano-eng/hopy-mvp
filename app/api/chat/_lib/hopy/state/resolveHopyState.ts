@@ -34,6 +34,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
+function hasDefinedKey(record: Record<string, unknown>, key: string): boolean {
+  return typeof record[key] !== "undefined";
+}
+
 function normalizeNumericState(value: unknown): HopyStateLevel | null {
   if (isFiniteNumber(value)) {
     const rounded = Math.round(value);
@@ -120,33 +124,33 @@ function hasCurrentStateShape(value: unknown): value is Record<string, unknown> 
   if (!isRecord(value)) return false;
 
   return (
-    typeof value.state_level !== "undefined" ||
-    typeof value.current_phase !== "undefined" ||
-    typeof value.phase !== "undefined" ||
-    typeof value.level !== "undefined" ||
-    typeof value.currentStateLevel !== "undefined" ||
-    typeof value.currentPhase !== "undefined" ||
-    typeof value.stateLevel !== "undefined" ||
-    typeof value.after_state_level !== "undefined" ||
-    typeof value.next_state_level !== "undefined" ||
-    typeof value.next_phase !== "undefined"
+    hasDefinedKey(value, "state_level") ||
+    hasDefinedKey(value, "current_phase") ||
+    hasDefinedKey(value, "phase") ||
+    hasDefinedKey(value, "level") ||
+    hasDefinedKey(value, "currentStateLevel") ||
+    hasDefinedKey(value, "currentPhase") ||
+    hasDefinedKey(value, "stateLevel") ||
+    hasDefinedKey(value, "after_state_level") ||
+    hasDefinedKey(value, "next_state_level") ||
+    hasDefinedKey(value, "next_phase")
   );
 }
 
 function hasStateShape(value: unknown): value is Record<string, unknown> {
   if (!isRecord(value)) return false;
+  if (hasCurrentStateShape(value)) return true;
 
   return (
-    hasCurrentStateShape(value) ||
-    typeof value.prev_phase !== "undefined" ||
-    typeof value.prev_state_level !== "undefined" ||
-    typeof value.before_state_level !== "undefined" ||
-    typeof value.previousPhase !== "undefined" ||
-    typeof value.previousStateLevel !== "undefined" ||
-    typeof value.state_changed !== "undefined" ||
-    typeof value.label !== "undefined" ||
-    typeof value.prev_label !== "undefined" ||
-    typeof value.name !== "undefined"
+    hasDefinedKey(value, "prev_phase") ||
+    hasDefinedKey(value, "prev_state_level") ||
+    hasDefinedKey(value, "before_state_level") ||
+    hasDefinedKey(value, "previousPhase") ||
+    hasDefinedKey(value, "previousStateLevel") ||
+    hasDefinedKey(value, "state_changed") ||
+    hasDefinedKey(value, "label") ||
+    hasDefinedKey(value, "prev_label") ||
+    hasDefinedKey(value, "name")
   );
 }
 
@@ -235,10 +239,9 @@ current_phase / state_level / prev_phase / prev_state_level / state_changed / la
 
 /*
 【今回このファイルで修正したこと】
-- normalizeBoolean(...) で 1 / 0 / "1" / "0" も true / false として読めるように修正しました。
-- explicit な state_changed が来ている場合は、それを唯一の正としてそのまま採用するように修正しました。
-- current !== prev の再計算結果で explicit な state_changed を上書きする処理を止めました。
-- current / prev の正規化ロジックや label の生成責務はこのファイル内だけに維持し、他ファイルには触れていません。
+- hasDefinedKey(...) を追加し、shape 判定でのプロパティ確認を record[key] ベースへ統一しました。
+- hasStateShape(...) 内の hasCurrentStateShape(value) || value.prev_phase ... という並びをやめ、TypeScript の誤絞り込みで never になる build エラーを止めました。
+- state_changed の唯一の正をそのまま返す既存責務は維持し、state 生成ロジック自体には広げていません。
 */
 
 /* /app/api/chat/_lib/hopy/state/resolveHopyState.ts */
