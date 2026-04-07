@@ -23,6 +23,20 @@ export type OpenAIChatMessage = {
 
 type PhaseValue = 1 | 2 | 3 | 4 | 5;
 
+const ALLOWED_TOP_LEVEL_KEYS = new Set([
+  "hopy_confirmed_payload",
+  "confirmed_memory_candidates",
+]);
+
+const FORBIDDEN_TOP_LEVEL_KEYS = [
+  "reply",
+  "state",
+  "assistant_state",
+  "compassText",
+  "compassPrompt",
+  "compass",
+] as const;
+
 function normalizeResolvedPlan(value: ResolvedPlanLike): string {
   return String(value ?? "").trim().toLowerCase();
 }
@@ -35,25 +49,32 @@ function buildStateStructureSystem(args: {
       "最重要出力ルール:",
       "返答は JSON object 1個だけで返すこと。",
       "markdown・コードブロック・説明文は禁止。",
-      "トップレベルキーとして reply / state / compassText / compassPrompt を必ず返すこと。",
-      "state は必須。",
-      "state を省略してはいけない。",
-      "state を null にしてはいけない。",
-      "state_changed は boolean 必須。",
-      "current_phase / state_level / prev_phase / prev_state_level は 1|2|3|4|5 の整数必須。",
+      'トップレベルキーは "hopy_confirmed_payload" / "confirmed_memory_candidates" のみとすること。',
+      "top-level の reply / state / assistant_state / compassText / compassPrompt / compass は返してはならない。",
+      '"hopy_confirmed_payload" は必須。',
+      '"hopy_confirmed_payload.reply" は 1文字以上必須。',
+      '"hopy_confirmed_payload.state" は必須。',
+      "hopy_confirmed_payload.state.current_phase / state_level / prev_phase / prev_state_level は 1|2|3|4|5 の整数必須。",
       "0..4 は禁止。",
+      "hopy_confirmed_payload.state.state_changed は boolean 必須。",
+      "state_changed は shape の飾りではない。",
+      "state_changed は、その回に HOPY が確定した状態変化の正をそのまま返すこと。",
+      "state_changed を false に固定したり、無難だから false にしたりしてはならない。",
+      "下の数値と boolean は shape の例であり、そのまま固定コピーしてはならない。",
+      '"confirmed_memory_candidates" は必須で、配列にすること。',
       "正式shape:",
       "{",
-      '  "reply": "HOPYの本文",',
-      '  "state": {',
-      '    "current_phase": 1,',
-      '    "state_level": 1,',
-      '    "prev_phase": 1,',
-      '    "prev_state_level": 1,',
-      '    "state_changed": false',
+      '  "hopy_confirmed_payload": {',
+      '    "reply": "HOPYの本文",',
+      '    "state": {',
+      '      "current_phase": 1,',
+      '      "state_level": 1,',
+      '      "prev_phase": 1,',
+      '      "prev_state_level": 1,',
+      '      "state_changed": false',
+      "    }",
       "  },",
-      '  "compassText": "",',
-      '  "compassPrompt": ""',
+      '  "confirmed_memory_candidates": []',
       "}",
     ].join("\n");
   }
@@ -62,26 +83,63 @@ function buildStateStructureSystem(args: {
     "Most important output rule:",
     "Return exactly one JSON object.",
     "Do not output markdown, code fences, or explanations.",
-    "Always return these top-level keys: reply, state, compassText, compassPrompt.",
-    "state is mandatory.",
-    "Do not omit state.",
-    "Do not return state as null.",
-    "state_changed must be a boolean.",
-    "current_phase, state_level, prev_phase, prev_state_level must be integers in 1|2|3|4|5.",
+    'The top-level keys must be only "hopy_confirmed_payload" and "confirmed_memory_candidates".',
+    "Never return top-level reply, state, assistant_state, compassText, compassPrompt, or compass.",
+    '"hopy_confirmed_payload" is required.',
+    '"hopy_confirmed_payload.reply" must be a non-empty string.',
+    '"hopy_confirmed_payload.state" is required.',
+    "hopy_confirmed_payload.state.current_phase, state_level, prev_phase, and prev_state_level must be integers in 1|2|3|4|5.",
     "Never use 0..4.",
+    "hopy_confirmed_payload.state.state_changed must be a boolean.",
+    "state_changed is not decorative shape data.",
+    "state_changed must reflect HOPY's confirmed transition truth for this turn.",
+    "Do not default state_changed to false just because it looks safer.",
+    "The numbers and boolean shown below are shape examples only, and must not be copied blindly.",
+    '"confirmed_memory_candidates" is required and must be an array.',
     "Official shape:",
     "{",
-    '  "reply": "main reply",',
-    '  "state": {',
-    '    "current_phase": 1,',
-    '    "state_level": 1,',
-    '    "prev_phase": 1,',
-    '    "prev_state_level": 1,',
-    '    "state_changed": false',
+    '  "hopy_confirmed_payload": {',
+    '    "reply": "main reply",',
+    '    "state": {',
+    '      "current_phase": 1,',
+    '      "state_level": 1,',
+    '      "prev_phase": 1,',
+    '      "prev_state_level": 1,',
+    '      "state_changed": false',
+    "    }",
     "  },",
-    '  "compassText": "",',
-    '  "compassPrompt": ""',
+    '  "confirmed_memory_candidates": []',
     "}",
+  ].join("\n");
+}
+
+function buildStateMeaningSystem(args: {
+  uiLang: Lang;
+}): string {
+  if (args.uiLang === "ja") {
+    return [
+      "状態確定ルール:",
+      "hopy_confirmed_payload.state は、この回のユーザー入力と、この回に自分が確定した最終返答の意味から決めること。",
+      "prev_phase / prev_state_level は入力前の参考状態である。",
+      "current_phase / state_level は今回ターン後の確定状態である。",
+      "入力前状態をそのまま current に持ち込んではならない。",
+      "current と prev の意味が異なるなら state_changed=true にすること。",
+      "current と prev の意味が同じときだけ state_changed=false にしてよい。",
+      "『整理できた』『やることが見えてきた』『次の一歩が見えた』『方向が定まった』など前進意味なのに、prev=1 / current=1 / state_changed=false の固定コピーで逃げてはならない。",
+      "下流は再判定しないため、このターンで自分が確定した真値をそのまま返すこと。",
+    ].join("\n");
+  }
+
+  return [
+    "State decision rule:",
+    "Decide hopy_confirmed_payload.state from the meaning of this turn's user input and this turn's final reply that you have confirmed.",
+    "prev_phase and prev_state_level are the reference state before this turn.",
+    "current_phase and state_level are the confirmed state after this turn.",
+    "Do not carry the pre-turn state into current unchanged by default.",
+    "If current and prev differ in meaning, set state_changed=true.",
+    "Set state_changed=false only when current and prev truly mean the same state.",
+    'Do not escape with a copied prev=1 / current=1 / state_changed=false pattern when the reply clearly means progress such as "things became clearer", "the next step became visible", or "direction was found".',
+    "Downstream will not re-judge this, so return the truth you confirmed in this turn.",
   ].join("\n");
 }
 
@@ -95,44 +153,46 @@ function buildCompassStructureSystem(args: {
     if (args.uiLang === "ja") {
       return [
         "Compassルール:",
-        "Free では Compass を出さないこと。",
-        'compassText は必ず "" にすること。',
-        'compassPrompt も必ず "" にすること。',
-        "reply と state は必ず返すこと。",
+        "Free では Compass を出してはならない。",
+        "state_changed=true でも hopy_confirmed_payload.compass を付けてはならない。",
+        "Compass をトップレベルへ置いてはならない。",
+        "reply と state は必ず hopy_confirmed_payload 内に返すこと。",
       ].join("\n");
     }
 
     return [
       "Compass rule:",
       "Do not output Compass on Free.",
-      'compassText must always be "".',
-      'compassPrompt must always be "".',
-      "Always return reply and state.",
+      'Even when state_changed=true, do not include "hopy_confirmed_payload.compass".',
+      "Never place Compass at the top level.",
+      'Always return reply and state inside "hopy_confirmed_payload".',
     ].join("\n");
   }
 
   if (args.uiLang === "ja") {
     return [
       "Compassルール:",
-      'state_changed=false のときは compassText と compassPrompt を必ず "" にすること。',
-      "state_changed=true のときは compassText と compassPrompt を必ず非空で返すこと。",
-      "compassText は短くてよい。",
-      "compassPrompt も短くてよい。",
-      "ただし HOPY回答○ の唯一の正を壊してはならない。",
-      "state_changed=true なら Compass 欠落は不正であり、空文字でごまかしてはならない。",
-      "reply と state を省略してはならない。",
+      "Plus / Pro では HOPY回答○ と Compass を分離してはならない。",
+      "hopy_confirmed_payload.state.state_changed=false のときは hopy_confirmed_payload.compass を付けてはならない。",
+      "hopy_confirmed_payload.state.state_changed=true のときは hopy_confirmed_payload.compass を必ず付けること。",
+      "その場合、hopy_confirmed_payload.compass.text は必ず非空で返すこと。",
+      "その場合、hopy_confirmed_payload.compass.prompt も必ず非空で返すこと。",
+      "Compass をトップレベルへ置いてはならない。",
+      "本文から Compass を推測したり、fallback 文字列でごまかしたりしてはならない。",
+      'reply と state を "hopy_confirmed_payload" の外へ出してはならない。',
     ].join("\n");
   }
 
   return [
     "Compass rule:",
-    'When state_changed=false, compassText and compassPrompt must both be "".',
-    "When state_changed=true, compassText and compassPrompt must both be non-empty.",
-    "compassText may be short.",
-    "compassPrompt may be short.",
-    "Do not break the single source of truth for the HOPY reply badge.",
-    "When state_changed=true, missing Compass is invalid and must not be faked with empty strings.",
-    "Never omit reply or state.",
+    "On Plus / Pro, never separate the HOPY reply badge truth and Compass truth.",
+    'When "hopy_confirmed_payload.state.state_changed" is false, omit "hopy_confirmed_payload.compass" entirely.',
+    'When "hopy_confirmed_payload.state.state_changed" is true, you must include "hopy_confirmed_payload.compass".',
+    '"hopy_confirmed_payload.compass.text" must be non-empty in that case.',
+    '"hopy_confirmed_payload.compass.prompt" must also be non-empty in that case.',
+    "Never place Compass at the top level.",
+    "Do not infer Compass from reply wording, and do not fake it with fallback text.",
+    'Never place reply or state outside "hopy_confirmed_payload".',
   ].join("\n");
 }
 
@@ -145,10 +205,12 @@ function buildEmptyJsonRetrySystem(args: {
       "直前の出力は空でした。",
       "今回は空文字を返してはいけません。",
       "必ず JSON object 1個だけを非空で返してください。",
-      "最小でも reply / state / compassText / compassPrompt をすべて含めてください。",
-      "reply は 1文字以上必須です。",
-      "state は必須です。",
-      "state を null にしてはいけません。",
+      '最小でも "hopy_confirmed_payload" / "confirmed_memory_candidates" を含めてください。',
+      '"hopy_confirmed_payload.reply" は 1文字以上必須です。',
+      '"hopy_confirmed_payload.state" は必須です。',
+      '"confirmed_memory_candidates" は空配列でもよいので必ず返してください。',
+      "top-level の reply / state / compassText / compassPrompt は禁止です。",
+      "state_changed を false に固定して逃げてはいけません。",
     ].join("\n");
   }
 
@@ -157,10 +219,12 @@ function buildEmptyJsonRetrySystem(args: {
     "The previous output was empty.",
     "Do not return an empty string this time.",
     "Return exactly one non-empty JSON object.",
-    "At minimum include reply, state, compassText, and compassPrompt.",
-    "reply must contain at least 1 character.",
-    "state is required.",
-    "Do not return state as null.",
+    'At minimum include "hopy_confirmed_payload" and "confirmed_memory_candidates".',
+    '"hopy_confirmed_payload.reply" must contain at least 1 character.',
+    '"hopy_confirmed_payload.state" is required.',
+    '"confirmed_memory_candidates" may be empty but must be present.',
+    "Top-level reply, state, compassText, and compassPrompt are forbidden.",
+    "Do not escape by defaulting state_changed to false.",
   ].join("\n");
 }
 
@@ -171,12 +235,16 @@ function buildContractRetrySystem(args: {
     return [
       "再出力指示:",
       "直前の JSON は HOPY の正式契約に違反していました。",
-      "今回は正式shapeを厳守してください。",
-      "state.current_phase / state.state_level / state.prev_phase / state.prev_state_level は 1|2|3|4|5 の整数必須です。",
-      "state.state_changed は boolean 必須です。",
-      "Free では compassText / compassPrompt は必ず空文字です。",
-      "Plus / Pro では state_changed=true の回に compassText を必ず非空で返してください。",
-      "空文字や省略でごまかしてはいけません。",
+      "今回は hopy_confirmed_payload 正式shape を厳守してください。",
+      "トップレベルキーは hopy_confirmed_payload / confirmed_memory_candidates のみです。",
+      "top-level の reply / state / assistant_state / compassText / compassPrompt / compass は禁止です。",
+      "hopy_confirmed_payload.state.current_phase / state_level / prev_phase / prev_state_level は 1|2|3|4|5 の整数必須です。",
+      "hopy_confirmed_payload.state.state_changed は boolean 必須です。",
+      "state_changed を false に固定してはなりません。",
+      "Free では hopy_confirmed_payload.compass を付けてはなりません。",
+      "Plus / Pro では state_changed=true の回に hopy_confirmed_payload.compass.text を必ず非空で返してください。",
+      "Plus / Pro では state_changed=true の回に hopy_confirmed_payload.compass.prompt も必ず非空で返してください。",
+      "空文字や省略や fallback でごまかしてはいけません。",
       "必ず JSON object 1個だけを返してください。",
     ].join("\n");
   }
@@ -184,12 +252,16 @@ function buildContractRetrySystem(args: {
   return [
     "Retry instruction:",
     "The previous JSON violated the HOPY contract.",
-    "Return the official shape exactly this time.",
-    "state.current_phase, state.state_level, state.prev_phase, and state.prev_state_level must be integers in 1|2|3|4|5.",
-    "state.state_changed must be a boolean.",
-    "On Free, compassText and compassPrompt must both be empty strings.",
-    "On Plus or Pro, when state_changed=true, compassText must be non-empty.",
-    "Do not fake compliance with empty strings or omissions.",
+    "Return the official hopy_confirmed_payload shape exactly this time.",
+    'The top-level keys must be only "hopy_confirmed_payload" and "confirmed_memory_candidates".',
+    "Top-level reply, state, assistant_state, compassText, compassPrompt, and compass are forbidden.",
+    "hopy_confirmed_payload.state.current_phase, state_level, prev_phase, and prev_state_level must be integers in 1|2|3|4|5.",
+    "hopy_confirmed_payload.state.state_changed must be a boolean.",
+    "Do not hard-code state_changed to false.",
+    'On Free, do not return "hopy_confirmed_payload.compass".',
+    'On Plus / Pro, when state_changed=true, "hopy_confirmed_payload.compass.text" must be non-empty.',
+    'On Plus / Pro, when state_changed=true, "hopy_confirmed_payload.compass.prompt" must also be non-empty.',
+    "Do not fake compliance with empty strings, omissions, or fallback text.",
     "Return exactly one JSON object.",
   ].join("\n");
 }
@@ -355,7 +427,10 @@ function parseJsonObjectContent(content: string): Record<string, unknown> {
     }
     return parsed;
   } catch (error) {
-    if (error instanceof Error && error.message.includes("invalid_json_object_content")) {
+    if (
+      error instanceof Error &&
+      error.message.includes("invalid_json_object_content")
+    ) {
       throw error;
     }
     throw new Error("invalid_json_object_content | parse_failed");
@@ -377,30 +452,92 @@ function readRequiredPhaseValue(
 ): PhaseValue {
   const value = state[key];
   if (!isPhaseValue(value)) {
-    throw new Error(`invalid_hopy_json_contract | ${key}_must_be_1_to_5_integer`);
+    throw new Error(
+      `invalid_hopy_json_contract | ${key}_must_be_1_to_5_integer`,
+    );
   }
   return value;
 }
 
-function readRequiredStateChanged(
-  state: Record<string, unknown>,
-): boolean {
+function readRequiredStateChanged(state: Record<string, unknown>): boolean {
   const value = state["state_changed"];
   if (typeof value !== "boolean") {
-    throw new Error("invalid_hopy_json_contract | state_changed_must_be_boolean");
+    throw new Error(
+      "invalid_hopy_json_contract | state_changed_must_be_boolean",
+    );
   }
   return value;
 }
 
 function readStringField(
   body: Record<string, unknown>,
-  key: "reply" | "compassText" | "compassPrompt",
+  key: string,
 ): string {
   const value = body[key];
   if (typeof value !== "string") {
     return "";
   }
   return value.trim();
+}
+
+function readRequiredObjectField(
+  body: Record<string, unknown>,
+  key: string,
+): Record<string, unknown> {
+  const value = body[key];
+  if (!isRecord(value)) {
+    throw new Error(`invalid_hopy_json_contract | ${key}_missing_or_invalid`);
+  }
+  return value;
+}
+
+function readOptionalObjectField(
+  body: Record<string, unknown>,
+  key: string,
+): Record<string, unknown> | null {
+  const value = body[key];
+  if (value == null) return null;
+  if (!isRecord(value)) {
+    throw new Error(`invalid_hopy_json_contract | ${key}_must_be_object`);
+  }
+  return value;
+}
+
+function ensureConfirmedMemoryCandidates(
+  body: Record<string, unknown>,
+): void {
+  const value = body["confirmed_memory_candidates"];
+  if (!Array.isArray(value)) {
+    throw new Error(
+      "invalid_hopy_json_contract | confirmed_memory_candidates_missing_or_invalid",
+    );
+  }
+}
+
+function ensureNoForbiddenTopLevelKeys(
+  body: Record<string, unknown>,
+): void {
+  for (const key of FORBIDDEN_TOP_LEVEL_KEYS) {
+    if (key in body) {
+      throw new Error(
+        `invalid_hopy_json_contract | forbidden_top_level_key_${key}`,
+      );
+    }
+  }
+}
+
+function ensureOnlyAllowedTopLevelKeys(
+  body: Record<string, unknown>,
+): void {
+  const unexpectedKeys = Object.keys(body).filter(
+    (key) => !ALLOWED_TOP_LEVEL_KEYS.has(key),
+  );
+
+  if (unexpectedKeys.length > 0) {
+    throw new Error(
+      `invalid_hopy_json_contract | unexpected_top_level_keys_${unexpectedKeys.join("_")}`,
+    );
+  }
 }
 
 function detectFreePlanFromMessages(messages: OpenAIChatMessage[]): boolean {
@@ -411,7 +548,13 @@ function detectFreePlanFromMessages(messages: OpenAIChatMessage[]): boolean {
 
   return (
     joined.includes("do not output compass on free.") ||
-    joined.includes("free では compass を出さないこと。")
+    joined.includes("free では compass を出してはならない。") ||
+    joined.includes(
+      'even when state_changed=true, do not include "hopy_confirmed_payload.compass".',
+    ) ||
+    joined.includes(
+      "state_changed=true でも hopy_confirmed_payload.compass を付けてはならない。",
+    )
   );
 }
 
@@ -422,15 +565,23 @@ function ensureJsonCompletionMatchesHopyContract(args: {
   const content = readCompletionContent(args.completion);
   const body = parseJsonObjectContent(content);
 
-  const reply = readStringField(body, "reply");
+  ensureNoForbiddenTopLevelKeys(body);
+  ensureOnlyAllowedTopLevelKeys(body);
+  ensureConfirmedMemoryCandidates(body);
+
+  const confirmedPayload = readRequiredObjectField(
+    body,
+    "hopy_confirmed_payload",
+  );
+
+  const reply = readStringField(confirmedPayload, "reply");
   if (!reply) {
-    throw new Error("invalid_hopy_json_contract | reply_missing_or_empty");
+    throw new Error(
+      "invalid_hopy_json_contract | hopy_confirmed_payload_reply_missing_or_empty",
+    );
   }
 
-  const state = body["state"];
-  if (!isRecord(state)) {
-    throw new Error("invalid_hopy_json_contract | state_missing_or_invalid");
-  }
+  const state = readRequiredObjectField(confirmedPayload, "state");
 
   readRequiredPhaseValue(state, "current_phase");
   readRequiredPhaseValue(state, "state_level");
@@ -438,24 +589,44 @@ function ensureJsonCompletionMatchesHopyContract(args: {
   readRequiredPhaseValue(state, "prev_state_level");
   const stateChanged = readRequiredStateChanged(state);
 
-  const compassText = readStringField(body, "compassText");
-  const compassPrompt = readStringField(body, "compassPrompt");
-
+  const compass = readOptionalObjectField(confirmedPayload, "compass");
   const isFreePlan = detectFreePlanFromMessages(args.messages);
 
   if (isFreePlan) {
-    if (compassText !== "") {
-      throw new Error("invalid_hopy_json_contract | free_must_not_return_compass_text");
-    }
-    if (compassPrompt !== "") {
-      throw new Error("invalid_hopy_json_contract | free_must_not_return_compass_prompt");
+    if (compass) {
+      throw new Error(
+        "invalid_hopy_json_contract | free_must_not_return_compass",
+      );
     }
     return args.completion;
   }
 
-  if (stateChanged && !compassText) {
+  if (!stateChanged) {
+    if (compass) {
+      throw new Error(
+        "invalid_hopy_json_contract | compass_must_be_omitted_when_state_not_changed",
+      );
+    }
+    return args.completion;
+  }
+
+  if (!compass) {
+    throw new Error(
+      "invalid_hopy_json_contract | plus_or_pro_requires_compass_when_state_changed",
+    );
+  }
+
+  const compassText = readStringField(compass, "text");
+  if (!compassText) {
     throw new Error(
       "invalid_hopy_json_contract | plus_or_pro_requires_compass_text_when_state_changed",
+    );
+  }
+
+  const compassPrompt = readStringField(compass, "prompt");
+  if (!compassPrompt) {
+    throw new Error(
+      "invalid_hopy_json_contract | plus_or_pro_requires_compass_prompt_when_state_changed",
     );
   }
 
@@ -494,6 +665,10 @@ export function buildOpenAIMessages(args: {
     uiLang: args.replyLang,
   });
 
+  const stateMeaningSystem = buildStateMeaningSystem({
+    uiLang: args.replyLang,
+  });
+
   const compassStructureSystem = buildCompassStructureSystem({
     uiLang: args.replyLang,
     resolvedPlan: args.resolvedPlan,
@@ -514,6 +689,9 @@ export function buildOpenAIMessages(args: {
     },
     ...(stateStructureSystem
       ? [{ role: "system" as const, content: stateStructureSystem }]
+      : []),
+    ...(stateMeaningSystem
+      ? [{ role: "system" as const, content: stateMeaningSystem }]
       : []),
     ...(compassStructureSystem
       ? [{ role: "system" as const, content: compassStructureSystem }]
@@ -596,6 +774,12 @@ export async function createJsonForcedCompletion(params: {
               uiLang: params.replyLang,
             }),
           },
+          {
+            role: "system",
+            content: buildStateMeaningSystem({
+              uiLang: params.replyLang,
+            }),
+          },
         ];
 
         return runJsonForcedCompletion({
@@ -634,17 +818,18 @@ export async function createPlainCompletion(params: {
 このファイルの正式役割:
 OpenAI へ渡す messages の組み立てと、
 OpenAI completion 実行時の timeout / 一時失敗制御を担うファイル。
-Free / Plus / Pro ごとの Compass 出力ルールを system 指示へ載せ、
+HOPY唯一の正に従う confirmed payload の shape を OpenAI 実行層でも強制し、
 promptBundle と history から最終 messages を構成し、
 completion 実行を安定して OpenAI 呼び出し層へ渡す責務を持つ。
 */
 
 /*
 【今回このファイルで修正したこと】
-- JSON completion 受領直後に、state の正式shape（1..5 / state_changed boolean）を検証するよう修正しました。
-- Free / Plus / Pro の Compass 契約をこのファイルで検証し、Free で Compass 混入、Plus / Pro で state_changed=true なのに compassText 欠落、を不正として止めるよう修正しました。
-- invalid_hopy_json_contract / invalid_json_object_content を retry 対象に追加し、再出力指示で正式契約を再要求するよう修正しました。
-- それ以外の timeout、single retry、messages 組み立て責務、plain completion の流れは触っていません。
+- buildStateMeaningSystem(...) を追加し、今回ターンのユーザー入力と今回ターンの最終返答の意味から current / prev / state_changed を確定する明示指示を OpenAI 実行層で強制するようにしました。
+- buildOpenAIMessages(...) に stateMeaningSystem を追加し、通常実行時の messages にも state 意味確定ルールを載せるようにしました。
+- createJsonForcedCompletion(...) の retryMessages 最後に stateMeaningSystem を追加し、retry 時に shape 契約だけが強く残って state 意味指示が薄まる状態を止めました。
+- 既存の timeout、single retry、plain completion、contract 検証ロジックそのものには触っていません。
 */
 
-// このファイルの正式役割: OpenAI へ渡す messages の組み立てと completion 実行制御ファイル
+/* /app/api/chat/_lib/route/openaiExecution.ts */
+// このファイルの正式役割: OpenAI 実行層で confirmed payload の契約を強制するファイル

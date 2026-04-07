@@ -42,10 +42,17 @@ function normalizeCompassString(value: unknown): string | null {
 function normalizeBooleanOrNull(value: unknown): boolean | null {
   if (typeof value === "boolean") return value;
 
+  if (typeof value === "number") {
+    if (value === 1) return true;
+    if (value === 0) return false;
+  }
+
   if (typeof value === "string") {
     const s = value.trim().toLowerCase();
     if (s === "true") return true;
     if (s === "false") return false;
+    if (s === "1") return true;
+    if (s === "0") return false;
   }
 
   return null;
@@ -230,10 +237,7 @@ msg / divider / compass の表示用データを組み立てる。
 - 互換のため hopy_confirmed_payload.uiEffects.compass と hopy_confirmed_payload.compass も順番に読めるようにしました。
 - state_changed の唯一の正は hopy_confirmed_payload.state.state_changed のまま維持しました。
 - Compass 文言の生成や再判定は追加していません。
+- normalizeBooleanOrNull で 1 / 0 / "1" / "0" も true / false として通すようにしました。
 */
 
-/*
-このファイルの正式役割:
-チャット表示用の ViewItem 生成ファイル。
-rendered と visibleTexts から、msg / divider / compass の表示用データを組み立てる。
-*/
+/* /components/chat/view/chatStreamViewItems.ts */

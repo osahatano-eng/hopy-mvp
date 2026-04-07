@@ -4,7 +4,6 @@ import OpenAI from "openai";
 import type { Lang } from "../router/simpleRouter";
 import type { PromptBundle } from "./promptBundle";
 import { extractAssistantReplyPayload } from "./openaiParsing";
-import { sanitizeAssistantReply } from "./openaiSanitize";
 import {
   detectResolvedPlanFromPromptBundle,
   getReplyMaxTokensByPlan,
@@ -200,11 +199,11 @@ function isCompassRequiredForPlan(params: {
 }
 
 function shouldRetryWithStructuredForMissingState(params: {
-  assistantText: string;
+  parsedJson: unknown;
   state: Record<string, unknown> | null;
 }): boolean {
-  const { assistantText, state } = params;
-  if (!assistantText.trim()) return false;
+  const { parsedJson, state } = params;
+  if (!isRecord(parsedJson)) return false;
   return !hasRequiredCanonicalState(state);
 }
 
@@ -260,14 +259,15 @@ function buildConfirmedPayload(params: {
   if (!canonicalState) return undefined;
   if (!assistantText.trim()) return undefined;
 
-  if (
-    isCompassRequiredForPlan({
-      resolvedPlan,
-      state,
-    }) &&
-    (!compassText.trim() || !compassPrompt.trim())
-  ) {
-    return undefined;
+  const compassRequiredForPlan = isCompassRequiredForPlan({
+    resolvedPlan,
+    state,
+  });
+
+  if (compassRequiredForPlan) {
+    if (!compassText.trim() || !compassPrompt.trim()) {
+      return undefined;
+    }
   }
 
   const payload: NonNullable<
@@ -277,10 +277,10 @@ function buildConfirmedPayload(params: {
     state: canonicalState,
   };
 
-  if (compassText && compassPrompt) {
+  if (compassRequiredForPlan) {
     payload.compass = {
-      text: compassText,
-      prompt: compassPrompt,
+      text: compassText.trim(),
+      prompt: compassPrompt.trim(),
     };
   }
 
@@ -294,7 +294,7 @@ function selectPreferredState(params: {
   const { primary, fallback } = params;
   if (hasRequiredCanonicalState(primary)) return primary;
   if (hasRequiredCanonicalState(fallback)) return fallback;
-  return primary ?? fallback ?? null;
+  return null;
 }
 
 function selectPreferredCompassString(params: {
@@ -341,70 +341,79 @@ function extractCanonicalStateFromUnknown(
   };
 }
 
-function recoverStateFromParsedJson(
+function recoverConfirmedPayloadFromParsedJson(
   parsedJson: unknown,
 ): Record<string, unknown> | null {
   if (!isRecord(parsedJson)) return null;
 
-  const directState = extractCanonicalStateFromUnknown(parsedJson.state);
-  if (directState) return directState;
-
-  const assistantState = extractCanonicalStateFromUnknown(
-    parsedJson.assistant_state,
-  );
-  if (assistantState) return assistantState;
-
   const payload = parsedJson.hopy_confirmed_payload;
-  if (isRecord(payload)) {
-    const payloadState = extractCanonicalStateFromUnknown(payload.state);
-    if (payloadState) return payloadState;
-  }
+  if (!isRecord(payload)) return null;
 
-  const thread = parsedJson.thread;
-  if (isRecord(thread)) {
-    const threadState = extractCanonicalStateFromUnknown({
-      current_phase: thread.current_phase,
-      state_level: thread.state_level,
-      prev_phase: thread.prev_phase,
-      prev_state_level: thread.prev_state_level,
-      state_changed: thread.state_changed,
-    });
-    if (threadState) return threadState;
-  }
-
-  return null;
+  return payload;
 }
 
-function resolveExtractedState(params: {
-  extractedState: Record<string, unknown> | null;
-  parsedJson: unknown;
-}): Record<string, unknown> | null {
-  const { extractedState, parsedJson } = params;
-  if (hasRequiredCanonicalState(extractedState)) {
-    return extractedState;
+function recoverAssistantTextFromParsedJson(parsedJson: unknown): string {
+  const payload = recoverConfirmedPayloadFromParsedJson(parsedJson);
+  if (!payload) return "";
+  return normalizeAssistantText(payload.reply);
+}
+
+function recoverStateFromParsedJson(
+  parsedJson: unknown,
+): Record<string, unknown> | null {
+  const payload = recoverConfirmedPayloadFromParsedJson(parsedJson);
+  if (!payload) return null;
+
+  return extractCanonicalStateFromUnknown(payload.state);
+}
+
+function recoverCompassFromParsedJson(parsedJson: unknown): {
+  text: string;
+  prompt: string;
+} {
+  const payload = recoverConfirmedPayloadFromParsedJson(parsedJson);
+  if (!payload) {
+    return { text: "", prompt: "" };
   }
-  return recoverStateFromParsedJson(parsedJson);
+
+  const compass = payload.compass;
+  if (!isRecord(compass)) {
+    return { text: "", prompt: "" };
+  }
+
+  return {
+    text: normalizeCompassString(compass.text),
+    prompt: normalizeCompassString(compass.prompt),
+  };
+}
+
+function recoverMemoryCandidatesFromParsedJson(parsedJson: unknown): unknown[] {
+  if (!isRecord(parsedJson)) return [];
+  return Array.isArray(parsedJson.confirmed_memory_candidates)
+    ? parsedJson.confirmed_memory_candidates
+    : [];
 }
 
 function buildExtractedPayloadFromRawContent(
   rawContent: string,
 ): ExtractedReplyPayload {
   const extracted = extractAssistantReplyPayload(rawContent);
+  const canonicalAssistantText = recoverAssistantTextFromParsedJson(
+    extracted.parsed_json,
+  );
+  const canonicalState = recoverStateFromParsedJson(extracted.parsed_json);
+  const canonicalCompass = recoverCompassFromParsedJson(extracted.parsed_json);
+  const canonicalMemoryCandidates = recoverMemoryCandidatesFromParsedJson(
+    extracted.parsed_json,
+  );
 
   return {
-    assistantText: normalizeAssistantText(extracted.assistantText),
-    confirmed_memory_candidates: Array.isArray(
-      extracted.confirmed_memory_candidates,
-    )
-      ? extracted.confirmed_memory_candidates
-      : [],
+    assistantText: canonicalAssistantText,
+    confirmed_memory_candidates: canonicalMemoryCandidates,
     parsed_json: extracted.parsed_json,
-    compassText: normalizeCompassString(extracted.compassText),
-    compassPrompt: normalizeCompassString(extracted.compassPrompt),
-    state: resolveExtractedState({
-      extractedState: extracted.state ?? null,
-      parsedJson: extracted.parsed_json,
-    }),
+    compassText: canonicalCompass.text,
+    compassPrompt: canonicalCompass.prompt,
+    state: canonicalState,
   };
 }
 
@@ -577,7 +586,7 @@ export async function generateAssistantReply(
     const firstCompassResolveStartMs = nowMs();
     const needsStructuredRetry =
       shouldRetryWithStructuredForMissingState({
-        assistantText: firstJsonExtracted.assistantText,
+        parsedJson: firstJsonExtracted.parsed_json,
         state: firstJsonExtracted.state,
       }) ||
       shouldRetryWithStructuredForMissingCompass({
@@ -633,12 +642,7 @@ export async function generateAssistantReply(
 
     const extracted = selectedExtracted;
 
-    assistantText = sanitizeAssistantReply({
-      assistantText: extracted.assistantText,
-      userText,
-      resolvedPlan,
-      replyLang,
-    });
+    assistantText = normalizeAssistantText(extracted.assistantText);
 
     const memoryCandidatesResolveStartMs = nowMs();
     confirmed_memory_candidates = extracted.confirmed_memory_candidates;
@@ -676,6 +680,11 @@ export async function generateAssistantReply(
       state,
     });
     speed_audit.compass_resolve_ms += elapsedMs(requiredCompassResolveStartMs);
+
+    if (!compassRequiredForPlan) {
+      compassText = "";
+      compassPrompt = "";
+    }
 
     if (
       compassRequiredForPlan &&
@@ -741,22 +750,18 @@ OpenAI 応答の生成・回収ファイル。
 promptBundle と history から messages を作る前提で、
 JSON強制生成を試し、
 返ってきた内容から assistantText / confirmed_memory_candidates /
-compassText / compassPrompt / state を抽出して返す。
-このファイルは Compass の保存先や表示可否を決める層ではなく、
-モデル出力から Compass 関連値と state を回収して次段へ渡す生成結果回収責務を持つ。
+compassText / compassPrompt / state を回収して返す。
+このファイルは独自に状態変化や Compass を再判定する層ではなく、
+確定意味ペイロードから正式値だけを回収して次段へ渡す生成結果回収責務を持つ。
 */
 
 /*
 【今回このファイルで修正したこと】
-- ResolvedPlanLike 型を import し、resolvedPlan を string ではなく ResolvedPlanLike で保持するよう修正しました。
-- isCompassRequiredForPlan / shouldRetryWithStructuredForMissingCompass / buildMissingRequiredCompassErrorMessage / buildConfirmedPayload の resolvedPlan 型も ResolvedPlanLike にそろえました。
-- これにより buildOpenAIMessages(...) へ resolvedPlan を渡す箇所の build error を解消しました。
-- それ以外の state 抽出、assistantText 必須、retry 判定、speed_audit、memory_candidates 回収責務は触っていません。
+- sanitizeAssistantReply の import を削除しました。
+- assistantText を sanitize 後の別文字列へ差し替える処理をやめ、hopy_confirmed_payload.reply から回収した確定本文だけをそのまま返す形に戻しました。
+- これにより、このファイル内で reply と state の出どころがズレる経路を止めました。
+- retry、speed_audit、memory_candidates 回収、compass 必須判定、confirmed payload 組み立ての責務には触っていません。
 */
-// このファイルの正式役割: OpenAI 応答の生成・回収ファイル
 
-/*
-【今回このファイルで修正したこと】
-resolvedPlan の型ずれを直し、build error を止めました。
-Compass の唯一の正に関わる判定ロジック自体は変更していません。
-*/
+/* /app/api/chat/_lib/route/openai.ts */
+// このファイルの正式役割: OpenAI の確定意味ペイロードを回収し、そのまま次段へ渡すファイル

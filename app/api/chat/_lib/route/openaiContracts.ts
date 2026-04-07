@@ -105,54 +105,86 @@ export function memoryOutputContractSystem(uiLang: Lang): string {
     return [
       "Output format contract for confirmed meaning payload (HARD):",
       "- Return ONLY a single JSON object. No markdown fences. No commentary outside JSON.",
-      '- The JSON object MUST contain exactly these top-level keys: "reply", "state", "confirmed_memory_candidates", "compassText", and "compassPrompt".',
-      '- "reply" must be a natural user-facing assistant reply string.',
-      '- "state" must be an object.',
-      '- "state" must contain exactly these keys: "current_phase", "state_level", "prev_phase", "prev_state_level", and "state_changed".',
-      '- "current_phase", "state_level", "prev_phase", and "prev_state_level" must each be one of 1, 2, 3, 4, 5.',
+      '- The JSON object MUST contain exactly these top-level keys: "hopy_confirmed_payload" and "confirmed_memory_candidates".',
+      '- Top-level "reply" / "state" / "assistant_state" / "compassText" / "compassPrompt" / "compass" are forbidden.',
+      '- "hopy_confirmed_payload" must be an object.',
+      '- "hopy_confirmed_payload.reply" must be the natural user-facing assistant reply string.',
+      '- "hopy_confirmed_payload.state" must be an object.',
+      '- "hopy_confirmed_payload.state" must contain exactly these keys: "current_phase" / "state_level" / "prev_phase" / "prev_state_level" / "state_changed".',
+      '- "current_phase" / "state_level" / "prev_phase" / "prev_state_level" must each be one of 1, 2, 3, 4, 5.',
       '- "state_changed" must be a boolean.',
+      '- The one and only source of truth for the HOPY reply badge is "hopy_confirmed_payload.state.state_changed".',
+      '- Do NOT derive the HOPY reply badge from wording, tone, length, phrase, or any other field.',
+      '- Downstream layers must not recalculate state_changed.',
+      '- Determine the confirmed state first, then write reply / state / compass so they all describe the same confirmed meaning of the same turn.',
+      '- Never output a reply that implies progress, organizing, convergence, a visible next step, or readiness to act while also outputting state 1 / confused and state_changed=false.',
+      '- Never let reply and state disagree just because the safer-looking default seems easier.',
+      '- state_changed must be TRUE when current_phase differs from prev_phase, or when state_level differs from prev_state_level.',
+      '- state_changed must be FALSE only when current_phase equals prev_phase and state_level equals prev_state_level.',
+      '- Never keep state_changed=false when you already changed the current or previous state numbers.',
+      '- Use the actual confirmed meaning of this turn, not the safest-looking default.',
+      '- Phase meaning anchor: 1=confused/scattered, 2=searching/exploring, 3=organizing/seeing structure, 4=converging/narrowing to one direction, 5=deciding/ready to act or already acting.',
+      '- If the confirmed result says the user can now see what to do, has organized thoughts, or has a next step, do NOT output state 1 / confused.',
+      '- If the confirmed result says the user can now see what to do, has organized thoughts, or has a next step, output at least a state meaning consistent with organizing / convergence, not confusion.',
       '- "confirmed_memory_candidates" must be an array.',
-      '- "compassText" and "compassPrompt" are official top-level keys. Do not replace them with nested-only keys such as compass.text.',
-      '- Do not include hopy_confirmed_payload, assistant_state, notification, thread, dashboard_signals, ui_effects, or any other extra keys.',
-      '- Free rule: "compassText" must be an empty string and "compassPrompt" must be an empty string.',
-      '- State-change rule: only when state_changed=true may Compass be generated.',
-      '- State-change rule: when state_changed=false, "compassText" must be an empty string and "compassPrompt" must be an empty string even on Plus or Pro.',
-      '- Plus rule: when state_changed=true, "compassText" must NOT be empty. It must be a structured multi-line display body using exactly these headings: 【いまの状態】, 【学問的解釈】, 【あなたへ】. Do not include 【占い的解釈】 or 【創業者より、あなたへ】.',
-      '- Pro rule: when state_changed=true, "compassText" must NOT be empty. It must be a structured multi-line display body using exactly these headings: 【いまの状態】, 【学問的解釈】, 【占い的解釈】, 【あなたへ】, 【創業者より、あなたへ】.',
-      '- For Plus or Pro with state_changed=true, do NOT leave "compassText" empty.',
-      '- For Plus or Pro with state_changed=true, do NOT leave "compassPrompt" empty.',
-      '- "compassPrompt" must be a short internal Compass generation hint string.',
-      '- Each array item must be an object with these keys only: source_type, memory_type, body, savable.',
+      '- Free rule: even when state_changed=true, omitting Compass is allowed.',
+      '- Free rule: do NOT force Compass just because state_changed=true.',
+      '- Plus / Pro rule: when "hopy_confirmed_payload.state.state_changed" is true, "hopy_confirmed_payload.compass" must exist.',
+      '- Plus / Pro rule: when "hopy_confirmed_payload.state.state_changed" is true, "hopy_confirmed_payload.compass.text" must NOT be empty.',
+      '- Plus / Pro rule: when "hopy_confirmed_payload.state.state_changed" is true, "hopy_confirmed_payload.compass.prompt" must NOT be empty.',
+      '- Plus / Pro rule: do NOT separate the truth of the HOPY reply badge and the truth of Compass.',
+      '- When "hopy_confirmed_payload.state.state_changed" is false, omit "hopy_confirmed_payload.compass" entirely.',
+      '- If "hopy_confirmed_payload.compass.prompt" is returned, it must be a string. Do not return null.',
+      '- Do NOT invent Compass from reply wording.',
+      '- Do NOT fake Compass with fallback text.',
+      '- Do NOT include notification, thread, dashboard_signals, ui_effects, assistant_state, or any other extra keys.',
+      '- Each confirmed_memory_candidates item may contain only: source_type, memory_type, body, savable.',
       '- "source_type" must be "auto".',
       '- "memory_type" must be one of: "trait", "theme", "support_context", "dashboard_signal".',
       '- "body" must be a short meaning summary worth saving for future support. Do not copy long sentences from the reply.',
       '- "savable" must be true only when the item is clearly worth saving as a memory candidate. Otherwise omit the item instead of returning false items.',
-      "- If there is no clearly savable memory candidate for this turn, return an empty array.",
-      "- Keep confirmed_memory_candidates minimal: usually 0 to 2 items.",
+      '- If there is no clearly savable memory candidate for this turn, return an empty array.',
+      '- Keep confirmed_memory_candidates minimal: usually 0 to 2 items.',
     ].join("\n");
   }
 
   return [
     "確定意味ペイロード用の出力契約（HARD）：",
     "・出力は JSON オブジェクト1個のみ。markdown のコードフェンスや前置き説明は付けない",
-    '・JSON のトップレベルキーは必ず "reply" / "state" / "confirmed_memory_candidates" / "compassText" / "compassPrompt" のみ',
-    '・"reply" には、ユーザー向けの自然な最終返答本文を入れる',
-    '・"state" は object にする',
-    '・"state" のキーは必ず "current_phase" / "state_level" / "prev_phase" / "prev_state_level" / "state_changed" のみ',
+    '・JSON のトップレベルキーは必ず "hopy_confirmed_payload" / "confirmed_memory_candidates" のみ',
+    '・top-level の "reply" / "state" / "assistant_state" / "compassText" / "compassPrompt" / "compass" を返してはならない',
+    '・"hopy_confirmed_payload" は object にする',
+    '・"hopy_confirmed_payload.reply" には、ユーザー向けの自然な最終返答本文を入れる',
+    '・"hopy_confirmed_payload.state" は object にする',
+    '・"hopy_confirmed_payload.state" のキーは必ず "current_phase" / "state_level" / "prev_phase" / "prev_state_level" / "state_changed" のみ',
     '・"current_phase" / "state_level" / "prev_phase" / "prev_state_level" は必ず 1 / 2 / 3 / 4 / 5 のいずれかにする',
     '・"state_changed" は必ず boolean にする',
+    '・HOPY回答○ の唯一の正は hopy_confirmed_payload.state.state_changed だけである',
+    '・本文の見た目 / 文体 / 温度感 / 語尾 / 回答長さ / phrase などから HOPY回答○ を再判定してはならない',
+    '・下流で state_changed を再計算してはならない',
+    '・まずこのターンの確定意味を決め、その同じ確定意味を reply / state / compass のすべてに一致させること',
+    '・reply で「やることが見えてきた」「整理が進んだ」「次の一歩が見えた」「動きやすくなった」などの前進意味を書いたのに、state は 1=混線 / state_changed=false のままにしてはならない',
+    '・安全そうだから false にする、無難だから 1 に置く、という逃がし方で reply と state を矛盾させてはならない',
+    '・current_phase が prev_phase と違う、または state_level が prev_state_level と違うなら、state_changed は必ず true にする',
+    '・current_phase と prev_phase が同じ、かつ state_level と prev_state_level が同じときだけ、state_changed を false にしてよい',
+    '・状態値を変えたのに state_changed=false にしてはならない',
+    '・安全そうだから false にする、無難だから 1 に置く、という逃がし方をしてはならない',
+    '・1=混線、2=模索、3=整理、4=収束、5=決定 の意味で判断する',
+    '・今回の確定結果が「やることが見えてきた」「考えが整理できた」「次の一歩が見えた」に当たるなら、1=混線 を返してはならない',
+    '・今回の確定結果が「やることが見えてきた」「考えが整理できた」「次の一歩が見えた」に当たるなら、少なくとも整理〜収束に整合する state を返すこと',
     '・"confirmed_memory_candidates" は配列にする',
-    '・"compassText" と "compassPrompt" は Compass の正式トップレベルキーである。compass.text のような別構造だけで返してはいけない',
-    '・hopy_confirmed_payload / assistant_state / notification / thread / dashboard_signals / ui_effects など、他のキーはこの JSON に含めない',
-    '・Free では "compassText" も "compassPrompt" も必ず空文字 "" を返す',
-    '・Compass は state_changed=true のときだけ生成してよい',
-    '・state_changed=false のときは、Plus / Pro でも "compassText" と "compassPrompt" を必ず空文字 "" にする',
-    '・Plus では、state_changed=true の回答では "compassText" を空文字にしてはいけない。必ず複数行の構造化本文を返し、見出しは【いまの状態】【学問的解釈】【あなたへ】の3つを正式名で使う。【占い的解釈】【創業者より、あなたへ】は出さない',
-    '・Pro では、state_changed=true の回答では "compassText" を空文字にしてはいけない。必ず複数行の構造化本文を返し、見出しは【いまの状態】【学問的解釈】【占い的解釈】【あなたへ】【創業者より、あなたへ】を正式名で使う',
-    '・Plus / Pro の state_changed=true ターンでは "compassText" を必ず返す',
-    '・Plus / Pro の state_changed=true ターンでは "compassPrompt" も必ず返す',
-    '・"compassPrompt" には Compass 用の短い内部ヒント文字列を入れる',
-    "・配列要素は object とし、キーは source_type / memory_type / body / savable のみ",
+    '・Free では state_changed=true でも Compass 非表示を許容してよい',
+    '・Free で state_changed=true だからといって Compass を強制してはならない',
+    '・Plus / Pro では hopy_confirmed_payload.state.state_changed=true の回に hopy_confirmed_payload.compass を必ず付ける',
+    '・Plus / Pro では hopy_confirmed_payload.state.state_changed=true の回に hopy_confirmed_payload.compass.text を空にしてはならない',
+    '・Plus / Pro では hopy_confirmed_payload.state.state_changed=true の回に hopy_confirmed_payload.compass.prompt も空にしてはならない',
+    '・Plus / Pro では HOPY回答○ の正と Compass の正を分離してはならない',
+    '・hopy_confirmed_payload.state.state_changed=false のときは hopy_confirmed_payload.compass を付けてはならない',
+    '・hopy_confirmed_payload.compass.prompt を返す場合は string にする。null を返してはならない',
+    '・本文から Compass を推測してはならない',
+    '・fallback 文字列で Compass 欠落をごまかしてはならない',
+    '・notification / thread / dashboard_signals / ui_effects / assistant_state など、他のキーはこの JSON に含めない',
+    '・confirmed_memory_candidates の配列要素は source_type / memory_type / body / savable のみ',
     '・"source_type" は必ず "auto"',
     '・"memory_type" は "trait" / "theme" / "support_context" / "dashboard_signal" のいずれかのみ',
     '・"body" は、今後の支援に使う価値がある短い意味要約にする。reply本文の長い言い換えやコピペはしない',
@@ -165,31 +197,31 @@ export function memoryOutputContractSystem(uiLang: Lang): string {
 export function memoryRecoveryContractSystem(uiLang: Lang): string {
   if (uiLang === "en") {
     return [
-      "Recover confirmed memory candidates from the already written assistant reply.",
+      "Recover only confirmed_memory_candidates from the already finalized confirmed payload.",
       "Return ONLY one JSON object.",
-      'Top-level keys MUST be exactly "reply", "state", "confirmed_memory_candidates", "compassText", and "compassPrompt".',
-      'Keep "reply" exactly as provided by the user message in this request.',
-      '"state" must be kept exactly as provided by the user message in this request.',
-      'confirmed_memory_candidates must be an array of 0 to 2 items.',
-      'compassText must be kept as provided if present, otherwise return an empty string.',
-      'compassPrompt must be kept as provided if present, otherwise return an empty string.',
-      "Each item may contain only source_type, memory_type, body, savable.",
-      'source_type must be "auto".',
-      'memory_type must be one of "trait", "theme", "support_context", "dashboard_signal".',
-      "Only include clearly savable future-support meaning summaries.",
-      "If none, return an empty array.",
+      '- The top-level keys MUST be exactly "hopy_confirmed_payload" and "confirmed_memory_candidates".',
+      '- Keep "hopy_confirmed_payload" exactly as provided by the user message in this request.',
+      '- Do NOT rewrite reply, state, or compass.',
+      '- Do NOT re-interpret state_changed.',
+      '- Do NOT generate or repair missing Compass during recovery.',
+      '- confirmed_memory_candidates must be an array of 0 to 2 items.',
+      "- Each item may contain only source_type, memory_type, body, savable.",
+      '- source_type must be "auto".',
+      '- memory_type must be one of "trait", "theme", "support_context", "dashboard_signal".',
+      "- Only include clearly savable future-support meaning summaries.",
+      "- If none, return an empty array.",
     ].join("\n");
   }
 
   return [
-    "すでに生成済みの assistant reply から confirmed_memory_candidates だけを復元する。",
+    "すでに確定済みの confirmed payload から confirmed_memory_candidates だけを復元する。",
     "出力は JSON オブジェクト1個のみ。",
-    'トップレベルキーは必ず "reply" / "state" / "confirmed_memory_candidates" / "compassText" / "compassPrompt" のみ。',
-    'reply には、このリクエストで渡された assistant reply をそのまま入れる。',
-    'state には、このリクエストで渡された state をそのまま入れる。',
+    'トップレベルキーは必ず "hopy_confirmed_payload" / "confirmed_memory_candidates" のみ。',
+    'hopy_confirmed_payload には、このリクエストで渡された確定済み payload をそのまま入れる。',
+    "reply / state / compass を書き換えてはならない。",
+    "state_changed を再解釈してはならない。",
+    "復元時に Compass を生成・補完・修復してはならない。",
     "confirmed_memory_candidates は 0〜2 件の配列にする。",
-    'compassText は既に与えられていればそれを保ち、無ければ空文字 "" を返す。',
-    'compassPrompt は既に与えられていればそれを保ち、無ければ空文字 "" を返す。',
     "各要素のキーは source_type / memory_type / body / savable のみ。",
     'source_type は必ず "auto"。',
     'memory_type は "trait" / "theme" / "support_context" / "dashboard_signal" のみ。',
@@ -199,12 +231,21 @@ export function memoryRecoveryContractSystem(uiLang: Lang): string {
 }
 
 /*
-【今回このファイルで修正したこと】
-- OpenAI 出力契約のトップレベル必須キーに state を追加した。
-- state を要求する実装と、state を禁止する契約文の矛盾を解消した。
-- Plus / Pro の state_changed=true ターンでは compassText だけでなく compassPrompt も必須に固定した。
-- 余計な追加キーを禁止し、reply / state / confirmed_memory_candidates / compassText / compassPrompt の正式shapeに固定した。
-
 このファイルの正式役割
-OpenAI 出力JSONの契約定義ファイル
+OpenAI 出力JSONの契約定義ファイル。
+HOPY回答○ の唯一の正を hopy_confirmed_payload.state.state_changed に固定し、
+OpenAI 出力契約と memory recovery 契約の両方で、
+下流が再判定せず確定意味ペイロードをそのまま通すための文面を定義する。
 */
+
+/*
+【今回このファイルで修正したこと】
+- memoryOutputContractSystem(...) に、reply / state / compass は同じ確定意味に一致しなければならない契約を追加しました。
+- 「前進意味の本文なのに 1=混線 / state_changed=false」を禁止する契約文を追加しました。
+- 「やることが見えてきた / 整理できた / 次の一歩が見えた」なら、少なくとも整理〜収束に整合する state を返す指示を追加しました。
+- Plus / Pro の Compass 必須ルールは維持しつつ、reply と state の意味矛盾を safer-looking default で逃がさない文に強化しました。
+- planPrioritySystem(...) と memoryRecoveryContractSystem(...) の責務には触っていません。
+*/
+
+/* /app/api/chat/_lib/route/openaiContracts.ts */
+// このファイルの正式役割: OpenAI 出力JSONの契約定義ファイル

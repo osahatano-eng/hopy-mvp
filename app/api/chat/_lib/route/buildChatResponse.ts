@@ -56,16 +56,6 @@ export type BuildChatResponseInput = {
 export type ChatResponseShape =
   | {
       ok: true;
-      reply: string;
-      state: {
-        current_phase: HopyStateLevel;
-        state_level: HopyStateLevel;
-        prev_phase: HopyStateLevel;
-        prev_state_level: HopyStateLevel;
-        state_changed: boolean;
-        label?: string;
-        prev_label?: string;
-      };
       notification: {
         unread_count: number;
         updated_at: string | null;
@@ -80,10 +70,6 @@ export type ChatResponseShape =
         prev_state_level: HopyStateLevel;
         updated_at: string | null;
         last_assistant_at: string | null;
-      };
-      compass?: {
-        text: string;
-        prompt: string | null;
       };
       debug?: unknown;
       hopy_confirmed_payload: {
@@ -294,7 +280,8 @@ function normalizeStrictState(
     normalizeOptionalLabel(value.label) ?? labelFromStateLevel(stateLevel);
 
   const prevLabel =
-    normalizeOptionalLabel(value.prev_label) ?? labelFromStateLevel(prevStateLevel);
+    normalizeOptionalLabel(value.prev_label) ??
+    labelFromStateLevel(prevStateLevel);
 
   return {
     current_phase: currentPhase,
@@ -543,10 +530,12 @@ export function buildChatResponse(
     confirmed: normalizedConfirmedPayload.compass,
   });
 
+  if (input.thread) {
+    normalizeStrictThread(input.thread, "thread");
+  }
+
   return {
     ok: true,
-    reply: normalizedConfirmedPayload.reply,
-    state: normalizedConfirmedPayload.state,
     notification: {
       unread_count: normalizeCount(notificationInput?.unread_count, 0),
       updated_at: normalizeIsoDatetime(notificationInput?.updated_at),
@@ -555,11 +544,6 @@ export function buildChatResponse(
       thread: input.thread ?? null,
       confirmed: normalizedConfirmedPayload.state,
     }),
-    ...(normalizedConfirmedPayload.compass
-      ? {
-          compass: normalizedConfirmedPayload.compass,
-        }
-      : {}),
     ...(typeof input.debug === "undefined" ? {} : { debug: input.debug }),
     hopy_confirmed_payload: normalizedConfirmedPayload,
   };
@@ -570,7 +554,7 @@ export default buildChatResponse;
 /*
 このファイルの正式役割
 最終 API レスポンスの正規化ファイル。
-reply / state / notification / thread / compass / debug / hopy_confirmed_payload を受け取り、
+notification / thread / debug / hopy_confirmed_payload を受け取り、
 クライアントへ返す ChatResponseShape に整えて返す。
 
 このファイルが受け取るもの
@@ -589,30 +573,26 @@ input
 ChatResponseShape
 - ok
 - error
-- reply
-- state
 - notification
 - thread
-- compass
 - debug
 - hopy_confirmed_payload
 
 Compass 観点でこのファイルの意味
-このファイルは Compass の最終レスポンス整形場所。
-ただし、Compass の生成はしない。
-state_changed を見て Compass を消すこともしない。
-受け取った値を検証し、唯一の正と一致するものだけをそのまま返す。
-失敗系では成功系の必須値検証をしない。
-成功系では hopy_confirmed_payload を唯一の正として必須化し、
-top-level reply / state / compass がある場合のみ一致検証し、
-最終 response は hopy_confirmed_payload 由来の値だけを返す。
+このファイルは最終レスポンス整形場所。
+ただし、reply / state / compass の正は hopy_confirmed_payload の中だけに残す。
+受け取った top-level reply / state / compass は移行期の一致検証にだけ使い、
+成功レスポンスの正式出力としては返さない。
+thread は最新確定状態の投影としてだけ返す。
 */
 
 /*
 【今回このファイルで修正したこと】
-- 下流で prev/current から state_changed を再判定していた assertStateTransitionConsistency を削除しました。
-- buildChatResponse は唯一の正を再計算せず、受け取った hopy_confirmed_payload.state.state_changed をそのまま運ぶ役割に戻しました。
-- top-level と confirmed payload の一致検証だけを残し、下流の責務を「運ぶ・整える・一致確認」に限定しました。
+- 成功レスポンスの ChatResponseShape から top-level reply / state / compass を外しました。
+- buildChatResponse の成功返却値からも top-level reply / state / compass を外しました。
+- hopy_confirmed_payload を唯一の正として残し、top-level 値は一致検証専用に限定しました。
+- thread は確定状態の投影として返し続けるように維持しました。
+- thread 入力がある場合は normalizeStrictThread(...) で shape 妥当性だけ確認するようにしました。
 */
 
 /* /app/api/chat/_lib/route/buildChatResponse.ts */

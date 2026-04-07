@@ -69,12 +69,15 @@ function normalizeNumericState(value: unknown): HopyStateLevel | null {
       value.current_phase,
       value.phase,
       value.level,
-      value.state,
-      value.label,
-      value.name,
       value.currentStateLevel,
       value.currentPhase,
       value.stateLevel,
+      value.after_state_level,
+      value.next_state_level,
+      value.next_phase,
+      value.state,
+      value.label,
+      value.name,
     ];
 
     for (const candidate of candidates) {
@@ -89,10 +92,17 @@ function normalizeNumericState(value: unknown): HopyStateLevel | null {
 function normalizeBoolean(value: unknown): boolean | null {
   if (typeof value === "boolean") return value;
 
+  if (typeof value === "number") {
+    if (value === 1) return true;
+    if (value === 0) return false;
+  }
+
   if (typeof value === "string") {
     const s = value.trim().toLowerCase();
     if (s === "true") return true;
     if (s === "false") return false;
+    if (s === "1") return true;
+    if (s === "0") return false;
   }
 
   return null;
@@ -102,28 +112,38 @@ function toStateLevelOrNull(value: unknown): HopyStateLevel | null {
   return normalizeNumericState(value);
 }
 
-function toStateLevel(
-  value: unknown,
-  fallback: HopyStateLevel,
-): HopyStateLevel {
-  return normalizeNumericState(value) ?? fallback;
-}
-
 function toStateLabel(level: HopyStateLevel): HopyStateLabel {
   return HOPY_STATE_LABELS[level];
+}
+
+function hasCurrentStateShape(value: unknown): value is Record<string, unknown> {
+  if (!isRecord(value)) return false;
+
+  return (
+    typeof value.state_level !== "undefined" ||
+    typeof value.current_phase !== "undefined" ||
+    typeof value.phase !== "undefined" ||
+    typeof value.level !== "undefined" ||
+    typeof value.currentStateLevel !== "undefined" ||
+    typeof value.currentPhase !== "undefined" ||
+    typeof value.stateLevel !== "undefined" ||
+    typeof value.after_state_level !== "undefined" ||
+    typeof value.next_state_level !== "undefined" ||
+    typeof value.next_phase !== "undefined"
+  );
 }
 
 function hasStateShape(value: unknown): value is Record<string, unknown> {
   if (!isRecord(value)) return false;
 
   return (
-    typeof value.state_level !== "undefined" ||
-    typeof value.current_phase !== "undefined" ||
+    hasCurrentStateShape(value) ||
     typeof value.prev_phase !== "undefined" ||
     typeof value.prev_state_level !== "undefined" ||
+    typeof value.before_state_level !== "undefined" ||
+    typeof value.previousPhase !== "undefined" ||
+    typeof value.previousStateLevel !== "undefined" ||
     typeof value.state_changed !== "undefined" ||
-    typeof value.phase !== "undefined" ||
-    typeof value.level !== "undefined" ||
     typeof value.label !== "undefined" ||
     typeof value.prev_label !== "undefined" ||
     typeof value.name !== "undefined"
@@ -145,12 +165,15 @@ function pickStateRecord(value: unknown): Record<string, unknown> | null {
     value,
   ];
 
+  let fallbackRecord: Record<string, unknown> | null = null;
+
   for (const candidate of directCandidates) {
     if (!hasStateShape(candidate)) continue;
-    return candidate;
+    if (hasCurrentStateShape(candidate)) return candidate;
+    if (!fallbackRecord) fallbackRecord = candidate;
   }
 
-  return null;
+  return fallbackRecord;
 }
 
 export function resolveHopyState(
@@ -162,6 +185,9 @@ export function resolveHopyState(
     toStateLevelOrNull(
       stateRecord?.prev_state_level ??
         stateRecord?.prev_phase ??
+        stateRecord?.before_state_level ??
+        stateRecord?.previousStateLevel ??
+        stateRecord?.previousPhase ??
         input.prevStateLevel,
     ) ?? 1;
 
@@ -169,7 +195,13 @@ export function resolveHopyState(
     stateRecord?.state_level ??
       stateRecord?.current_phase ??
       stateRecord?.phase ??
-      stateRecord?.level,
+      stateRecord?.level ??
+      stateRecord?.currentStateLevel ??
+      stateRecord?.currentPhase ??
+      stateRecord?.stateLevel ??
+      stateRecord?.after_state_level ??
+      stateRecord?.next_state_level ??
+      stateRecord?.next_phase,
   );
 
   const currentFromModelState = toStateLevelOrNull(input.modelState);
@@ -178,12 +210,7 @@ export function resolveHopyState(
 
   const explicitChanged = normalizeBoolean(stateRecord?.state_changed);
   const transitionChanged = current !== prev;
-  const stateChanged =
-    explicitChanged === null
-      ? transitionChanged
-      : explicitChanged === transitionChanged
-        ? explicitChanged
-        : transitionChanged;
+  const stateChanged = explicitChanged ?? transitionChanged;
 
   return {
     current_phase: current,
@@ -208,9 +235,10 @@ current_phase / state_level / prev_phase / prev_state_level / state_changed / la
 
 /*
 【今回このファイルで修正したこと】
-- state_changed を外部入力の false でそのまま固定せず、prev/current の遷移と整合する値だけを採用するよう修正しました。
-- 4→3 なのに state_changed=false のような不正を、この確定層で通さないようにしました。
-- prev/current が変わっている回では必ず state_changed=true になるよう固定しました。
+- normalizeBoolean(...) で 1 / 0 / "1" / "0" も true / false として読めるように修正しました。
+- explicit な state_changed が来ている場合は、それを唯一の正としてそのまま採用するように修正しました。
+- current !== prev の再計算結果で explicit な state_changed を上書きする処理を止めました。
+- current / prev の正規化ロジックや label の生成責務はこのファイル内だけに維持し、他ファイルには触れていません。
 */
 
 /* /app/api/chat/_lib/hopy/state/resolveHopyState.ts */

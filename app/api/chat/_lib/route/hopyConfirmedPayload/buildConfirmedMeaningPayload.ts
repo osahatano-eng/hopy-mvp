@@ -191,15 +191,22 @@ function resolveConfirmedTurnWithCompass(params: {
   } as ConfirmedAssistantTurn;
 }
 
+function isCanonicalStateChanged(
+  state: HopyReplyState["state"] | null | undefined,
+): boolean {
+  return state?.state_changed === true;
+}
+
 function resolveConfirmedUiEffects(params: {
   confirmedTurn: ConfirmedAssistantTurn;
+  stateChanged: boolean;
   compassText?: unknown;
   compassPrompt?: unknown;
 }): HopyConfirmedMeaningPayload["ui_effects"] {
   const confirmedTurnWithCompass = resolveConfirmedTurnWithCompass({
     confirmedTurn: params.confirmedTurn,
-    compassText: params.compassText,
-    compassPrompt: params.compassPrompt,
+    compassText: params.stateChanged ? params.compassText : "",
+    compassPrompt: params.stateChanged ? params.compassPrompt : "",
   });
 
   return buildUiEffects({
@@ -228,6 +235,7 @@ export function buildConfirmedMeaningPayload(
   const replyState = buildReplyState({
     confirmedTurn,
   });
+  const canonicalStateChanged = isCanonicalStateChanged(replyState.state);
 
   const thread_summary = buildThreadSummary({
     confirmedTurn,
@@ -253,6 +261,7 @@ export function buildConfirmedMeaningPayload(
 
   const ui_effects = resolveConfirmedUiEffects({
     confirmedTurn,
+    stateChanged: canonicalStateChanged,
     compassText,
     compassPrompt,
   });
@@ -270,7 +279,7 @@ export function buildConfirmedMeaningPayload(
   return {
     reply: replyState.reply,
     state: replyState.state,
-    ...(resolvedCompassText.length > 0
+    ...(canonicalStateChanged && resolvedCompassText.length > 0
       ? {
           compass: {
             text: resolvedCompassText,
@@ -304,9 +313,10 @@ hopy_confirmed_payload の正式shapeへ載せる。
 
 /*
 【今回このファイルで修正したこと】
-- authenticatedHelpers.ts から export されていない MemoryWriteDebug の import を削除した。
-- このファイル内で必要最小限の MemoryWriteDebug 型を定義した。
-- ConfirmedAssistantTurn のローカル型定義はそのまま使った。
-- hopy_confirmed_payload の組み立てロジック自体は変えていない。
+- Compass を hopy_confirmed_payload.state.state_changed に従属させました。
+- state_changed=false のときは、resolvedCompassText が残っていても payload に compass を載せないようにしました。
+- state_changed=false のときは、ui_effects 側にも compass を渡さないようにしました。
+- confirmedTurn からの state 生成や buildReplyState(...) の中身自体は触っていません。
 */
-// このファイルの正式役割: hopy_confirmed_payload の正式組み立てファイル
+
+/* /app/api/chat/_lib/route/hopyConfirmedPayload/buildConfirmedMeaningPayload.ts */

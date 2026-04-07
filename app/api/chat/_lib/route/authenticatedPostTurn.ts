@@ -182,6 +182,55 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value as Record<string, unknown>;
 }
 
+function normalizeStateLevel(value: unknown): 1 | 2 | 3 | 4 | 5 | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const rounded = Math.round(value);
+    if (rounded === 1) return 1;
+    if (rounded === 2) return 2;
+    if (rounded === 3) return 3;
+    if (rounded === 4) return 4;
+    if (rounded === 5) return 5;
+    return null;
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+
+    const numeric = Number(trimmed);
+    if (Number.isFinite(numeric)) {
+      return normalizeStateLevel(numeric);
+    }
+
+    const lowered = trimmed.toLowerCase();
+    if (trimmed === "混線" || lowered === "mixed") return 1;
+    if (trimmed === "模索" || lowered === "seeking") return 2;
+    if (trimmed === "整理" || lowered === "organizing") return 3;
+    if (trimmed === "収束" || lowered === "converging") return 4;
+    if (trimmed === "決定" || lowered === "deciding") return 5;
+  }
+
+  return null;
+}
+
+function normalizeBoolean(value: unknown): boolean | null {
+  if (typeof value === "boolean") return value;
+
+  if (typeof value === "string") {
+    const trimmed = value.trim().toLowerCase();
+    if (trimmed === "true") return true;
+    if (trimmed === "false") return false;
+  }
+
+  return null;
+}
+
+function normalizeNonEmptyString(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : null;
+}
+
 function resolvePostTurnFailure(
   params: AuthenticatedPostTurnParams,
 ): string | null {
@@ -228,6 +277,80 @@ function normalizeCompassPrompt(value: unknown): string | null {
   return normalized.length > 0 ? normalized : null;
 }
 
+function resolveConfirmedTurnFromRunTurnResult(params: {
+  runTurnResult: RunHopyTurnBuiltResult | null | undefined;
+  confirmedTurn: ConfirmedAssistantTurn;
+}): ConfirmedAssistantTurn {
+  const resultRecord = asRecord(params.runTurnResult ?? null);
+  const confirmedPayload = asRecord(resultRecord?.hopy_confirmed_payload);
+  const confirmedState = asRecord(confirmedPayload?.state);
+  const confirmedCompass = asRecord(confirmedPayload?.compass);
+
+  const assistantText =
+    normalizeNonEmptyString(confirmedPayload?.reply) ??
+    params.confirmedTurn.assistantText;
+
+  const prevPhase =
+    normalizeStateLevel(
+      confirmedState?.prev_phase ?? confirmedState?.prev_state_level,
+    ) ?? params.confirmedTurn.prevPhase;
+
+  const prevStateLevel =
+    normalizeStateLevel(
+      confirmedState?.prev_state_level ?? confirmedState?.prev_phase,
+    ) ?? params.confirmedTurn.prevStateLevel;
+
+  const currentPhase =
+    normalizeStateLevel(
+      confirmedState?.current_phase ?? confirmedState?.state_level,
+    ) ?? params.confirmedTurn.currentPhase;
+
+  const currentStateLevel =
+    normalizeStateLevel(
+      confirmedState?.state_level ?? confirmedState?.current_phase,
+    ) ?? params.confirmedTurn.currentStateLevel;
+
+  const stateChanged =
+    normalizeBoolean(confirmedState?.state_changed) ??
+    params.confirmedTurn.stateChanged;
+
+  const compassText =
+    normalizeCompassText(confirmedCompass?.text) ??
+    normalizeCompassText(params.confirmedTurn.compassText) ??
+    null;
+
+  const compassPrompt =
+    normalizeCompassPrompt(confirmedCompass?.prompt) ??
+    normalizeCompassPrompt(params.confirmedTurn.compassPrompt) ??
+    null;
+
+  return {
+    ...params.confirmedTurn,
+    assistantText,
+    prevPhase,
+    prevStateLevel,
+    currentPhase,
+    currentStateLevel,
+    stateChanged,
+    canonicalAssistantState: {
+      current_phase: currentPhase,
+      state_level: currentStateLevel,
+      prev_phase: prevPhase,
+      prev_state_level: prevStateLevel,
+      state_changed: stateChanged,
+    },
+    compassText: compassText ?? undefined,
+    compassPrompt: compassPrompt ?? undefined,
+    compass:
+      compassText !== null
+        ? {
+            text: compassText,
+            prompt: compassPrompt,
+          }
+        : undefined,
+  };
+}
+
 function resolvePostTurnStateCompassInvariant(params: {
   resolvedPlan: ResolvedPlan;
   confirmedTurn: ConfirmedAssistantTurn;
@@ -252,6 +375,63 @@ function resolvePostTurnStateCompassInvariant(params: {
   return null;
 }
 
+function toConfirmedMemoryCandidates(
+  value: unknown,
+): ConfirmedMemoryCandidate[] {
+  if (!Array.isArray(value)) return [];
+
+  return value.filter((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return false;
+    const record = item as Record<string, unknown>;
+    const content =
+      typeof record.content === "string"
+        ? record.content.trim()
+        : typeof record.body === "string"
+          ? record.body.trim()
+          : "";
+    return content.length > 0;
+  }) as ConfirmedMemoryCandidate[];
+}
+
+function resolveBuiltResultConfirmedMemoryCandidates(
+  runTurnResult: RunHopyTurnBuiltResult | null | undefined,
+): ConfirmedMemoryCandidate[] {
+  const topLevelConfirmed = toConfirmedMemoryCandidates(
+    runTurnResult?.confirmed_memory_candidates,
+  );
+  if (topLevelConfirmed.length > 0) {
+    return topLevelConfirmed;
+  }
+
+  const topLevelMemory = toConfirmedMemoryCandidates(
+    runTurnResult?.memory_candidates,
+  );
+  if (topLevelMemory.length > 0) {
+    return topLevelMemory;
+  }
+
+  const confirmedPayload = asRecord(runTurnResult?.hopy_confirmed_payload);
+  if (!confirmedPayload) {
+    return [];
+  }
+
+  const payloadConfirmed = toConfirmedMemoryCandidates(
+    confirmedPayload.confirmed_memory_candidates,
+  );
+  if (payloadConfirmed.length > 0) {
+    return payloadConfirmed;
+  }
+
+  const payloadMemory = toConfirmedMemoryCandidates(
+    confirmedPayload.memory_candidates,
+  );
+  if (payloadMemory.length > 0) {
+    return payloadMemory;
+  }
+
+  return [];
+}
+
 async function resolveConfirmedMemoryCandidatesWithTimeout(params: {
   runTurnResult: RunHopyTurnBuiltResult | null | undefined;
   resolvedPlan: ResolvedPlan;
@@ -266,12 +446,8 @@ async function resolveConfirmedMemoryCandidatesWithTimeout(params: {
   confirmedMemoryCandidates: ConfirmedMemoryCandidate[];
   usedHeuristicConfirmedMemoryCandidates: boolean;
 }> {
-  const builtResultConfirmedMemoryCandidates = Array.isArray(
-    params.runTurnResult?.confirmed_memory_candidates,
-  )
-    ? (params.runTurnResult
-        ?.confirmed_memory_candidates as ConfirmedMemoryCandidate[])
-    : [];
+  const builtResultConfirmedMemoryCandidates =
+    resolveBuiltResultConfirmedMemoryCandidates(params.runTurnResult);
 
   if (builtResultConfirmedMemoryCandidates.length > 0) {
     return {
@@ -352,15 +528,20 @@ export async function finalizeAuthenticatedPostTurn(
     };
   }
 
-  const resolvedCompass = resolveConfirmedCompassArtifacts({
-    resolvedPlan: params.resolvedPlan,
+  const syncedConfirmedTurn = resolveConfirmedTurnFromRunTurnResult({
     runTurnResult: params.runTurnResult,
     confirmedTurn: params.confirmedTurn,
   });
 
+  const resolvedCompass = resolveConfirmedCompassArtifacts({
+    resolvedPlan: params.resolvedPlan,
+    runTurnResult: params.runTurnResult,
+    confirmedTurn: syncedConfirmedTurn,
+  });
+
   const stateCompassInvariantError = resolvePostTurnStateCompassInvariant({
     resolvedPlan: params.resolvedPlan,
-    confirmedTurn: params.confirmedTurn,
+    confirmedTurn: syncedConfirmedTurn,
     resolvedCompass,
   });
 
@@ -390,7 +571,7 @@ export async function finalizeAuthenticatedPostTurn(
       runTurnResult: params.runTurnResult,
       resolvedPlan: params.resolvedPlan,
       userText: params.userText,
-      confirmedTurn: params.confirmedTurn,
+      confirmedTurn: syncedConfirmedTurn,
       uiLang: params.uiLang,
       resolvedConversationId: params.resolvedConversationId,
       assistantMessageId: params.assistantMessageId,
@@ -420,7 +601,7 @@ export async function finalizeAuthenticatedPostTurn(
     userMessageId: params.userMessageId,
     assistantMessageId: params.assistantMessageId,
     userText: params.userText,
-    confirmedTurn: params.confirmedTurn,
+    confirmedTurn: syncedConfirmedTurn,
     uiLang: params.uiLang,
   });
 
@@ -455,9 +636,9 @@ export async function finalizeAuthenticatedPostTurn(
         routedTone: params.routed.tone,
         routedIntensity: params.routed.intensity,
         usedHeuristicConfirmedMemoryCandidates,
-        stateLevel: params.confirmedTurn.currentStateLevel,
-        currentPhase: params.confirmedTurn.currentPhase,
-        stateChanged: params.confirmedTurn.stateChanged,
+        stateLevel: syncedConfirmedTurn.currentStateLevel,
+        currentPhase: syncedConfirmedTurn.currentPhase,
+        stateChanged: syncedConfirmedTurn.stateChanged,
         confirmedMemoryCandidates,
       });
       memoryWrite = {
@@ -508,15 +689,15 @@ export async function finalizeAuthenticatedPostTurn(
       input_intensity: params.routed.intensity,
       selected_strategy: params.selectedStrategy,
       style_id: 1,
-      hopy_output: params.confirmedTurn.assistantText,
+      hopy_output: syncedConfirmedTurn.assistantText,
       avoid_phrases: [],
       model: params.modelName,
       system_digest: params.buildSig,
       system_core_digest: systemCoreDigest(),
       build_sig: params.buildSig,
       system_core_prompt: systemCorePrompt,
-      phase_before: params.confirmedTurn.prevPhase,
-      phase_after: params.confirmedTurn.currentPhase,
+      phase_before: syncedConfirmedTurn.prevPhase,
+      phase_after: syncedConfirmedTurn.currentPhase,
       score_before: params.stateBefore?.stability_score ?? 0,
       score_after:
         params.st?.applied?.nextScore ?? params.stateBefore?.stability_score ?? 0,
@@ -562,7 +743,7 @@ export async function finalizeAuthenticatedPostTurn(
   } catch {}
 
   const confirmedTurnWithCompass = {
-    ...params.confirmedTurn,
+    ...syncedConfirmedTurn,
     compassText: normalizeCompassText(resolvedCompass.compassText) ?? undefined,
     compassPrompt:
       normalizeCompassPrompt(resolvedCompass.compassPrompt) ?? undefined,
@@ -574,8 +755,8 @@ export async function finalizeAuthenticatedPostTurn(
           }
         : undefined,
     canonicalAssistantState: {
-      ...params.confirmedTurn.canonicalAssistantState,
-      state_changed: params.confirmedTurn.stateChanged,
+      ...syncedConfirmedTurn.canonicalAssistantState,
+      state_changed: syncedConfirmedTurn.stateChanged,
     },
   } as ConfirmedAssistantTurn;
 
@@ -634,12 +815,9 @@ Compass を含む最終 turn artifacts 作成、
 
 /*
 【今回このファイルで修正したこと】
-- Compass 不正停止を memory / learning / audit / title 解決より前へ移動しました。
-- state_changed と Compass の整合が壊れている turn は、保存系へ進む前に即エラー停止するようにしました。
-- state_changed=false なのに compass が存在する不正を、このファイルで即エラー停止するようにしました。
-- Plus / Pro で stateChanged=true なのに compassText がない不正を、このファイルで即エラー停止するようにしました。
-- state_changed の値自体は再計算せず、confirmedTurn.stateChanged をそのまま唯一の正として維持しました。
-- compassText / compassPrompt は正規化だけに留め、fallback 文字列で補っていません。
+- runTurnResult.hopy_confirmed_payload を唯一の正として、この層の入口で confirmedTurn を同期するようにしました。
+- 以後の memory / learning / audit / final payload 作成は、同期後の confirmedTurn を使うように統一しました。
+- これにより、この postTurn 層が別経路の confirmedTurn で唯一の正を上書きする余地を塞ぎました。
 */
 
 /* /app/api/chat/_lib/route/authenticatedPostTurn.ts */

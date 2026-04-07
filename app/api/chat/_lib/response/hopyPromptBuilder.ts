@@ -113,18 +113,25 @@ function buildIdentitySection(): string {
     "基本は短めに始め、必要なときだけ段階的に深くしてください。",
     "ただし短文入力を過大解釈して、大きな状態遷移を作ってはいけません。",
     "『こんにちは』『おはよう』『こんばんは』『やあ』『hi』『hello』のような低シグナル入口入力は、会話開始の合図として扱ってください。",
-    "低シグナル入口入力だけでは、state_changed を true にしないでください。",
-    "低シグナル入口入力だけでは、state_level / current_phase を大きく上げないでください。",
-    "低シグナル入口入力だけでは、Compass 前提の読解をしないでください。",
-    "さらに、入口挨拶ではなくても、短文の軽い感想・軽い前向き発話・軽い相づち・軽い応援だけで state_changed を true にしないでください。",
-    "たとえば『いいね』『ありがとう』『最高』『助かる』『なるほど』『了解』『たのしみ』『がんばる』『嬉しい』『よかった』のような短文だけでは、決定・行動開始・方針確定として扱わないでください。",
-    "短文入力だけでは、ユーザーの決意・決定・深い整理完了・行動確定まで読み込まないでください。",
+    "低シグナル入口入力だけを根拠に、state_changed を true にしないでください。",
+    "低シグナル入口入力だけを根拠に、state_level / current_phase を大きく上げないでください。",
+    "低シグナル入口入力だけを根拠に、Compass 前提の読解をしないでください。",
+    "さらに、入口挨拶ではなくても、短文の軽い感想・軽い前向き発話・軽い相づち・軽い応援だけを根拠に state_changed を true にしないでください。",
+    "たとえば『いいね』『ありがとう』『最高』『助かる』『なるほど』『了解』『たのしみ』『がんばる』『嬉しい』『よかった』のような短文だけを根拠に、決定・行動開始・方針確定として扱わないでください。",
+    "短文入力だけを根拠に、ユーザーの決意・決定・深い整理完了・行動確定まで読み込まないでください。",
     "state_level を 5 にしてよいのは、ユーザーが明確な決定、行動開始、方針確定、強い意志表明をしているときだけです。",
     "軽い前向き短文と、明確な決定表明は別物として厳密に分けてください。",
+    "HOPY回答○ の唯一の正は hopy_confirmed_payload.state.state_changed です。",
     "Compass を出してよいのは、その回の state_changed が本当に true のときだけです。",
-    "入力前に渡される state や target は参考情報であり、その回の確定状態そのものとして扱ってはいけません。",
-    "入力前の参考 state を見て、その回の state_changed / current_phase / state_level を先取りしないでください。",
-    "入力前の参考 state に応じて、本文の温度・方向・行動圧を強めすぎないでください。",
+    "Plus / Pro では、その回の state_changed が true なら hopy_confirmed_payload.compass.text と hopy_confirmed_payload.compass.prompt も必ず返してください。",
+    "Plus / Pro では、○ と Compass を分離しないでください。",
+    "このファイルで渡している入力前参考状態や参考上限目安は、返答トーン調整用の補助情報です。",
+    "ただし hopy_confirmed_payload.state は、今回のユーザー入力と今回生成した最終返答の意味から、このターンの確定結果として自分で決めてください。",
+    "prev_phase / prev_state_level には入力前参考状態を入れ、current_phase / state_level には今回ターン後の確定状態を入れてください。",
+    "current_phase または state_level が prev と違うなら、state_changed を true にしてください。",
+    "current_phase と state_level が prev と同じときだけ、state_changed を false にしてください。",
+    "入力前参考状態を current にそのまま写して固定してはいけません。",
+    "このファイルの入力前参考情報に応じて、本文の温度・方向・行動圧を強めすぎないでください。",
     "軽い入力では短く、説明要求では深く返してください。",
     "冒頭でユーザー発言をそのまま言い換えて繰り返さないでください。",
     "自然な日本語で返してください。",
@@ -216,6 +223,34 @@ function buildPlanSection(resolvedPlan: HopyResolvedPlan): string {
   ].join("\n");
 }
 
+function buildSingleSourceOfTruthSection(
+  resolvedPlan: HopyResolvedPlan,
+): string {
+  if (resolvedPlan === "free") {
+    return [
+      "唯一の正ルール:",
+      "- HOPY回答○ の唯一の正は hopy_confirmed_payload.state.state_changed です。",
+      "- state_changed は、今回のユーザー入力と今回生成した最終返答の意味から、このターンの確定結果として決めること。",
+      "- prev_phase / prev_state_level には入力前参考状態を入れ、current_phase / state_level には今回ターン後の確定状態を入れること。",
+      "- current_phase または state_level が prev と違うなら state_changed=true、両方同じときだけ false にすること。",
+      "- 下流は再判定しない前提なので、current と prev の関係を曖昧にしないこと。",
+      "- Free では state_changed=true でも hopy_confirmed_payload.compass を付けてはならないこと。",
+    ].join("\n");
+  }
+
+  return [
+    "唯一の正ルール:",
+    "- HOPY回答○ の唯一の正は hopy_confirmed_payload.state.state_changed です。",
+    "- state_changed は、今回のユーザー入力と今回生成した最終返答の意味から、このターンの確定結果として決めること。",
+    "- prev_phase / prev_state_level には入力前参考状態を入れ、current_phase / state_level には今回ターン後の確定状態を入れること。",
+    "- current_phase または state_level が prev と違うなら state_changed=true、両方同じときだけ false にすること。",
+    "- Plus / Pro では state_changed=true の回に、hopy_confirmed_payload.compass.text と hopy_confirmed_payload.compass.prompt を必ず返すこと。",
+    "- Plus / Pro では state_changed=true なのに Compass を欠けさせてはならないこと。",
+    "- Plus / Pro では state_changed=false の回に compass を付けてはならないこと。",
+    "- ○ と Compass を分離しないこと。",
+  ].join("\n");
+}
+
 function buildMemoriesSection(memories?: HopyMemoryInput[] | null): string {
   const lines = clipLines(
     (memories ?? []).map((memory, index) => {
@@ -300,8 +335,8 @@ function buildTransitionSection(
       "- 今回は低シグナル入口入力として扱うこと。",
       "- 上の2値は今回ターンの確定結果ではありません。",
       "- 低シグナル入口入力では、状態を進めること自体を目的にしないこと。",
-      "- 低シグナル入口入力では、state_changed を true にしないこと。",
-      "- 低シグナル入口入力では、current_phase / state_level を大きく上げないこと。",
+      "- 低シグナル入口入力だけを根拠に、state_changed を true にしないこと。",
+      "- 低シグナル入口入力だけを根拠に、current_phase / state_level を大きく上げないこと。",
       "- 参考状態や参考上限目安が高くても、それを今回ターンの決定根拠にしないこと。",
       "- 会話開始または軽い応答として静かに返すこと。",
     ].join("\n");
@@ -313,12 +348,12 @@ function buildTransitionSection(
     `- 参考上限目安: ${normalizedTarget}/5`,
     "- 上の2値は今回ターンの確定結果ではありません。",
     "- 参考上限目安は強制到達先ではなく、意味入力が十分なときだけ近づける上限目安です。",
-    "- 入力前の参考状態や参考上限目安だけを見て、その回の state_changed / current_phase / state_level を先取りしないでください。",
-    "- 低シグナル入口入力や軽い短文では、状態を進めること自体を目的にしないでください。",
+    "- 入力前の参考状態や参考上限目安だけを見て、その回の state_changed / current_phase / stateLevel を先取りしないでください。",
+    "- 低シグナル入口入力や軽い短文では、状態前進を作ること自体を目的にしないでください。",
     "- 実質的な意味入力が十分にあり、前進の根拠が明確なときだけ、次の自然な段階へ進める返答にしてください。",
     "- 入口の挨拶だけなら、会話開始として静かに受け、状態遷移を確定しないでください。",
     "- 軽い短文だけなら、気持ちの受け止めに留め、状態を大きく進めないでください。",
-    "- 軽い前向き短文だけでは、決定・実行開始・方針確定に進めないでください。",
+    "- 軽い前向き短文だけを根拠に、決定・実行開始・方針確定に進めないでください。",
     "- state 5 は、決定・行動開始・方針確定が明確なときだけです。",
     "- 状態前進よりも、入力に合った自然さと過大解釈の防止を優先してください。",
     "- 押しつけず、受け取りやすい小さな一歩を含めてください。",
@@ -459,13 +494,16 @@ function buildGenerationRulesSection(
     return [
       "回答生成ルール:",
       "- 今回は低シグナル入口入力として扱うこと。",
-      "- 入力前に渡される state や target は参考情報であり、その回の確定 state を意味しないこと。",
-      "- 参考 state や参考 target だけを根拠に、その回の state_changed / current_phase / state_level を決め打ちしないこと。",
+      "- このファイルで渡している入力前参考状態や参考上限目安は補助情報であり、その回の確定 state を意味しないこと。",
+      "- このファイルの参考情報だけを根拠に、その回の state_changed / current_phase / state_level を決め打ちしないこと。",
+      "- 今回のユーザー入力と今回生成した最終返答の意味から、その回の current_phase / state_level / state_changed を確定すること。",
+      "- prev_phase / prev_state_level には入力前参考状態を入れ、current_phase / state_level には今回ターン後の確定状態を入れること。",
+      "- current_phase または stateLevel が prev と違うなら state_changed=true、両方同じときだけ false にすること。",
       "- 低シグナル入口入力では、状態前進を作ること自体を目的にしないこと。",
-      "- 低シグナル入口入力だけでは、状態変化を確定しないこと。",
-      "- 低シグナル入口入力だけでは、state_changed を true にしないこと。",
-      "- 低シグナル入口入力だけでは、current_phase / state_level を 5 へ飛ばさないこと。",
-      "- 低シグナル入口入力だけでは、Compass を必要とする意味づけをしないこと。",
+      "- 低シグナル入口入力だけを根拠に、状態変化を確定しないこと。",
+      "- 低シグナル入口入力だけを根拠に、state_changed を true にしないこと。",
+      "- 低シグナル入口入力だけを根拠に、current_phase / state_level を 5 へ飛ばさないこと。",
+      "- 低シグナル入口入力だけを根拠に、Compass を必要とする意味づけをしないこと。",
       "- 挨拶や軽い短文では、短く自然に返すこと。",
       "- 深い気づきや強い方向提示を入れないこと。",
       "- 行動開始・方針確定・決定完了として扱わないこと。",
@@ -477,16 +515,19 @@ function buildGenerationRulesSection(
   return [
     "回答生成ルール:",
     "- 今回の回答は、入力の重さ・深さ・説明要求に合う自然な返答を優先すること",
-    "- 入力前に渡される state や target は参考情報であり、その回の確定 state を意味しないこと",
-    "- 参考 state や参考 target だけを根拠に、その回の state_changed / current_phase / state_level を決め打ちしないこと",
+    "- このファイルで渡している入力前参考状態や参考上限目安は補助情報であり、その回の確定 state を意味しないこと",
+    "- このファイルの参考情報だけを根拠に、その回の state_changed / current_phase / state_level を決め打ちしないこと",
+    "- 今回のユーザー入力と今回生成した最終返答の意味から、その回の current_phase / state_level / state_changed を確定すること",
+    "- prev_phase / prev_state_level には入力前参考状態を入れ、current_phase / state_level には今回ターン後の確定状態を入れること",
+    "- current_phase または state_level が prev と違うなら state_changed=true、両方同じときだけ false にすること",
     "- 低シグナル入口入力や軽い短文では、状態前進を作ること自体を目的にしないこと",
-    "- ただし低シグナル入口入力だけでは、状態変化を確定しないこと",
-    "- 低シグナル入口入力だけでは、state_changed を true にしないこと",
-    "- 低シグナル入口入力だけでは、current_phase / state_level を 5 へ飛ばさないこと",
-    "- 低シグナル入口入力だけでは、Compass を必要とする意味づけをしないこと",
-    "- 入口挨拶ではなくても、短文の軽い感想・軽い前向き発話・軽い応援だけでは state_changed を true にしないこと",
-    "- 『いいね』『ありがとう』『最高』『助かる』『なるほど』『了解』『たのしみ』『がんばる』『嬉しい』『よかった』程度の短文だけで、決定・行動開始・方針確定を作らないこと",
-    "- 短文だけで決意・決定・整理完了・行動確定まで読み込まないこと",
+    "- ただし低シグナル入口入力だけを根拠に、状態変化を確定しないこと",
+    "- 低シグナル入口入力だけを根拠に、state_changed を true にしないこと",
+    "- 低シグナル入口入力だけを根拠に、current_phase / state_level を 5 へ飛ばさないこと",
+    "- 低シグナル入口入力だけを根拠に、Compass を必要とする意味づけをしないこと",
+    "- 入口挨拶ではなくても、短文の軽い感想・軽い前向き発話・軽い応援だけを根拠に state_changed を true にしないこと",
+    "- 『いいね』『ありがとう』『最高』『助かる』『なるほど』『了解』『たのしみ』『がんばる』『嬉しい』『よかった』程度の短文だけを根拠に、決定・行動開始・方針確定を作らないこと",
+    "- 短文だけを根拠に、決意・決定・整理完了・行動確定まで読み込まないこと",
     "- 軽い前向き短文と、明確な決断表明を混同しないこと",
     "- state_level を 5 にしてよいのは、明確な決定・行動開始・方針確定・強い意志表明があるときだけです",
     "- 自然な日本語で返すこと",
@@ -507,6 +548,52 @@ function buildGenerationRulesSection(
   ].join("\n");
 }
 
+function buildConfirmedPayloadShapeSection(
+  resolvedPlan: HopyResolvedPlan,
+): string {
+  if (resolvedPlan === "free") {
+    return [
+      "返却JSON契約:",
+      "- 返却は必ず JSON オブジェクト1つだけにすること。",
+      "- Markdown、コードフェンス、前置き説明、後置き説明は禁止。",
+      '- top-level で許可するキーは "hopy_confirmed_payload" と "confirmed_memory_candidates" だけにすること。',
+      '- top-level の "reply" / "state" / "assistant_state" / "compassText" / "compassPrompt" / "compass" を返してはならない。',
+      "- 回答本文は必ず hopy_confirmed_payload.reply に入れること。",
+      "- 状態は必ず hopy_confirmed_payload.state に入れること。",
+      "- hopy_confirmed_payload.state.state_changed が HOPY回答○ の唯一の正です。",
+      "- hopy_confirmed_payload.state は、今回のユーザー入力と今回生成した最終返答の意味から、このターンの確定結果として自分で決めること。",
+      "- prev_phase / prev_state_level には入力前参考状態を入れること。",
+      "- current_phase / state_level には今回ターン後の確定状態を入れること。",
+      "- current_phase または state_level が prev と違うなら state_changed=true にすること。両方同じときだけ false にすること。",
+      "- 参考状態を current にそのまま複写して固定してはならない。",
+      "- 『やることが見えてきた』『整理できた』『次の一歩が見えた』の意味なら、1=混線 / state_changed=false に固定してはならない。",
+      "- Free では hopy_confirmed_payload.compass を付けてはならない。",
+      "- confirmed_memory_candidates は top-level 配列で返してよい。",
+    ].join("\n");
+  }
+
+  return [
+    "返却JSON契約:",
+    "- 返却は必ず JSON オブジェクト1つだけにすること。",
+    "- Markdown、コードフェンス、前置き説明、後置き説明は禁止。",
+    '- top-level で許可するキーは "hopy_confirmed_payload" と "confirmed_memory_candidates" だけにすること。',
+    '- top-level の "reply" / "state" / "assistant_state" / "compassText" / "compassPrompt" / "compass" を返してはならない。',
+    "- 回答本文は必ず hopy_confirmed_payload.reply に入れること。",
+    "- 状態は必ず hopy_confirmed_payload.state に入れること。",
+    "- hopy_confirmed_payload.state.state_changed が HOPY回答○ の唯一の正です。",
+    "- hopy_confirmed_payload.state は、今回のユーザー入力と今回生成した最終返答の意味から、このターンの確定結果として自分で決めること。",
+    "- prev_phase / prev_state_level には入力前参考状態を入れること。",
+    "- current_phase / state_level には今回ターン後の確定状態を入れること。",
+    "- current_phase または state_level が prev と違うなら state_changed=true にすること。両方同じときだけ false にすること。",
+    "- 参考状態を current にそのまま複写して固定してはならない。",
+    "- 『やることが見えてきた』『整理できた』『次の一歩が見えた』の意味なら、1=混線 / state_changed=false に固定してはならない。",
+    "- Plus / Pro では state_changed=true のとき、hopy_confirmed_payload.compass.text と hopy_confirmed_payload.compass.prompt を必ず返すこと。",
+    "- Plus / Pro では state_changed=true なのに compass を欠けさせてはならない。",
+    "- Plus / Pro で state_changed=false のときは hopy_confirmed_payload.compass を付けてはならない。",
+    "- confirmed_memory_candidates は top-level 配列で返してよい。",
+  ].join("\n");
+}
+
 function buildUserInputSection(userInput: string): string {
   return [
     "今回のユーザー入力:",
@@ -519,8 +606,8 @@ function buildUserInputSection(userInput: string): string {
     "ただし毎回同じ量を出さず、入力に応じて見せる量を調整してください。",
     "ただし『こんにちは』のような入口挨拶だけなら、会話開始として静かに返してください。",
     "入口挨拶だけなら、深い意味づけ、強い状態遷移、Compass前提の読解をしないでください。",
-    "短文の軽い感想・軽い前向き発話・軽い応援だけなら、短く返し、状態を大きく進めないでください。",
-    "『いいね』『ありがとう』『最高』『助かる』『なるほど』『了解』『たのしみ』『がんばる』『嬉しい』『よかった』のような短文だけでは、決定・行動開始・方針確定として扱わないでください。",
+    "短文の軽い感想・軽い前向き発話・軽い応援だけを根拠に、状態を大きく進めないでください。",
+    "『いいね』『ありがとう』『最高』『助かる』『なるほど』『了解』『たのしみ』『がんばる』『嬉しい』『よかった』のような短文だけを根拠に、決定・行動開始・方針確定として扱わないでください。",
     "明確な決定・行動開始・方針確定がない限り、state 5 を前提に読まないでください。",
     "軽い入力では短く、説明要求では深く返してください。",
   ].join("\n");
@@ -543,6 +630,8 @@ export function buildHopyPrompt(
       "",
       buildPlanSection(resolvedPlan),
       "",
+      buildSingleSourceOfTruthSection(resolvedPlan),
+      "",
       buildTransitionSection(
         stateLevel,
         params.transitionTargetLevel,
@@ -562,6 +651,8 @@ export function buildHopyPrompt(
       buildExpressionAssetsSection(params.expressionAssets),
       "",
       buildGenerationRulesSection(resolvedPlan, userInput),
+      "",
+      buildConfirmedPayloadShapeSection(resolvedPlan),
     ].join("\n"),
     userPrompt: buildUserInputSection(userInput),
   };
@@ -574,10 +665,12 @@ HOPY回答の核になる system / developer / user prompt を組み立て、状
 
 /*
 【今回このファイルで修正したこと】
-- 低シグナル入口入力を isLowSignalInput で先に判定し、参考 state が高くても本文圧を強めない分岐を追加しました。
-- buildPolicySection / buildTransitionSection / buildThreeStepStructureSection / buildStateDensitySection / buildGenerationRulesSection を userInput 依存に変更しました。
-- 低シグナル入口入力では、参考 state や target が 2 以上でも state_changed=true や state 5 を誘導しない専用ルールへ切り替えるようにしました。
-- それ以外の上流 state 生成や payload 組み立ては触っていません。
+- HOPY回答○ の唯一の正が hopy_confirmed_payload.state.state_changed であることを prompt に明記しました。
+- Plus / Pro では state_changed=true の回に compass.text / compass.prompt を必須とし、○ と Compass を分離しない指示を追加しました。
+- 「低シグナル入力や短文だから即 false」と読まれやすい抑制文を、「それだけを根拠に false / 大幅前進にしない」へ寄せました。
+- current / prev / state_changed は、今回のユーザー入力と今回生成した最終返答の意味から確定する方針をさらに強めました。
+- 低シグナル判定の閾値、本文密度、長さ制御、プラン分岐そのものには触っていません。
 */
 
 /* /app/api/chat/_lib/response/hopyPromptBuilder.ts */
+// このファイルの正式役割: HOPY回答の核になる system / developer / user prompt を組み立てるファイル

@@ -202,8 +202,8 @@ function buildConcreteCompassStateInstruction(args: {
       "今回ターンの prev_state_level は prev_state_level 参考値をそのまま使うこと。",
       "state_changed は、サーバ計算済みの state_changed 参考値と一致させること。",
       "current_phase / state_level / prev_phase / prev_state_level / state_changed を、本文内容や雰囲気から再判定してはならない。",
-      "Free では Compass は生成しないこと。",
-      'Free では compassText と compassPrompt を必ず空文字 "" にすること。',
+      "Free では hopy_confirmed_payload.compass を生成しないこと。",
+      'Free では top-level の compassText / compassPrompt を返してはならない。',
     ].join("\n");
   }
 
@@ -225,8 +225,9 @@ function buildConcreteCompassStateInstruction(args: {
     "今回ターンの prev_state_level は prev_state_level 参考値をそのまま使うこと。",
     "state_changed は、サーバ計算済みの state_changed 参考値と一致させること。",
     "current_phase / state_level / prev_phase / prev_state_level / state_changed を、本文内容や雰囲気から再判定してはならない。",
-    "state_changed=true なら compassText と compassPrompt を必ず返すこと。",
-    'state_changed=false なら compassText と compassPrompt は必ず空文字 "" にすること。',
+    "state_changed=true なら hopy_confirmed_payload.compass.text と hopy_confirmed_payload.compass.prompt を必ず返すこと。",
+    "state_changed=false なら hopy_confirmed_payload.compass を付けないこと。",
+    'top-level の compassText / compassPrompt を返してはならない。',
   ].join("\n");
 }
 
@@ -245,9 +246,9 @@ function buildCompassInstruction(args: {
         resolvedPlan,
         stateFacts,
       }),
-      "Free では compassText を作らないこと。",
-      "Free では compassPrompt を作らないこと。",
-      '返却時は compassText と compassPrompt を必ず空文字 "" にすること。',
+      "Free では hopy_confirmed_payload.compass を作らないこと。",
+      "Free では top-level の compassText / compassPrompt を作らないこと。",
+      "Free では hopy_confirmed_payload.reply と hopy_confirmed_payload.state だけを正式に返すこと。",
       "compass.text のような別構造だけで返してはいけない。",
     ].join("\n");
   }
@@ -260,7 +261,7 @@ function buildCompassInstruction(args: {
   const structureLines =
     resolvedPlan === "pro"
       ? [
-          "state_changed=true の対象ターンでは、compassText は必ず複数行の構造化本文で返すこと。",
+          "state_changed=true の対象ターンでは、hopy_confirmed_payload.compass.text は必ず複数行の構造化本文で返すこと。",
           "1文だけの短文にしてはいけない。",
           "見出しは必ず次の正式名を使うこと。",
           "【いまの状態】",
@@ -273,7 +274,7 @@ function buildCompassInstruction(args: {
           "【あなたへ】と【創業者より、あなたへ】には、それぞれ少なくとも1行以上の本文を書くこと。",
         ]
       : [
-          "state_changed=true の対象ターンでは、compassText は必ず複数行の構造化本文で返すこと。",
+          "state_changed=true の対象ターンでは、hopy_confirmed_payload.compass.text は必ず複数行の構造化本文で返すこと。",
           "1文だけの短文にしてはいけない。",
           "見出しは必ず次の正式名を使うこと。",
           "【いまの状態】",
@@ -289,15 +290,15 @@ function buildCompassInstruction(args: {
     "【Compass生成ルール】",
     "Compass は本文の別回答ではない。",
     "Compass は、なぜこの回答に○が付いたのか、なぜ状態がここに確定したのかを根拠説明する補助レイヤーである。",
-    "reply は主役の回答本文として返し、compassText は本文とは別に返す。",
+    "reply は主役の回答本文として返し、Compass は hopy_confirmed_payload.compass の中に返す。",
     buildConcreteCompassStateInstruction({
       resolvedPlan,
       stateFacts,
     }),
-    "state_changed=true の対象ターンでは、compassText を空欄にしてはいけない。",
-    "state_changed=true の対象ターンでは、compassPrompt も空欄にしてはいけない。",
-    "返却JSONでは compassText と compassPrompt を正式キーとして返すこと。",
-    "compass.text だけを返してはいけない。",
+    "state_changed=true の対象ターンでは、hopy_confirmed_payload.compass.text を空欄にしてはいけない。",
+    "state_changed=true の対象ターンでは、hopy_confirmed_payload.compass.prompt も空欄にしてはいけない。",
+    "返却JSONでは hopy_confirmed_payload.compass.text と hopy_confirmed_payload.compass.prompt を正式キーとして返すこと。",
+    "top-level の compassText / compassPrompt を返してはいけない。",
     "compassText では、HOPY がどこを見てそう読んだのかを短くやさしく説明する。",
     "compassText は本文の言い換え・要約にしない。",
     "compassText は、状態変化の背景説明にする。",
@@ -306,7 +307,7 @@ function buildCompassInstruction(args: {
     "専門用語を並べるだけにしない。",
     "視点を使う場合も、最後はこの会話に即した一つの説明へまとめる。",
     ...structureLines,
-    "compassPrompt には、compassText を要約した短い内部ヒントを必ず返すこと。",
+    "hopy_confirmed_payload.compass.prompt には、compassText を要約した短い内部ヒントを必ず返すこと。",
     "Compass で扱ってよい中心内容は次の通り。",
     "・ユーザーの言葉のどこに変化の兆しがあったか",
     "・迷いから絞り込みへ進んだ理由",
@@ -318,6 +319,55 @@ function buildCompassInstruction(args: {
     "・学問名を並べるだけで終わること",
     "・説教や評価にすること",
     "・state_changed がない前提の一般論を書くこと",
+  ].join("\n");
+}
+
+function buildConfirmedPayloadOutputContract(args: {
+  resolvedPlan: ResolvedPlan;
+  stateFacts: HopyStateFacts;
+}): string {
+  const { resolvedPlan, stateFacts } = args;
+
+  const baseLines = [
+    "【返却JSONの正式shape】",
+    "返却は必ず JSON オブジェクト1つだけにすること。",
+    "Markdown、コードフェンス、前置き説明、後置き説明は禁止。",
+    'top-level で許可するキーは "hopy_confirmed_payload" と "confirmed_memory_candidates" だけにすること。',
+    'top-level の "reply" / "state" / "assistant_state" / "compassText" / "compassPrompt" / "compass" を返してはならない。',
+    "回答本文は必ず hopy_confirmed_payload.reply に入れること。",
+    "状態は必ず hopy_confirmed_payload.state に入れること。",
+    "hopy_confirmed_payload.state.current_phase はサーバ計算済み current_phase と一致させること。",
+    "hopy_confirmed_payload.state.state_level はサーバ計算済み state_level と一致させること。",
+    "hopy_confirmed_payload.state.prev_phase は直前確定の prev_phase と一致させること。",
+    "hopy_confirmed_payload.state.prev_state_level は直前確定の prev_state_level と一致させること。",
+    "hopy_confirmed_payload.state.state_changed はサーバ計算済み state_changed と一致させること。",
+    `今回ターンの current_phase 参考値=${formatStateFactNumber(stateFacts.currentPhase)}`,
+    `今回ターンの state_level 参考値=${formatStateFactNumber(stateFacts.stateLevel)}`,
+    `今回ターンの prev_phase 参考値=${formatStateFactNumber(stateFacts.prevPhase)}`,
+    `今回ターンの prev_state_level 参考値=${formatStateFactNumber(stateFacts.prevStateLevel)}`,
+    `今回ターンの state_changed 参考値=${formatStateFactBoolean(stateFacts.stateChanged)}`,
+    "current_phase / state_level / prev_phase / prev_state_level / state_changed を本文内容や雰囲気から再判定してはならない。",
+    "confirmed_memory_candidates は top-level 配列で返してよい。",
+  ];
+
+  if (resolvedPlan === "free") {
+    return [
+      ...baseLines,
+      "Free では hopy_confirmed_payload.compass を付けてはならない。",
+      "Free では top-level の compassText / compassPrompt も返してはならない。",
+      "Free の正式shape例:",
+      '{ "hopy_confirmed_payload": { "reply": "...", "state": { "current_phase": 1, "state_level": 1, "prev_phase": 1, "prev_state_level": 1, "state_changed": false } }, "confirmed_memory_candidates": [] }',
+    ].join("\n");
+  }
+
+  return [
+    ...baseLines,
+    "Plus / Pro では state_changed=true のときだけ hopy_confirmed_payload.compass を付けること。",
+    "Plus / Pro で state_changed=true のときは hopy_confirmed_payload.compass.text と hopy_confirmed_payload.compass.prompt を必ず入れること。",
+    "Plus / Pro で state_changed=false のときは hopy_confirmed_payload.compass を付けてはならない。",
+    "top-level の compassText / compassPrompt を返してはならない。",
+    "Plus / Pro の正式shape例:",
+    '{ "hopy_confirmed_payload": { "reply": "...", "state": { "current_phase": 3, "state_level": 3, "prev_phase": 2, "prev_state_level": 2, "state_changed": true }, "compass": { "text": "...", "prompt": "..." } }, "confirmed_memory_candidates": [] }',
   ].join("\n");
 }
 
@@ -360,6 +410,11 @@ function buildHopyAnswerContract(args: {
     buildPlanDepthInstruction(args.resolvedPlan),
     "",
     buildCompassInstruction({
+      resolvedPlan: args.resolvedPlan,
+      stateFacts: args.stateFacts,
+    }),
+    "",
+    buildConfirmedPayloadOutputContract({
       resolvedPlan: args.resolvedPlan,
       stateFacts: args.stateFacts,
     }),
@@ -406,16 +461,17 @@ ${learningBlock}`,
 このファイルの正式役割
 HOPY 用の追加 prompt section を組み立てるファイル。
 stateForSystem から今回ターンの状態材料を受け取り、
-本文ルールと Compass 生成ルールを system prompt 文字列へ具体化して返す。
+本文ルールと Compass 生成ルールと返却JSON契約を system prompt 文字列へ具体化して返す。
 */
 
 /*
 【今回このファイルで修正したこと】
-- buildConcreteCompassStateInstruction(...) の文言を修正し、stateForSystem.current_phase / state_level を「入力前参考」ではなく「今回ターンでサーバが計算済みの正式な状態材料」として扱うように戻しました。
-- 同じ箇所で、「今回ターンの current_phase と state_level は新たに決めること」という誤指示を削除し、サーバ計算済み current/state をそのまま hopy_confirmed_payload.state に一致させるよう明記しました。
-- prev_phase / prev_state_level も、直前確定状態としてそのまま一致させることを明記しました。
-- state_changed もサーバ計算済みの参考値と一致させることを明記し、本文内容や雰囲気から再判定しないよう固定しました。
-- これにより、5→4 のはずの current_phase/state_level をモデルが 1 に振り直す経路をこのファイル内で止めます。
+- モデル返却の正式shapeを hopy_confirmed_payload.reply / hopy_confirmed_payload.state / hopy_confirmed_payload.compass に固定する出力契約を追加しました。
+- top-level の reply / state / assistant_state / compassText / compassPrompt / compass を返してはならないことを明記しました。
+- Plus / Pro では state_changed=true のときだけ hopy_confirmed_payload.compass.text / prompt を返し、state_changed=false では compass を付けないことを明記しました。
+- Free では hopy_confirmed_payload.compass 自体を返さないことを明記しました。
+- 既存の「サーバ計算済み状態値と一致させる」指示は維持しつつ、JSON の入れ場所そのものを唯一の正に合わせて固定しました。
 */
 
 /* /app/api/chat/_lib/route/promptHopySections.ts */
+// このファイルの正式役割: HOPY 用の追加 prompt section を組み立てるファイル

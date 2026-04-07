@@ -50,23 +50,9 @@ export function safeParseJsonObject(
 
 export function hasReplyPayloadShape(parsed: Record<string, unknown>): boolean {
   return (
-    "reply" in parsed ||
-    "assistantText" in parsed ||
-    "assistant_text" in parsed ||
-    "content" in parsed ||
-    "confirmed_memory_candidates" in parsed ||
-    "memory_candidates" in parsed ||
-    "state" in parsed ||
-    "assistant_state" in parsed ||
     "hopy_confirmed_payload" in parsed ||
     "hopyConfirmedPayload" in parsed ||
-    "compass" in parsed ||
-    "compassText" in parsed ||
-    "compass_text" in parsed ||
-    "compassPrompt" in parsed ||
-    "compass_prompt" in parsed ||
-    "ui_effects" in parsed ||
-    "uiEffects" in parsed
+    "confirmed_memory_candidates" in parsed
   );
 }
 
@@ -110,18 +96,6 @@ export function extractConfirmedMemoryCandidatesFromParsed(
     return parsed.confirmed_memory_candidates;
   }
 
-  if (Array.isArray(parsed.memory_candidates)) {
-    return parsed.memory_candidates;
-  }
-
-  const confirmedPayload =
-    asRecord(parsed.hopy_confirmed_payload) ??
-    asRecord(parsed.hopyConfirmedPayload);
-
-  if (confirmedPayload && Array.isArray(confirmedPayload.memory_candidates)) {
-    return confirmedPayload.memory_candidates;
-  }
-
   return [];
 }
 
@@ -141,9 +115,7 @@ function extractUiEffectsFromParsed(
 
   return (
     asRecord(confirmedPayload?.ui_effects) ??
-    asRecord(confirmedPayload?.uiEffects) ??
-    asRecord(parsed.ui_effects) ??
-    asRecord(parsed.uiEffects)
+    asRecord(confirmedPayload?.uiEffects)
   );
 }
 
@@ -152,11 +124,7 @@ export function extractStateFromParsed(
 ): Record<string, unknown> | null {
   const confirmedPayload = extractConfirmedPayloadFromParsed(parsed);
 
-  return (
-    asRecord(confirmedPayload?.state) ??
-    asRecord(parsed.state) ??
-    asRecord(parsed.assistant_state)
-  );
+  return asRecord(confirmedPayload?.state);
 }
 
 export function extractCompassTextFromParsed(
@@ -164,7 +132,6 @@ export function extractCompassTextFromParsed(
 ): string {
   const confirmedPayload = extractConfirmedPayloadFromParsed(parsed);
   const confirmedCompass = asRecord(confirmedPayload?.compass);
-  const directCompass = asRecord(parsed.compass);
   const uiEffects = extractUiEffectsFromParsed(parsed);
   const uiEffectsCompass = asRecord(uiEffects?.compass);
 
@@ -172,10 +139,7 @@ export function extractCompassTextFromParsed(
     readString(confirmedCompass?.text) ||
     readString(confirmedPayload?.compassText) ||
     readString(confirmedPayload?.compass_text) ||
-    readString(uiEffectsCompass?.text) ||
-    readString(parsed.compassText) ||
-    readString(parsed.compass_text) ||
-    readString(directCompass?.text)
+    readString(uiEffectsCompass?.text)
   );
 }
 
@@ -184,7 +148,6 @@ export function extractCompassPromptFromParsed(
 ): string {
   const confirmedPayload = extractConfirmedPayloadFromParsed(parsed);
   const confirmedCompass = asRecord(confirmedPayload?.compass);
-  const directCompass = asRecord(parsed.compass);
   const uiEffects = extractUiEffectsFromParsed(parsed);
   const uiEffectsCompass = asRecord(uiEffects?.compass);
 
@@ -192,10 +155,7 @@ export function extractCompassPromptFromParsed(
     readString(confirmedCompass?.prompt) ||
     readString(confirmedPayload?.compassPrompt) ||
     readString(confirmedPayload?.compass_prompt) ||
-    readString(uiEffectsCompass?.prompt) ||
-    readString(parsed.compassPrompt) ||
-    readString(parsed.compass_prompt) ||
-    readString(directCompass?.prompt)
+    readString(uiEffectsCompass?.prompt)
   );
 }
 
@@ -226,10 +186,6 @@ export function extractReplyTextFromParsed(
     confirmedPayload?.assistantText ??
     confirmedPayload?.assistant_text ??
     confirmedPayload?.content ??
-    parsed.reply ??
-    parsed.assistantText ??
-    parsed.assistant_text ??
-    parsed.content ??
     fallbackText ??
     "";
 
@@ -297,15 +253,13 @@ assistantText / confirmed_memory_candidates / state / compassText / compassPromp
 
 /*
 【今回このファイルで修正したこと】
-- hopy_confirmed_payload.ui_effects / uiEffects を正式抽出対象に追加しました。
-- Compass の抽出順序を、confirmed payload 内の compass とフラットキーを優先し、その次に confirmed payload 内 ui_effects.compass を見る形へそろえました。
-- これにより、唯一の正に最も近い confirmed payload 内の ui_effects に入っている Compass を parser で欠落させず下流へ渡せるようにしました。
-- それ以外の parsed_json / state / memory_candidates / reply の抽出順序は変更していません。
+- hasReplyPayloadShape(...) から旧い flat key 判定を外し、hopy_confirmed_payload / hopyConfirmedPayload / confirmed_memory_candidates だけを対象にしました。
+- extractConfirmedMemoryCandidatesFromParsed(...) から legacy な memory_candidates 救出を外しました。
+- extractUiEffectsFromParsed(...) から parsed.ui_effects / parsed.uiEffects の top-level 救出を外しました。
+- extractReplyTextFromParsed(...) から parsed.reply / parsed.assistantText / parsed.assistant_text / parsed.content の flat 抽出を外しました。
+- extractCompassTextFromParsed(...) / extractCompassPromptFromParsed(...) から parsed.compassText / parsed.compass_prompt / parsed.compass など top-level 救出を外しました。
+- extractStateFromParsed(...) は引き続き hopy_confirmed_payload.state / hopyConfirmedPayload.state だけを正式抽出対象にしています。
 */
-// このファイルの正式役割: OpenAI 生出力から、確定意味ペイロードを抽出する解析ファイル
 
-/*
-【今回このファイルで修正したこと】
-confirmed payload 内の ui_effects.compass を抽出できるように修正しました。
-Compass の抽出優先順も、唯一の正に近い confirmed payload 側を先に見る形へそろえました。
-*/
+/* /app/api/chat/_lib/route/openaiParsing.ts */
+// このファイルの正式役割: OpenAI 生出力から、確定意味ペイロードを抽出する解析ファイル

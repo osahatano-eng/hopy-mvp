@@ -105,8 +105,8 @@ function readConfirmedState(
 ): {
   current_phase: 1 | 2 | 3 | 4 | 5;
   state_level: 1 | 2 | 3 | 4 | 5;
-  prev_phase: 1 | 2 | 3 | 4 | 5;
-  prev_state_level: 1 | 2 | 3 | 4 | 5;
+  prev_phase?: 1 | 2 | 3 | 4 | 5;
+  prev_state_level?: 1 | 2 | 3 | 4 | 5;
   state_changed: boolean;
   label?: string;
   prev_label?: string;
@@ -116,19 +116,17 @@ function readConfirmedState(
   const confirmedState = asRecord(confirmedPayload?.state);
   if (!confirmedState) return null;
 
-  const currentPhase = readLevelCandidate(confirmedState.current_phase);
-  const stateLevel = readLevelCandidate(confirmedState.state_level);
+  const currentPhase =
+    readLevelCandidate(confirmedState.current_phase) ??
+    readLevelCandidate(confirmedState.state_level);
+  const stateLevel =
+    readLevelCandidate(confirmedState.state_level) ??
+    readLevelCandidate(confirmedState.current_phase);
   const prevPhase = readLevelCandidate(confirmedState.prev_phase);
   const prevStateLevel = readLevelCandidate(confirmedState.prev_state_level);
   const stateChanged = readBool(confirmedState.state_changed);
 
-  if (
-    currentPhase == null ||
-    stateLevel == null ||
-    prevPhase == null ||
-    prevStateLevel == null ||
-    stateChanged == null
-  ) {
+  if (currentPhase == null || stateLevel == null || stateChanged == null) {
     return null;
   }
 
@@ -146,11 +144,11 @@ function readConfirmedState(
   return {
     current_phase: currentPhase,
     state_level: stateLevel,
-    prev_phase: prevPhase,
-    prev_state_level: prevStateLevel,
+    ...(prevPhase != null ? { prev_phase: prevPhase } : {}),
+    ...(prevStateLevel != null ? { prev_state_level: prevStateLevel } : {}),
     state_changed: stateChanged,
-    label,
-    prev_label: prevLabel,
+    ...(label ? { label } : {}),
+    ...(prevLabel ? { prev_label: prevLabel } : {}),
   };
 }
 
@@ -225,16 +223,10 @@ changed 判定そのものは独自再計算しない。
 
 /*
 【今回このファイルで修正したこと】
-- HOPY○ の表示条件を confirmedState.state_changed === true のみへ固定したまま維持した。
-- phase を visual.level ではなく confirmedState.current_phase のみに固定した。
-- dotToken も confirmedState.current_phase から直接決める形に修正し、UI側の phase 再解釈余地を消した。
-- label は confirmedState.label を優先し、見た目用の shortLabel は補助 fallback のみにした。
+- readConfirmedState(...) で prev_phase / prev_state_level を必須扱いしないように修正しました。
+- HOPY○ の表示可否は、current_phase / state_level / state_changed が取れている限り、唯一の正である confirmedState.state_changed をそのまま通す形に戻しました。
+- current_phase / state_level は片方しか来ない回でも相互補完して読めるようにし、このファイル内で不要な欠落落ちを止めました。
+- changed の再判定や本文からの推測は追加していません。
 */
-// このファイルの正式役割: assistant message から HOPY○ 表示用の AssistantDotMeta を作るファイル
 
-/*
-このファイルの正式役割
-assistant message から HOPY○ 表示用の AssistantDotMeta を作るファイル。
-唯一の正である hopy_confirmed_payload.state だけを受け取り、そのまま表示可否へ使う。
-phase / label / dotColor は見た目用に整えるが、changed 判定そのものは独自再計算しない。
-*/
+/* /components/chat/view/chatStreamAssistantState.tsx */

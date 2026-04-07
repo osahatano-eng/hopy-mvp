@@ -6,21 +6,6 @@ import type {
   ConfirmedAssistantTurn,
 } from "./authenticatedTypes";
 
-type AuthenticatedChatPayloadWithConfirmedCompass = AuthenticatedChatPayload & {
-  hopy_confirmed_payload?: {
-    reply: string;
-    state: ConfirmedAssistantTurn["canonicalAssistantState"];
-    compass?: {
-      text: string;
-      prompt: string | null;
-    };
-  };
-  compass?: {
-    text: string;
-    prompt: string | null;
-  };
-};
-
 type Phase1to5 = 1 | 2 | 3 | 4 | 5;
 
 function isPhase1to5(value: unknown): value is Phase1to5 {
@@ -80,7 +65,11 @@ function normalizeRequiredAssistantState(
     );
   }
 
-  if (prev_phase !== null && prev_phase !== undefined && !isPhase1to5(prev_phase)) {
+  if (
+    prev_phase !== null &&
+    prev_phase !== undefined &&
+    !isPhase1to5(prev_phase)
+  ) {
     throw new Error(
       "authenticatedPayload: state.prev_phase must be null or 1..5",
     );
@@ -97,49 +86,6 @@ function normalizeRequiredAssistantState(
   }
 
   return value;
-}
-
-function normalizeOptionalCompass(params: {
-  confirmedTurn: ConfirmedAssistantTurn;
-  stateChanged: boolean;
-}):
-  | {
-      text: string;
-      prompt: string | null;
-    }
-  | undefined {
-  const { confirmedTurn, stateChanged } = params;
-
-  if (stateChanged !== true) {
-    return undefined;
-  }
-
-  const rawCompass = (
-    confirmedTurn as ConfirmedAssistantTurn & { compass?: unknown }
-  ).compass;
-
-  if (!rawCompass || typeof rawCompass !== "object" || Array.isArray(rawCompass)) {
-    return undefined;
-  }
-
-  const generatedCompassText =
-    typeof (rawCompass as { text?: unknown }).text === "string"
-      ? (rawCompass as { text: string }).text.trim()
-      : "";
-
-  const generatedCompassPrompt =
-    typeof (rawCompass as { prompt?: unknown }).prompt === "string"
-      ? (rawCompass as { prompt: string }).prompt.trim()
-      : "";
-
-  if (generatedCompassText.length === 0) {
-    return undefined;
-  }
-
-  return {
-    text: generatedCompassText,
-    prompt: generatedCompassPrompt.length > 0 ? generatedCompassPrompt : null,
-  };
 }
 
 export function buildAuthenticatedChatPayload(params: {
@@ -169,7 +115,8 @@ export function buildAuthenticatedChatPayload(params: {
     memory_clean,
   } = params;
 
-  const assistantReply = normalizeRequiredReply(confirmedTurn.assistantText);
+  normalizeRequiredReply(confirmedTurn.assistantText);
+
   const assistantState = normalizeRequiredAssistantState(
     confirmedTurn.canonicalAssistantState,
   );
@@ -181,15 +128,8 @@ export function buildAuthenticatedChatPayload(params: {
     prev_state_level,
   } = assistantState;
 
-  const resolvedCompass = normalizeOptionalCompass({
-    confirmedTurn,
-    stateChanged: state_changed,
-  });
-
-  const payload: AuthenticatedChatPayloadWithConfirmedCompass = {
+  const payload = {
     ok: true,
-    reply: assistantReply,
-    state: assistantState,
     notification,
     thread: {
       id: resolvedConversationId,
@@ -202,19 +142,7 @@ export function buildAuthenticatedChatPayload(params: {
     },
     state_update_ok: stateUpdateOk,
     state_update_error: stateUpdateError,
-    state_level,
-    current_phase,
-    state_changed,
-    prev_phase,
-    prev_state_level,
-    assistant_state: assistantState,
-    ...(resolvedCompass ? { compass: resolvedCompass } : {}),
-    hopy_confirmed_payload: {
-      reply: assistantReply,
-      state: assistantState,
-      ...(resolvedCompass ? { compass: resolvedCompass } : {}),
-    },
-  };
+  } as AuthenticatedChatPayload;
 
   if (server_created_thread && debugSave && server_created_client_request_id) {
     payload.thread.client_request_id = server_created_client_request_id;
@@ -231,20 +159,21 @@ export default buildAuthenticatedChatPayload;
 
 /*
 このファイルの正式役割
-authenticated 最終 payload 組み立てファイル。
+authenticated 最終 payload の共通土台を組み立てるファイル。
 confirmedTurn / notification / thread 情報を受けて、
-クライアントへ返す AuthenticatedChatPayload を組み立てる。
-Compass 観点では、上流で確定済みの Compass を
-payload.compass と hopy_confirmed_payload.compass にそのまま載せる。
-このファイルは Compass を生成しない。
+クライアントへ返す AuthenticatedChatPayload の土台を作る。
+このファイルは HOPY唯一の正を新規生成しない。
+thread は確定状態の投影だけを持つ。
+reply / state / assistant_state / Compass / hopy_confirmed_payload の最終搭載はここで行わない。
 */
 
 /*
 【今回このファイルで修正したこと】
-- Compass を payload へ載せる条件に state_changed === true を追加しました。
-- confirmedTurn に Compass 文言があっても、state_changed !== true の回では payload.compass / hopy_confirmed_payload.compass を載せないようにしました。
-- Compass の参照元を confirmedTurn.compass の正式shape に寄せました。
-- reply / state の必須検証、状態 1..5 の検証、payload 本体の構造は変えていません。
+- old top-level の reply / state / assistant_state / state_level / current_phase / state_changed / prev_phase / prev_state_level を payload へ載せる処理を削除しました。
+- top-level の compass / hopy_confirmed_payload をこのファイルで組み立てる処理も削除しました。
+- このファイルは thread への確定状態の投影と、notification / state_update 系の共通土台だけを返す形に戻しました。
+- 状態値 1..5 の検証と confirmedTurn の必須検証は残しています。
 */
 
 /* /app/api/chat/_lib/route/authenticatedPayload.ts */
+// このファイルの正式役割: authenticated 最終 payload の共通土台を組み立てる

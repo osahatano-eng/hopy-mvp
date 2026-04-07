@@ -481,14 +481,23 @@ export function memoryOutputContractSystem(uiLang: Lang): string {
     return lines([
       "Output format contract for confirmed meaning payload (HARD):",
       "- Return ONLY a single JSON object. No markdown fences. No commentary outside JSON.",
-      '- The JSON object MUST contain exactly these top-level keys: "reply", "confirmed_memory_candidates", "compassText", and "compassPrompt".',
-      '- "reply" must be a natural user-facing assistant reply string.',
+      '- The JSON object MUST contain exactly these top-level keys: "hopy_confirmed_payload" and "confirmed_memory_candidates".',
+      '- Top-level "reply" / "state" / "assistant_state" / "compassText" / "compassPrompt" / "compass" are forbidden.',
+      '- "hopy_confirmed_payload" must be an object.',
+      '- "hopy_confirmed_payload.reply" must be the natural user-facing assistant reply string.',
+      '- "hopy_confirmed_payload.state" must be an object with exactly these keys: current_phase, state_level, prev_phase, prev_state_level, state_changed.',
+      '- "current_phase" / "state_level" / "prev_phase" / "prev_state_level" must stay in the 1..5 scale only.',
+      '- "state_changed" must be boolean.',
+      '- The one and only source of truth for the HOPY reply badge is "hopy_confirmed_payload.state.state_changed". Do NOT derive it from wording, tone, length, or any other field.',
+      '- Downstream layers must not recalculate state_changed. Return the finalized value only.',
+      '- When Compass is required for the current turn, return it only as "hopy_confirmed_payload.compass.text" and "hopy_confirmed_payload.compass.prompt".',
+      '- Do NOT keep Compass at the top level.',
+      '- Free may omit Compass even when state_changed is true.',
+      '- For Plus / Pro turns, if "hopy_confirmed_payload.state.state_changed" is true, "hopy_confirmed_payload.compass" must exist and "hopy_confirmed_payload.compass.text" must not be empty.',
+      '- For Plus / Pro turns, do NOT separate the reply badge truth and Compass truth. If state_changed is true, returning no Compass is invalid.',
+      '- Do NOT invent Compass from reply wording, and do NOT use fallback Compass text to hide missing upstream generation.',
+      '- When Compass is not allowed for the current turn, omit "hopy_confirmed_payload.compass" entirely.',
       '- "confirmed_memory_candidates" must be an array.',
-      '- "compassText" and "compassPrompt" are official top-level keys.',
-      "- Keep Compass keys at the top level and never nest them under other keys such as compass.text.",
-      "- Whether Compass is required or must be empty is determined by the plan-specific and state-specific Compass rules supplied elsewhere in the system prompts.",
-      '- When Compass is required for the current turn, do NOT leave "compassText" or "compassPrompt" empty.',
-      '- When Compass is not allowed for the current turn, return both "compassText" and "compassPrompt" as empty strings.',
       "- Each array item must be an object with these keys only: source_type, memory_type, body, savable.",
       '- "source_type" must be "auto".',
       '- "memory_type" must be one of: "trait", "theme", "support_context", "dashboard_signal".',
@@ -496,22 +505,31 @@ export function memoryOutputContractSystem(uiLang: Lang): string {
       '- "savable" must be true only when the item is clearly worth saving as a memory candidate. Otherwise omit the item instead of returning false items.',
       "- If there is no clearly savable memory candidate for this turn, return an empty array.",
       "- Keep confirmed_memory_candidates minimal: usually 0 to 2 items.",
-      '- Do not include thread_id, source_message_id, state, notification, dashboard_signals, or any other keys in this JSON.',
-      '- Do not nest compassText or compassPrompt under other keys. Keep them at the top level.',
+      '- Do not include thread_id, source_message_id, notification, dashboard_signals, or any other keys in this JSON.',
     ]);
   }
 
   return lines([
     "確定意味ペイロード用の出力契約（HARD）：",
     "・出力は JSON オブジェクト1個のみ。markdown のコードフェンスや前置き説明は付けない",
-    '・JSON のトップレベルキーは必ず "reply" / "confirmed_memory_candidates" / "compassText" / "compassPrompt" のみ',
-    '・"reply" には、ユーザー向けの自然な最終返答本文を入れる',
+    '・JSON のトップレベルキーは必ず "hopy_confirmed_payload" / "confirmed_memory_candidates" のみ',
+    '・top-level の "reply" / "state" / "assistant_state" / "compassText" / "compassPrompt" / "compass" を返してはならない',
+    '・"hopy_confirmed_payload" は object にする',
+    '・"hopy_confirmed_payload.reply" には、ユーザー向けの自然な最終返答本文を入れる',
+    '・"hopy_confirmed_payload.state" は object にし、キーは current_phase / state_level / prev_phase / prev_state_level / state_changed のみ',
+    "・current_phase / state_level / prev_phase / prev_state_level は必ず 1..5 のみで返す",
+    "・state_changed は必ず boolean で返す",
+    "・HOPY回答○ の唯一の正は hopy_confirmed_payload.state.state_changed だけである。文体・本文・温度感・長さ・他フィールドから再判定してはならない",
+    "・下流で state_changed を再計算せず、確定済みの値だけを返す",
+    "・Compass 必須ターンでは、Compass は hopy_confirmed_payload.compass.text / hopy_confirmed_payload.compass.prompt にだけ入れる",
+    "・Compass をトップレベルへ置いてはならない",
+    "・Free では state_changed=true でも Compass 非表示を許容してよい",
+    "・Plus / Pro では hopy_confirmed_payload.state.state_changed=true の回に hopy_confirmed_payload.compass を欠落させてはならない",
+    "・Plus / Pro では hopy_confirmed_payload.state.state_changed=true の回に hopy_confirmed_payload.compass.text を空にしてはならない",
+    "・Plus / Pro では HOPY回答○ の正と Compass の正を分離してはならない。state_changed=true なのに Compass なしは不正",
+    "・本文から Compass を推測したり、fallback の Compass 文言で欠落をごまかしたりしてはならない",
+    "・Compass 非対象ターンでは hopy_confirmed_payload.compass を付けてはならない",
     '・"confirmed_memory_candidates" は配列にする',
-    '・"compassText" と "compassPrompt" は正式なトップレベルキーである',
-    "・Compass キーは必ずトップレベルに置き、compass.text のような別構造へ逃がさない",
-    "・Compass が必須か空文字かは、別で与えられるプラン別・状態別の Compass ルールに厳密に従う",
-    '・今回ターンで Compass 必須なら、"compassText" と "compassPrompt" を空にしてはいけない',
-    '・今回ターンで Compass 非対象なら、"compassText" と "compassPrompt" は必ず空文字 "" にする',
     "・配列要素は object とし、キーは source_type / memory_type / body / savable のみ",
     '・"source_type" は必ず "auto"',
     '・"memory_type" は "trait" / "theme" / "support_context" / "dashboard_signal" のいずれかのみ',
@@ -519,8 +537,7 @@ export function memoryOutputContractSystem(uiLang: Lang): string {
     '・"savable" は明確に保存価値がある候補だけ true にする。保存価値が弱いものは false を返さず、配列に入れない',
     "・このターンで明確な候補がなければ、空配列 [] を返す",
     "・confirmed_memory_candidates は最小限。通常は 0〜2 件に抑える",
-    "・thread_id / source_message_id / state / notification / dashboard_signals など、他のキーはこの JSON に含めない",
-    "・compassText / compassPrompt は他キーの中へ入れず、必ずトップレベルに置く",
+    "・thread_id / source_message_id / notification / dashboard_signals など、他のキーはこの JSON に含めない",
   ]);
 }
 
@@ -531,11 +548,13 @@ export function memoryOutputContractSystem(uiLang: Lang): string {
 
 /*
 【今回このファイルで修正したこと】
-- conversationStyleSystem に、入力を「挨拶・軽い入口 / 軽い相談 / 重い相談 / 説明要求」で内部分類してテンポを切り替えるルールを追加した。
-- 他AIの良い部分を、テンポ・わかりやすさ・安心感・必要時だけ深くなる設計として吸収する方針を追加した。
-- HOPYの芯を「理解 → 気づき → 方向」としつつ、毎回同じ重さで全部見せないルールを追加した。
-- replyLengthSystem を、固定的な通常目安中心から、入力分類ごとの文量目安へ変更した。
-- 挨拶や軽い入力で長文化しにくいように、Free / Plus / Pro それぞれの短文レンジを下げた。
+- memoryOutputContractSystem(...) に、HOPY回答○ の唯一の正が hopy_confirmed_payload.state.state_changed であることを明記しました。
+- memoryOutputContractSystem(...) に、下流で state_changed を再計算してはならないことを追加しました。
+- memoryOutputContractSystem(...) に、Free / Plus / Pro の Compass 分岐を追加しました。
+- memoryOutputContractSystem(...) に、Plus / Pro で state_changed=true の回は Compass 欠落を不正とする契約を追加しました。
+- memoryOutputContractSystem(...) に、本文から Compass を推測したり、fallback でごまかしたりしてはならないことを追加しました。
+- それ以外の会話文体・継続性・長さ・プラン別方針には触っていません。
 */
 
 /* /app/api/chat/_lib/route/promptTextSystems.ts */
+// このファイルの正式役割: 会話文体・継続性・アンチ一般論・自己点検・回答長さ・プラン別応答方針・返信言語・確定意味ペイロード契約の system 文面を返すファイル

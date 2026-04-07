@@ -190,14 +190,7 @@ export function buildAuthenticatedResponsePayload(
     memory_clean,
   });
 
-  if (finalizedTurnArtifacts.compassText !== null) {
-    payload.compass = {
-      text: finalizedTurnArtifacts.compassText,
-      prompt: finalizedTurnArtifacts.compassPrompt,
-    };
-  } else {
-    delete payload.compass;
-  }
+  delete (payload as { compass?: unknown }).compass;
 
   payload.hopy_confirmed_payload =
     finalizedTurnArtifacts.confirmedMeaningPayload as ResponseConfirmedPayload;
@@ -210,7 +203,7 @@ export function buildAuthenticatedResponsePayload(
 authenticated 経路の最終 artifacts / payload 組み立てファイル。
 confirmedTurn と notification と Compass 情報を受け取り、
 confirmedMeaningPayload を作成し、
-最終 API payload に compass と hopy_confirmed_payload を載せる。
+最終 API payload に hopy_confirmed_payload を載せる。
 
 このファイルが受け取るもの
 buildFinalizedTurnArtifacts(...) へ
@@ -247,28 +240,28 @@ FinalizedTurnArtifacts
 
 最終 payload
 - buildAuthenticatedChatPayload(...) の結果
-- payload.compass
 - payload.hopy_confirmed_payload
 
 Compass 観点でこのファイルの意味
-このファイルは Compass の最終搭載場所。
+このファイルは Compass の最終中継箇所。
 Compass を新規生成しない。
-stateChanged を見て Compass を落とさない。
-受け取った compassText / compassPrompt を正規化し、
-payload.compass と confirmedMeaningPayload の両方に載せる。
+stateChanged を見て Compass を再判定しない。
+受け取った compassText / compassPrompt を
+confirmedMeaningPayload 側へ載せる。
 
 このファイルで確認できた大事なこと
 1. buildFinalizedTurnArtifacts(...) では、compassText 引数があればそれを優先し、なければ confirmedTurn 側の compassText を使う。
 2. buildConfirmedMeaningPayload(...) に compassText / compassPrompt を渡している。
-3. buildAuthenticatedResponsePayload(...) では finalizedTurnArtifacts.compassText !== null のときだけ payload.compass を載せる。
-4. finalizedTurnArtifacts.compassText が null の場合は payload.compass を delete する。
-5. payload.hopy_confirmed_payload は常に finalizedTurnArtifacts.confirmedMeaningPayload を載せる。
-6. このファイルは Compass を消す主原因ではなく、上流で null にされた Compass をそのまま反映する場所である。
+3. buildAuthenticatedResponsePayload(...) では top-level compass を載せず、hopy_confirmed_payload を唯一の正として返す。
+4. このファイルは Compass の生成元ではなく、唯一の正へ載せるための最終中継である。
 */
 
 /* 【今回このファイルで修正したこと】
-- `buildAuthenticatedChatPayload(...)` の戻り値から `hopy_confirmed_payload` の期待型を `ResponseConfirmedPayload` として取り出しました。
-- `payload.hopy_confirmed_payload` 代入時だけ、その期待型へ合わせる型注釈を追加しました。
-- 実際の payload 内容や state 値の計算ロジック自体には触れていません。
-- 他の処理や状態判定、Compass 系の流れには触れていません。
+- buildAuthenticatedResponsePayload(...) で top-level payload.compass を載せる処理をやめました。
+- 念のため delete (payload as { compass?: unknown }).compass; を入れ、top-level compass が残らないようにしました。
+- Compass の正は hopy_confirmed_payload 側だけに残す形へ寄せました。
+- confirmedMeaningPayload の生成、state 値の計算、DB 保存処理には触れていません。
 */
+
+/* /app/api/chat/_lib/route/authenticatedFinalize.ts */
+// このファイルの正式役割: authenticated 経路の最終 artifacts / payload 組み立て

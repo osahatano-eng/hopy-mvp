@@ -129,30 +129,39 @@ function normalizeAssistantStateRow(data: any): ConversationAssistantState {
   };
 }
 
-export async function loadLatestAssistantStateForConversation({
-  supabase,
-  conversationId,
-}: {
-  supabase: SupabaseClient;
-  conversationId: string;
-}): Promise<ConversationAssistantState> {
-  const cid = String(conversationId ?? "").trim();
-  if (!cid) return null;
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
 
-  const { data, error } = await supabase
-    .from("messages")
-    .select(
-      "current_phase, state_level, prev_phase, prev_state_level, state_changed, created_at",
-    )
-    .eq("conversation_id", cid)
-    .eq("role", "assistant")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+function resolvePhaseFromStateUpdate(
+  value: unknown,
+  fallback: 1 | 2 | 3 | 4 | 5,
+): 1 | 2 | 3 | 4 | 5 {
+  if (!isRecord(value)) return fallback;
 
-  if (error || !data) return null;
+  const candidates: unknown[] = [
+    value.current_phase,
+    value.currentPhase,
+    value.state_level,
+    value.stateLevel,
+    value.phase_after,
+    value.phaseAfter,
+    value.after_state_level,
+    value.afterStateLevel,
+    value.next_phase,
+    value.nextPhase,
+    value.next_state_level,
+    value.nextStateLevel,
+  ];
 
-  return normalizeAssistantStateRow(data);
+  for (const candidate of candidates) {
+    const n = Number(candidate);
+    if (Number.isFinite(n)) {
+      return normalizePhase(n);
+    }
+  }
+
+  return fallback;
 }
 
 async function updateConversationStateLevel(params: {
@@ -182,6 +191,32 @@ async function updateConversationStateLevel(params: {
   }
 
   return { ok: true };
+}
+
+export async function loadLatestAssistantStateForConversation({
+  supabase,
+  conversationId,
+}: {
+  supabase: SupabaseClient;
+  conversationId: string;
+}): Promise<ConversationAssistantState> {
+  const cid = String(conversationId ?? "").trim();
+  if (!cid) return null;
+
+  const { data, error } = await supabase
+    .from("messages")
+    .select(
+      "current_phase, state_level, prev_phase, prev_state_level, state_changed, created_at",
+    )
+    .eq("conversation_id", cid)
+    .eq("role", "assistant")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !data) return null;
+
+  return normalizeAssistantStateRow(data);
 }
 
 export async function resolveConversationState(params: {
@@ -226,34 +261,23 @@ export async function resolveConversationState(params: {
 
   /**
    * HOPY回答○ の唯一の正は回答確定後の hopy_confirmed_payload.state.state_changed。
-   * そのため、この前段層では userText だけで current/state_changed を進めない。
-   * prompt / deps へ渡す会話状態は、直近 assistant 確定状態をそのまま保持する。
+   * ただし、この前段層で current/stateChanged を prev 固定にすると、
+   * prompt 側まで常に 1 / false の土台が流れやすくなる。
+   *
+   * ここでは updateUserStateFromMessage(...) の結果を
+   * あくまで「回答確定前の暫定 state 文脈」としてだけ使い、
+   * DB保存済みの会話状態は先回り更新しない。
    */
-  const currentPhase = prevPhase;
-  const currentStateLevel = prevStateLevel;
-  const stateChanged = false;
+  const currentPhase = resolvePhaseFromStateUpdate(st, prevPhase);
+  const currentStateLevel = toConversationStateLevel(currentPhase);
+  const stateChanged =
+    currentPhase !== prevPhase || currentStateLevel !== prevStateLevel;
 
   /**
-   * 回答確定前に conversation.state_level を先回り更新しない。
-   * この層では DB の会話状態を動かさず、確定後の assistant 結果に委ねる。
+   * 回答確定前に conversations.state_level を先回り更新しない。
+   * 正式な会話状態の保存は、確定後の assistant 結果に委ねる。
    */
-  let conversationUpdateRes: { ok: true } | { ok: false; error: any } = {
-    ok: true,
-  };
-
-  if (currentStateLevel !== prevStateLevel) {
-    conversationUpdateRes = await updateConversationStateLevel({
-      supabase,
-      authedUserId,
-      resolvedConversationId,
-      currentStateLevel,
-    });
-  }
-
-  if (!conversationUpdateRes.ok) {
-    stateUpdateOk = false;
-    stateUpdateError = errorText(conversationUpdateRes.error);
-  }
+  void updateConversationStateLevel;
 
   const normalizedStateForPayload = normalizeStateForPayload(
     null,
@@ -288,13 +312,12 @@ updateUserStateFromMessage(...) の結果を受け取り、
 ただし HOPY回答○ の唯一の正そのものは作らない。
 */
 
- /*
+/*
 【今回このファイルで修正したこと】
-- resolveConversationState(...) で userText から currentPhase を先に進める処理をやめました。
-- resolveConversationState(...) で stateChanged = currentPhase !== prevPhase を前段で作る処理をやめました。
-- この前段層では currentPhase/currentStateLevel を直近 assistant の確定状態のまま保持し、stateChanged は false 固定にしました。
-- 回答確定前に conversations.state_level を先回り更新しないようにしました。
-- updateUserStateFromMessage(...) の呼び出し自体は残しつつ、HOPY回答○ の唯一の正には使わないように切り離しました。
+- resolveConversationState(...) で currentPhase/currentStateLevel/stateChanged を prev 固定にしていた処理をやめました。
+- updateUserStateFromMessage(...) の返り値から prompt 用の暫定 phase を読む helper を追加しました。
+- ただし conversations.state_level の先回り更新は再開せず、回答確定前の DB 更新は引き続き止めています。
+- HOPY回答○ の唯一の正そのものは、引き続き回答確定後の hopy_confirmed_payload.state.state_changed に委ねています。
 */
 
 /* /app/api/chat/_lib/route/authState.ts */
