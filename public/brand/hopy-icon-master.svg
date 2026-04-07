@@ -1,0 +1,112 @@
+<!-- /public/brand/hopy-icon-master.svg -->
+<svg
+  width="1024"
+  height="1024"
+  viewBox="0 0 1024 1024"
+  fill="none"
+  xmlns="http://www.w3.org/2000/svg"
+  role="img"
+  aria-labelledby="title desc"
+>
+  <title id="title">HOPY Icon Master v1</title>
+  <desc id="desc">
+    Center confusion point, four outer state points, and an upward compass needle moving toward decision.
+  </desc>
+
+  <!-- background safe field -->
+  <rect x="0" y="0" width="1024" height="1024" rx="240" fill="#FFFFFF" />
+
+  <!-- outer ring -->
+  <circle
+    cx="512"
+    cy="512"
+    r="358"
+    stroke="#94A3B8"
+    stroke-width="30"
+    fill="none"
+  />
+
+  <!-- secondary ring -->
+  <circle
+    cx="512"
+    cy="512"
+    r="288"
+    stroke="#CBD5E1"
+    stroke-width="14"
+    fill="none"
+  />
+
+  <!-- directional guide lines -->
+  <line
+    x1="512"
+    y1="224"
+    x2="512"
+    y2="800"
+    stroke="#CBD5E1"
+    stroke-width="12"
+    stroke-linecap="round"
+  />
+  <line
+    x1="224"
+    y1="512"
+    x2="800"
+    y2="512"
+    stroke="#CBD5E1"
+    stroke-width="12"
+    stroke-linecap="round"
+  />
+
+  <!-- center halo -->
+  <circle cx="512" cy="512" r="72" fill="#FFFFFF" fill-opacity="0.96" />
+
+  <!-- state circles -->
+  <!-- north = decision -->
+  <circle cx="512" cy="184" r="46" fill="#F59E0B" />
+
+  <!-- east = exploration -->
+  <circle cx="840" cy="512" r="40" fill="#3B82F6" />
+
+  <!-- south = organization -->
+  <circle cx="512" cy="840" r="40" fill="#14B8A6" />
+
+  <!-- west = convergence -->
+  <circle cx="184" cy="512" r="40" fill="#8B5CF6" />
+
+  <!-- center = confusion -->
+  <circle cx="512" cy="512" r="34" fill="#6B7280" />
+
+  <!-- upper red tip only / clearly points to north decision -->
+  <path
+    d="M512 238
+       L552 360
+       L512 334
+       L472 360
+       Z"
+    fill="#EF4444"
+  />
+
+  <!-- north emphasis ring -->
+  <circle
+    cx="512"
+    cy="184"
+    r="66"
+    stroke="#F59E0B"
+    stroke-opacity="0.30"
+    stroke-width="12"
+    fill="none"
+  />
+</svg>
+
+<!--
+このファイルの正式役割
+HOPYアイコンの親ソースとして使う元SVG。
+favicon・PWA用PNG・apple-touch-icon へ展開する前提の唯一の正の元データ。
+-->
+
+<!--
+【今回このファイルで修正したこと】
+1. 外周リングを大きくし、骨格が小サイズでも残る比率に調整しました。
+2. 北・東・南・西・中心の状態点を大きくし、5状態が見えやすい比率にしました。
+3. 針先だけを上方向へ強め、北の「決定」をしっかり指す形に調整しました。
+4. 意味・色・5点構造は変えず、比率だけを修正しました。
+-->

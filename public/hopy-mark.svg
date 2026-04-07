@@ -1,0 +1,45 @@
+// scripts/make-hopy-mark-A.mjs
+import { writeFileSync } from "node:fs";
+
+const size = 256;      // viewBox size
+const r = 28;          // corner radius feel (控えめ)
+const pad = 28;        // outer padding
+const stroke = 0;      // filled mark（線に頼らない）
+const fg = "#0B0B0B";  // almost-black
+const bg = "none";     // transparent
+
+// Geometry: a solid H with a quiet "gap" (negative space) in the center.
+const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="HOPY mark A">
+  <rect width="${size}" height="${size}" fill="${bg}"/>
+  <!-- Outer rounded square (optional framing) -->
+  <!-- <rect x="${pad}" y="${pad}" width="${size - pad*2}" height="${size - pad*2}" rx="${r}" fill="none" stroke="${fg}" stroke-width="10"/> -->
+
+  <!-- Mark: filled H with central whitespace -->
+  <path fill="${fg}" d="
+    M ${pad} ${pad}
+    H ${pad + 54}
+    V ${size - pad}
+    H ${pad}
+    Z
+
+    M ${size - pad - 54} ${pad}
+    H ${size - pad}
+    V ${size - pad}
+    H ${size - pad - 54}
+    Z
+
+    M ${pad + 54} ${Math.round(size/2 - 28)}
+    H ${size - pad - 54}
+    V ${Math.round(size/2 + 28)}
+    H ${pad + 54}
+    Z
+  "/>
+
+  <!-- Quiet inner cut (negative space) -->
+  <rect x="${pad + 76}" y="${Math.round(size/2 - 16)}" width="${size - (pad + 76)*2}" height="${32}" rx="12" fill="white"/>
+</svg>
+`;
+
+writeFileSync("hopy-mark-A.svg", svg, "utf8");
+console.log("Generated: hopy-mark-A.svg");
