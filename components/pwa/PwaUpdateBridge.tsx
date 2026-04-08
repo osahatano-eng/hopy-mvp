@@ -37,11 +37,17 @@ export default function PwaUpdateBridge() {
 
   const bindInstallingWorker = useCallback(
     (registration: ServiceWorkerRegistration, worker: ServiceWorker) => {
-      worker.addEventListener("statechange", () => {
+      const syncInstalledWorker = () => {
         if (worker.state !== "installed") return;
         if (!navigator.serviceWorker.controller) return;
-        markWaitingWorker(registration);
-      });
+
+        window.setTimeout(() => {
+          markWaitingWorker(registration);
+        }, 0);
+      };
+
+      syncInstalledWorker();
+      worker.addEventListener("statechange", syncInstalledWorker);
     },
     [markWaitingWorker],
   );
@@ -195,9 +201,10 @@ PWA更新検知と、ユーザーへの再読み込み導線をつなぐUIブリ
 */
 
 /*【今回このファイルで修正したこと】
-1. /components/pwa/PwaUpdateBridge.tsx を新規作成した
-2. service worker の register をこのファイルに閉じ込めた
-3. waiting 中の新版 service worker を検知して更新通知を出すようにした
-4. controllerchange 後に1回だけ reload するようにした
-5. focus / visibilitychange 時に update() を呼び、更新に気づきやすくした
+1. installing worker に listener を付けた直後に、すでに installed 済みかどうかも即時確認するようにした
+2. statechange の未来イベント待ちだけで取りこぼしていた ready 化を、このファイル内だけで補強した
+*/
+
+/* フルパス
+/components/pwa/PwaUpdateBridge.tsx
 */
