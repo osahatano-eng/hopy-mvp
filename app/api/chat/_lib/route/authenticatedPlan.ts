@@ -29,7 +29,7 @@ const PROMPT_MEMORY_LIMIT_BY_PLAN: Record<ResolvedPlan, number | null> = {
 
 const LEARNING_ENABLED_BY_PLAN: Record<ResolvedPlan, boolean> = {
   free: false,
-  plus: false,
+  plus: true,
   pro: true,
 };
 
@@ -127,7 +127,11 @@ plan ごとの memory 読み込み上限と learning 有効可否を返す。
 
 /*
 【今回このファイルで修正したこと】
-- loadMemoriesForPrompt(...) の戻り値を loaded.trim() で直接読んでいた箇所をやめました。
-- 先に String(loaded ?? "").trim() で loadedText を作り、その文字列を使って判定する形へ修正しました。
-- loadMemoriesForPrompt.ts 本体や plan 判定ロジックには触っていません。
+- LEARNING_ENABLED_BY_PLAN の plus を false から true へ修正しました。
+- Free は learning を保存しても prompt 使用しない方針のため false のまま維持しました。
+- Pro は従来どおり true のまま維持しました。
+- plan 正規化、memory 読み込み上限、memory 読み込み処理本体には触っていません。
 */
+
+/* /app/api/chat/_lib/route/authenticatedPlan.ts */
+// このファイルの正式役割: authenticated の plan / prompt memory 解決ファイル
