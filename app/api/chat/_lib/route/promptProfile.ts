@@ -2,7 +2,7 @@
 
 export type PromptVariant = "short" | "medium" | "full";
 export type MemoryMode = "off" | "plus" | "pro";
-export type LearningMode = "off" | "pro";
+export type LearningMode = "off" | "plus" | "pro";
 export type ReplyLengthMode = "free" | "plus" | "pro";
 
 export type PromptProfile = {
@@ -56,7 +56,7 @@ const PLUS_PROMPT_PROFILE = createPromptProfile({
   sharedVariant: "medium",
   complianceVariant: "full",
   memoryMode: "plus",
-  learningMode: "off",
+  learningMode: "plus",
   replyLengthMode: "plus",
 });
 
@@ -78,3 +78,22 @@ export function buildPromptProfile(
 ): PromptProfile {
   return PROMPT_PROFILES[resolvedPlan];
 }
+
+/*
+このファイルの正式役割
+plan ごとの prompt profile を定義するファイル。
+free / plus / pro に応じて、
+prompt の圧縮度、memory 利用可否、learning 利用可否、reply 長さ方針を返す。
+*/
+
+/*
+【今回このファイルで修正したこと】
+- LearningMode 型に "plus" を追加しました。
+- PLUS_PROMPT_PROFILE の learningMode を "off" から "plus" へ修正しました。
+- Free は learning を使わない方針のため "off" のまま維持しました。
+- Pro は従来どおり "pro" のまま維持しました。
+- memoryMode、replyLengthMode、prompt variant の既存設定には触っていません。
+*/
+
+/* /app/api/chat/_lib/route/promptProfile.ts */
+// このファイルの正式役割: plan ごとの prompt profile を定義するファイル
