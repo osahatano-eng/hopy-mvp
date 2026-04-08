@@ -195,7 +195,7 @@ export default function PwaUpdateBridge() {
   return (
     <div
       aria-live="polite"
-      className="fixed inset-x-4 bottom-4 z-[120] mx-auto w-auto max-w-[520px] rounded-2xl border border-black/10 bg-white/92 px-4 py-3 shadow-[0_10px_30px_rgba(0,0,0,0.08)] backdrop-blur-md"
+      className="fixed inset-x-4 top-4 z-[120] mx-auto w-auto max-w-[520px] rounded-2xl border border-black/10 bg-white/92 px-4 py-3 shadow-[0_10px_30px_rgba(0,0,0,0.08)] backdrop-blur-md"
       role="status"
     >
       <div className="flex items-center justify-between gap-3">
@@ -230,9 +230,9 @@ PWA更新検知と、ユーザーへの再読み込み導線をつなぐUIブリ
 */
 
 /*【今回このファイルで修正したこと】
-1. installed 直後の1回確認だけでは waiting 反映を取りこぼすため、短時間だけ再確認する待機チェックを追加した
-2. registration.update() 実行後にも waiting 再確認を入れ、更新確認後の ready 化をこのファイル内だけで補強した
-3. waiting 確認用 timer を unmount 時に破棄し、このファイルの責務内で後始末まで閉じた
+1. 更新通知バーの配置を bottom-4 から top-4 へ変更した
+2. 初見で目に入るように、画面上部固定へ変更した
+3. 更新判定ロジック、service worker 連携、文言、他UIには触れていない
 */
 
 /* /components/pwa/PwaUpdateBridge.tsx */
