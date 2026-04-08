@@ -125,6 +125,25 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value as Record<string, unknown>;
 }
 
+function attachDebugPayloadPreservingExisting(
+  params: Parameters<typeof attachDebugPayload>[0],
+): void {
+  const payloadRecord = asRecord(params.payload);
+  const existingDebug = payloadRecord?.debug
+    ? { ...(asRecord(payloadRecord.debug) ?? {}) }
+    : null;
+
+  attachDebugPayload(params);
+
+  if (!payloadRecord || !existingDebug) return;
+
+  const attachedDebug = asRecord(payloadRecord.debug) ?? {};
+  payloadRecord.debug = {
+    ...attachedDebug,
+    ...existingDebug,
+  };
+}
+
 function buildFinalizeConfirmedTurn(
   confirmedTurn: ReturnType<typeof resolveConfirmedTurnFromBuiltResult>,
 ): FinalizeConfirmedTurn {
@@ -206,6 +225,7 @@ export async function handleAuthenticatedChat(
   });
 
   const clientMemoryBlock = String(body?.memory_block ?? "").trim();
+  const threadMemoryBlock = String(body?.thread_memory_block ?? "").trim();
   const cleanTrigger = isTrueBoolean(body?.clean_memories);
 
   const memory_clean = await handleMemoryClean({
@@ -299,6 +319,7 @@ export async function handleAuthenticatedChat(
     replyLang,
     stateForSystem: normalizedStateForPayload,
     memoryBlock,
+    threadMemoryBlock,
     learningBlock,
     learningPromptContext,
     userText,
@@ -510,7 +531,7 @@ export async function handleAuthenticatedChat(
     }
 
     if (debugSave) {
-      attachDebugPayload({
+      attachDebugPayloadPreservingExisting({
         payload,
         buildSig,
         openaiTimeoutMs,
@@ -657,7 +678,7 @@ export async function handleAuthenticatedChat(
   }
 
   if (debugSave) {
-    attachDebugPayload({
+    attachDebugPayloadPreservingExisting({
       payload,
       buildSig,
       openaiTimeoutMs,
@@ -788,6 +809,7 @@ buildPromptBundle(...) へ
 - uiLang / replyLang
 - normalizedStateForPayload
 - memoryBlock
+- threadMemoryBlock
 - learningBlock
 - learningPromptContext
 - userText
@@ -830,7 +852,7 @@ finalizeAuthenticatedPostTurn(...) へ
 - state / title / memory / debug / request / thread / OpenAI 実行結果 一式
 
 最後に postTurn.payload を返す。
-debugSave=true のときは attachDebugPayload(...) で debug を積み増して返す。 
+debugSave=true のときは attachDebugPayload(...) で debug を積み増して返す。
 
 【Compass 観点でこのファイルの意味】
 このファイル自身は Compass 本文を生成していない。
@@ -856,10 +878,12 @@ authenticated 側の中継本体である。
    正式エラーをそのまま返す。
 */
 
-/* 【今回このファイルで修正したこと】
-- resolveConfirmedTurnFromBuiltResult(...) の呼び出しを 2引数 から 1引数 に修正しました。
-- これにより authenticated.ts:581 の「Expected 1 arguments, but got 2.」をこのファイルだけで止めました。
-- confirmedStateFallback の定義自体は残し、他の state 受け渡しや HOPY唯一の正、Compass、postTurn、DB 保存処理には触れていません。
+/*
+【今回このファイルで修正したこと】
+- attachDebugPayload(...) 実行前に既存の payload.debug を保持し、実行後に再マージする attachDebugPayloadPreservingExisting(...) を追加した構造は維持しました。
+- 再マージ順だけを修正し、payloadRecord.debug = { ...attachedDebug, ...existingDebug } に変更しました。
+- これにより authenticatedPostTurn.ts 側で先に積んだ debug.thread_summary_save を、authenticated.ts 側の debug 追加で後から上書きしないようにしました。
+- HOPY回答○ の唯一の正、state_changed、Compass、DB 保存処理そのものには触れていません。
 */
 
 /* /app/api/chat/_lib/route/authenticated.ts */

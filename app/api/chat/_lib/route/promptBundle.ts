@@ -193,6 +193,7 @@ export function buildPromptBundle(args: {
   replyLang: Lang;
   stateForSystem: any;
   memoryBlock: string;
+  threadMemoryBlock?: string;
   learningBlock?: string;
   learningPromptContext?: LearningPromptContext | null;
   userText: string;
@@ -205,6 +206,7 @@ export function buildPromptBundle(args: {
     replyLang,
     stateForSystem,
     memoryBlock,
+    threadMemoryBlock,
     learningBlock,
     learningPromptContext,
     userText,
@@ -229,6 +231,7 @@ export function buildPromptBundle(args: {
     stateForSystem,
     userText,
     memoryBlock: normalizedMemoryBlock,
+    threadMemoryBlock: threadMemoryBlock ?? "",
     learningBlock: normalizedLearningBlock,
   });
 
@@ -302,3 +305,21 @@ export function buildPromptBundle(args: {
     }),
   };
 }
+
+/*
+このファイルの正式役割
+promptBundle を組み立てるファイル。
+plan / state / memory / learning / userText / conversationId を受け取り、
+各 prompt section を束ねて OpenAI 実行用の PromptBundle を返す。
+thread memory を promptHopySections 側へ渡す中継受け口もこのファイルが持つ。
+*/
+
+/*
+【今回このファイルで修正したこと】
+- buildPromptBundle(...) の引数に threadMemoryBlock?: string を追加しました。
+- buildHopyPromptSections(...) 呼び出しへ threadMemoryBlock をそのまま渡す接続を追加しました。
+- 既存の memoryBlock / learningBlock / stateForSystem / conversationId / HOPY回答○ の唯一の正 / Compass 契約には触れていません。
+*/
+
+/* /app/api/chat/_lib/route/promptBundle.ts */
+// このファイルの正式役割: PromptBundle を組み立て、thread memory を prompt section 側へ中継するファイル

@@ -1,4 +1,4 @@
-// /app/api/chat/_lib/response/hopyPromptBuilder.ts
+/* /app/api/chat/_lib/response/hopyPromptBuilder.ts */
 
 import {
   getHopyReplyPolicy,
@@ -24,6 +24,16 @@ export type HopyRecentMessageInput = {
   content?: string | null;
 };
 
+export type HopyThreadMemoryInput = {
+  topic?: string | null;
+  recentFlowSummary?: string | null;
+  currentGoal?: string | null;
+  latestUserIntent?: string | null;
+  latestAssistantDirection?: string | null;
+  decidedPoints?: Array<string | null | undefined> | null;
+  unresolvedPoints?: Array<string | null | undefined> | null;
+};
+
 export type HopyResolvedPlan = "free" | "plus" | "pro";
 
 export type BuildHopyPromptParams = {
@@ -31,6 +41,7 @@ export type BuildHopyPromptParams = {
   userInput: string;
   memories?: HopyMemoryInput[] | null;
   recentMessages?: HopyRecentMessageInput[] | null;
+  threadMemory?: HopyThreadMemoryInput | null;
   expressionAssets?: HopyExpressionAssetInput[] | null;
   transitionTargetLevel?: HopyStateLevel | number | null;
   resolvedPlan?: HopyResolvedPlan | null;
@@ -292,6 +303,70 @@ function buildMemoriesSection(memories?: HopyMemoryInput[] | null): string {
   }
 
   return ["使用可能なMEMORIES:", ...lines].join("\n");
+}
+
+function buildThreadMemorySection(
+  threadMemory?: HopyThreadMemoryInput | null,
+): string {
+  const topic = normalizeText(threadMemory?.topic);
+  const recentFlowSummary = normalizeText(threadMemory?.recentFlowSummary);
+  const currentGoal = normalizeText(threadMemory?.currentGoal);
+  const latestUserIntent = normalizeText(threadMemory?.latestUserIntent);
+  const latestAssistantDirection = normalizeText(
+    threadMemory?.latestAssistantDirection,
+  );
+  const decidedPoints = clipLines(
+    (threadMemory?.decidedPoints ?? []).map((item) => normalizeText(item)),
+    5,
+  );
+  const unresolvedPoints = clipLines(
+    (threadMemory?.unresolvedPoints ?? []).map((item) => normalizeText(item)),
+    5,
+  );
+
+  const lines: string[] = [];
+
+  if (topic) {
+    lines.push(`- 主題: ${topic}`);
+  }
+
+  if (recentFlowSummary) {
+    lines.push(`- 流れ要約: ${recentFlowSummary}`);
+  }
+
+  if (currentGoal) {
+    lines.push(`- 現在の目的: ${currentGoal}`);
+  }
+
+  if (latestUserIntent) {
+    lines.push(`- 直近ユーザー意図: ${latestUserIntent}`);
+  }
+
+  if (latestAssistantDirection) {
+    lines.push(`- 直近HOPY方向: ${latestAssistantDirection}`);
+  }
+
+  if (decidedPoints.length > 0) {
+    lines.push("- 決まったこと:");
+    decidedPoints.forEach((item) => lines.push(`  - ${item}`));
+  }
+
+  if (unresolvedPoints.length > 0) {
+    lines.push("- 未解決のこと:");
+    unresolvedPoints.forEach((item) => lines.push(`  - ${item}`));
+  }
+
+  if (lines.length === 0) {
+    return "チャット内流れ記憶: なし";
+  }
+
+  return [
+    "チャット内流れ記憶:",
+    "- これは conversation ごとの流れ要約です。",
+    "- recentMessages ではなく、この流れ要約を主文脈として優先してください。",
+    "- ここに書かれた主題・目的・決定事項・未解決点を引き継いで回答してください。",
+    ...lines,
+  ].join("\n");
 }
 
 function buildRecentMessagesSection(
@@ -757,6 +832,8 @@ export function buildHopyPrompt(
       "",
       buildMemoriesSection(params.memories),
       "",
+      buildThreadMemorySection(params.threadMemory),
+      "",
       buildRecentMessagesSection(params.recentMessages),
       "",
       buildExpressionAssetsSection(params.expressionAssets),
@@ -769,15 +846,16 @@ export function buildHopyPrompt(
 
 /*
 このファイルの正式役割
-HOPY回答の核になる system / developer / user prompt を組み立て、状態・プラン・記憶・最近会話・表現資産を統合して返答生成の土台を作るファイル。
+HOPY回答の核になる system / developer / user prompt を組み立て、状態・プラン・記憶・チャット内流れ記憶・最近会話・表現資産を統合して返答生成の土台を作るファイル。
 */
 
 /*
 【今回このファイルで修正したこと】
-- 明確な前進表明を拾う hasExplicitForwardCommitment を追加し、「まずは〜から進めます」「この方針でいきます」などを軽い短文と混同しないようにしました。
-- buildExplicitForwardCommitmentSection を追加し、やることの絞り込み・着手意思が出た回は整理(3)または収束(4)への前進候補として扱えるよう prompt を強めました。
-- buildTransitionSection / buildThreeStepStructureSection / buildStateDensitySection / buildGenerationRulesSection / buildUserInputSection に前進表明専用の指示を追加し、prev と current を同値固定しにくくしました。
-- JSON 契約、唯一の正、Plus / Pro の Compass 必須条件、型、export、保存復元前提には触っていません。
+- thread memory を読む専用の受け口として HopyThreadMemoryInput を追加しました。
+- BuildHopyPromptParams に threadMemory を追加しました。
+- buildThreadMemorySection を追加し、チャット内流れ記憶を prompt に載せるだけの構成にしました。
+- developerPrompt 内で recentMessages より前に thread memory を配置し、主文脈として扱う形にしました。
+- thread memory の生成、更新、DB保存、復元、state の再判定には触っていません。
 */
 
 /* /app/api/chat/_lib/response/hopyPromptBuilder.ts */

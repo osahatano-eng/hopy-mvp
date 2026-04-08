@@ -46,6 +46,8 @@ type ConfirmedAssistantTurn = {
   canonicalAssistantState: CanonicalAssistantState;
   compassText?: string;
   compassPrompt?: string;
+  threadSummary?: string;
+  thread_summary?: string;
   compass?:
     | {
         text: string;
@@ -61,6 +63,32 @@ type MemoryWriteDebug = {
   mem_items_count?: number | null;
   mem_used_heuristic?: boolean | null;
   [key: string]: any;
+};
+
+type ThreadSummarySaveAttemptResult = {
+  step:
+    | "primary_internal_with_user_id"
+    | "fallback_supabase_with_user_id"
+    | "final_internal_without_user_id";
+  client_name: "internalWriteSupabase" | "supabase";
+  scoped_by_user_id: boolean;
+  ok: boolean;
+  matched: boolean;
+  error: string | null;
+};
+
+type ThreadSummarySaveDebug = {
+  attempted: boolean;
+  confirmed_thread_summary_present: boolean;
+  confirmed_thread_summary_length: number | null;
+  ok: boolean | null;
+  error: string | null;
+  matched_step:
+    | "primary_internal_with_user_id"
+    | "fallback_supabase_with_user_id"
+    | "final_internal_without_user_id"
+    | null;
+  attempts: ThreadSummarySaveAttemptResult[];
 };
 
 export type AuthenticatedPostTurnParams = {
@@ -231,6 +259,266 @@ function normalizeNonEmptyString(value: unknown): string | null {
   return normalized.length > 0 ? normalized : null;
 }
 
+function normalizeThreadSummary(value: unknown): string | null {
+  if (typeof value === "string") {
+    const normalized = value.trim();
+    return normalized.length > 0 ? normalized : null;
+  }
+
+  if (value && typeof value === "object") {
+    try {
+      const serialized = JSON.stringify(value);
+      if (typeof serialized !== "string") return null;
+
+      const normalized = serialized.trim();
+      return normalized.length > 0 ? normalized : null;
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
+}
+
+function createDefaultThreadSummarySaveDebug(params: {
+  confirmedThreadSummary: string | null;
+}): ThreadSummarySaveDebug {
+  return {
+    attempted: false,
+    confirmed_thread_summary_present: params.confirmedThreadSummary !== null,
+    confirmed_thread_summary_length:
+      params.confirmedThreadSummary?.length ?? null,
+    ok: null,
+    error: null,
+    matched_step: null,
+    attempts: [],
+  };
+}
+
+function attachThreadSummarySaveDebugToPayload(params: {
+  payload: any;
+  debugSave: boolean;
+  threadSummarySaveDebug: ThreadSummarySaveDebug;
+}): any {
+  if (!params.debugSave) {
+    return params.payload;
+  }
+
+  const payloadRecord = asRecord(params.payload);
+  if (!payloadRecord) {
+    return params.payload;
+  }
+
+  const existingDebug = asRecord(payloadRecord.debug) ?? {};
+  payloadRecord.debug = {
+    ...existingDebug,
+    thread_summary_save: params.threadSummarySaveDebug,
+  };
+
+  return params.payload;
+}
+
+async function saveThreadSummaryAttempt(params: {
+  step: ThreadSummarySaveAttemptResult["step"];
+  clientName: ThreadSummarySaveAttemptResult["client_name"];
+  client: SupabaseClient;
+  resolvedConversationId: string;
+  authedUserId?: string;
+  confirmedThreadSummary: string;
+}): Promise<ThreadSummarySaveAttemptResult> {
+  const scopedByUserId =
+    typeof params.authedUserId === "string" &&
+    params.authedUserId.trim().length > 0;
+
+  const query = params.client
+    .from("conversations")
+    .update({
+      thread_summary: params.confirmedThreadSummary,
+    })
+    .eq("id", params.resolvedConversationId);
+
+  const scopedQuery = scopedByUserId
+    ? query.eq("user_id", params.authedUserId as string)
+    : query;
+
+  const { data, error } = await scopedQuery.select("id").maybeSingle();
+
+  if (error) {
+    return {
+      step: params.step,
+      client_name: params.clientName,
+      scoped_by_user_id: scopedByUserId,
+      ok: false,
+      matched: false,
+      error: errorText(error) || "update_failed",
+    };
+  }
+
+  return {
+    step: params.step,
+    client_name: params.clientName,
+    scoped_by_user_id: scopedByUserId,
+    ok: true,
+    matched: Boolean(data?.id),
+    error: null,
+  };
+}
+
+async function saveConfirmedThreadSummary(params: {
+  internalWriteSupabase: SupabaseClient;
+  supabase: SupabaseClient;
+  resolvedConversationId: string;
+  authedUserId: string;
+  confirmedThreadSummary: string;
+}): Promise<{
+  ok: boolean;
+  error: string | null;
+  debug: ThreadSummarySaveDebug;
+}> {
+  const attempts: ThreadSummarySaveAttemptResult[] = [];
+
+  const primaryAttempt = await saveThreadSummaryAttempt({
+    step: "primary_internal_with_user_id",
+    clientName: "internalWriteSupabase",
+    client: params.internalWriteSupabase,
+    resolvedConversationId: params.resolvedConversationId,
+    authedUserId: params.authedUserId,
+    confirmedThreadSummary: params.confirmedThreadSummary,
+  });
+  attempts.push(primaryAttempt);
+
+  if (!primaryAttempt.ok) {
+    return {
+      ok: false,
+      error: `authenticatedPostTurn: thread_summary_save_failed:${primaryAttempt.error ?? "update_failed"}`,
+      debug: {
+        attempted: true,
+        confirmed_thread_summary_present: true,
+        confirmed_thread_summary_length: params.confirmedThreadSummary.length,
+        ok: false,
+        error: `authenticatedPostTurn: thread_summary_save_failed:${primaryAttempt.error ?? "update_failed"}`,
+        matched_step: null,
+        attempts,
+      },
+    };
+  }
+
+  if (primaryAttempt.matched) {
+    return {
+      ok: true,
+      error: null,
+      debug: {
+        attempted: true,
+        confirmed_thread_summary_present: true,
+        confirmed_thread_summary_length: params.confirmedThreadSummary.length,
+        ok: true,
+        error: null,
+        matched_step: primaryAttempt.step,
+        attempts,
+      },
+    };
+  }
+
+  if (params.supabase !== params.internalWriteSupabase) {
+    const fallbackAttempt = await saveThreadSummaryAttempt({
+      step: "fallback_supabase_with_user_id",
+      clientName: "supabase",
+      client: params.supabase,
+      resolvedConversationId: params.resolvedConversationId,
+      authedUserId: params.authedUserId,
+      confirmedThreadSummary: params.confirmedThreadSummary,
+    });
+    attempts.push(fallbackAttempt);
+
+    if (!fallbackAttempt.ok) {
+      return {
+        ok: false,
+        error: `authenticatedPostTurn: thread_summary_save_failed:${fallbackAttempt.error ?? "update_failed"}`,
+        debug: {
+          attempted: true,
+          confirmed_thread_summary_present: true,
+          confirmed_thread_summary_length: params.confirmedThreadSummary.length,
+          ok: false,
+          error: `authenticatedPostTurn: thread_summary_save_failed:${fallbackAttempt.error ?? "update_failed"}`,
+          matched_step: null,
+          attempts,
+        },
+      };
+    }
+
+    if (fallbackAttempt.matched) {
+      return {
+        ok: true,
+        error: null,
+        debug: {
+          attempted: true,
+          confirmed_thread_summary_present: true,
+          confirmed_thread_summary_length: params.confirmedThreadSummary.length,
+          ok: true,
+          error: null,
+          matched_step: fallbackAttempt.step,
+          attempts,
+        },
+      };
+    }
+  }
+
+  const finalAttempt = await saveThreadSummaryAttempt({
+    step: "final_internal_without_user_id",
+    clientName: "internalWriteSupabase",
+    client: params.internalWriteSupabase,
+    resolvedConversationId: params.resolvedConversationId,
+    confirmedThreadSummary: params.confirmedThreadSummary,
+  });
+  attempts.push(finalAttempt);
+
+  if (!finalAttempt.ok) {
+    return {
+      ok: false,
+      error: `authenticatedPostTurn: thread_summary_save_failed:${finalAttempt.error ?? "update_failed"}`,
+      debug: {
+        attempted: true,
+        confirmed_thread_summary_present: true,
+        confirmed_thread_summary_length: params.confirmedThreadSummary.length,
+        ok: false,
+        error: `authenticatedPostTurn: thread_summary_save_failed:${finalAttempt.error ?? "update_failed"}`,
+        matched_step: null,
+        attempts,
+      },
+    };
+  }
+
+  if (finalAttempt.matched) {
+    return {
+      ok: true,
+      error: null,
+      debug: {
+        attempted: true,
+        confirmed_thread_summary_present: true,
+        confirmed_thread_summary_length: params.confirmedThreadSummary.length,
+        ok: true,
+        error: null,
+        matched_step: finalAttempt.step,
+        attempts,
+      },
+    };
+  }
+
+  return {
+    ok: false,
+    error: "authenticatedPostTurn: thread_summary_save_target_not_found",
+    debug: {
+      attempted: true,
+      confirmed_thread_summary_present: true,
+      confirmed_thread_summary_length: params.confirmedThreadSummary.length,
+      ok: false,
+      error: "authenticatedPostTurn: thread_summary_save_target_not_found",
+      matched_step: null,
+      attempts,
+    },
+  };
+}
+
 function resolvePostTurnFailure(
   params: AuthenticatedPostTurnParams,
 ): string | null {
@@ -275,6 +563,64 @@ function normalizeCompassPrompt(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const normalized = value.trim();
   return normalized.length > 0 ? normalized : null;
+}
+
+function buildCanonicalThreadSummaryRecord(params: {
+  resolvedConversationId: string;
+  assistantMessageId: string;
+  latestReplyAt: string;
+  confirmedTurn: ConfirmedAssistantTurn;
+  autoTitleUpdated: boolean;
+}): Record<string, unknown> {
+  return {
+    thread_id: params.resolvedConversationId,
+    latest_reply_id: params.assistantMessageId,
+    latest_reply_at: params.latestReplyAt,
+    latest_confirmed_state: {
+      state_level: params.confirmedTurn.currentStateLevel,
+      current_phase: params.confirmedTurn.currentPhase,
+      prev_state_level: params.confirmedTurn.prevStateLevel,
+      prev_phase: params.confirmedTurn.prevPhase,
+      state_changed: params.confirmedTurn.stateChanged,
+    },
+    title_candidate_updated: params.autoTitleUpdated,
+  };
+}
+
+function resolveConfirmedThreadSummary(params: {
+  runTurnResult: RunHopyTurnBuiltResult | null | undefined;
+  confirmedTurn: ConfirmedAssistantTurn;
+  resolvedConversationId: string;
+  assistantMessageId: string;
+  latestReplyAt: string;
+  autoTitleUpdated: boolean;
+}): string | null {
+  const confirmedTurnSummary = normalizeThreadSummary(
+    params.confirmedTurn.threadSummary ?? params.confirmedTurn.thread_summary,
+  );
+  if (confirmedTurnSummary !== null) {
+    return confirmedTurnSummary;
+  }
+
+  const resultRecord = asRecord(params.runTurnResult ?? null);
+  const confirmedPayload = asRecord(resultRecord?.hopy_confirmed_payload);
+
+  const confirmedPayloadSummary = normalizeThreadSummary(
+    confirmedPayload?.thread_summary ?? confirmedPayload?.threadSummary,
+  );
+  if (confirmedPayloadSummary !== null) {
+    return confirmedPayloadSummary;
+  }
+
+  return normalizeThreadSummary(
+    buildCanonicalThreadSummaryRecord({
+      resolvedConversationId: params.resolvedConversationId,
+      assistantMessageId: params.assistantMessageId,
+      latestReplyAt: params.latestReplyAt,
+      confirmedTurn: params.confirmedTurn,
+      autoTitleUpdated: params.autoTitleUpdated,
+    }),
+  );
 }
 
 function resolveConfirmedTurnFromRunTurnResult(params: {
@@ -324,6 +670,15 @@ function resolveConfirmedTurnFromRunTurnResult(params: {
     normalizeCompassPrompt(params.confirmedTurn.compassPrompt) ??
     null;
 
+  const threadSummary =
+    normalizeThreadSummary(
+      confirmedPayload?.thread_summary ?? confirmedPayload?.threadSummary,
+    ) ??
+    normalizeThreadSummary(
+      params.confirmedTurn.threadSummary ?? params.confirmedTurn.thread_summary,
+    ) ??
+    null;
+
   return {
     ...params.confirmedTurn,
     assistantText,
@@ -341,6 +696,8 @@ function resolveConfirmedTurnFromRunTurnResult(params: {
     },
     compassText: compassText ?? undefined,
     compassPrompt: compassPrompt ?? undefined,
+    threadSummary: threadSummary ?? undefined,
+    thread_summary: threadSummary ?? undefined,
     compass:
       compassText !== null
         ? {
@@ -566,6 +923,62 @@ export async function finalizeAuthenticatedPostTurn(
     };
   }
 
+  const latestReplyAt = new Date().toISOString();
+
+  const confirmedThreadSummary = resolveConfirmedThreadSummary({
+    runTurnResult: params.runTurnResult,
+    confirmedTurn: syncedConfirmedTurn,
+    resolvedConversationId: params.resolvedConversationId,
+    assistantMessageId: params.assistantMessageId,
+    latestReplyAt,
+    autoTitleUpdated: params.auto_title_updated,
+  });
+
+  let threadSummarySaveDebug = createDefaultThreadSummarySaveDebug({
+    confirmedThreadSummary,
+  });
+
+  if (confirmedThreadSummary !== null) {
+    const threadSummarySave = await saveConfirmedThreadSummary({
+      internalWriteSupabase: params.internalWriteSupabase,
+      supabase: params.supabase,
+      resolvedConversationId: params.resolvedConversationId,
+      authedUserId: params.authedUserId,
+      confirmedThreadSummary,
+    });
+
+    threadSummarySaveDebug = threadSummarySave.debug;
+
+    if (!threadSummarySave.ok) {
+      const failurePayload = attachThreadSummarySaveDebugToPayload({
+        payload: {
+          ok: false,
+          error:
+            threadSummarySave.error ??
+            "authenticatedPostTurn: thread_summary_save_failed:update_failed",
+        },
+        debugSave: params.debugSave,
+        threadSummarySaveDebug,
+      });
+
+      return {
+        payload: failurePayload,
+        memoryWrite: createDefaultMemoryWriteDebug("not_attempted"),
+        confirmedMemoryCandidates: [],
+        usedHeuristicConfirmedMemoryCandidates:
+          params.usedHeuristicConfirmedMemoryCandidates,
+        learning_save_attempted: null,
+        learning_save_inserted: null,
+        learning_save_reason: null,
+        learning_save_error: null,
+        mem_write_ok: null,
+        mem_write_error: null,
+        audit_ok: null,
+        audit_error: null,
+      };
+    }
+  }
+
   const resolvedFinalConfirmedMemories =
     await resolveConfirmedMemoryCandidatesWithTimeout({
       runTurnResult: params.runTurnResult,
@@ -765,7 +1178,7 @@ export async function finalizeAuthenticatedPostTurn(
     notification: params.notification,
     resolvedConversationId: params.resolvedConversationId,
     assistantMessageId: params.assistantMessageId,
-    latestReplyAt: new Date().toISOString(),
+    latestReplyAt,
     autoTitleUpdated: params.auto_title_updated,
     memoryWrite,
     confirmedMemoryCandidates,
@@ -786,8 +1199,14 @@ export async function finalizeAuthenticatedPostTurn(
     memory_clean: params.memory_clean,
   });
 
-  return {
+  const payloadWithThreadSummaryDebug = attachThreadSummarySaveDebugToPayload({
     payload,
+    debugSave: params.debugSave,
+    threadSummarySaveDebug,
+  });
+
+  return {
+    payload: payloadWithThreadSummaryDebug,
     memoryWrite,
     confirmedMemoryCandidates,
     usedHeuristicConfirmedMemoryCandidates,
@@ -815,9 +1234,10 @@ Compass を含む最終 turn artifacts 作成、
 
 /*
 【今回このファイルで修正したこと】
-- runTurnResult.hopy_confirmed_payload を唯一の正として、この層の入口で confirmedTurn を同期するようにしました。
-- 以後の memory / learning / audit / final payload 作成は、同期後の confirmedTurn を使うように統一しました。
-- これにより、この postTurn 層が別経路の confirmedTurn で唯一の正を上書きする余地を塞ぎました。
+- thread_summary 保存判定が上流入力の有無だけに依存していたため、上流に thread_summary が無い場合でも、このファイルで確定済み情報から canonical な thread_summary を組み立てられる helper を追加しました。
+- latestReplyAt を 1回だけ先に確定し、DB保存用 thread_summary と最終レスポンスの thread_summary で同じ時刻を使うようにしました。
+- resolveConfirmedThreadSummary(...) に、resolvedConversationId / assistantMessageId / latestReplyAt / autoTitleUpdated を渡し、上流に thread_summary が無い場合は canonical thread_summary を生成して保存へ回すようにしました。
+- state_changed の唯一の正、Compass 条件、memory、audit、title 解決の既存ロジックには触れていません。
 */
 
 /* /app/api/chat/_lib/route/authenticatedPostTurn.ts */

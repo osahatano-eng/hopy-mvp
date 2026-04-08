@@ -426,6 +426,7 @@ export function buildHopyPromptSections(args: {
   stateForSystem: any;
   userText: string;
   memoryBlock: string;
+  threadMemoryBlock?: string;
   learningBlock?: string;
 }): HopyPromptSections {
   const stateFacts = detectHopyStateFacts(args.stateForSystem);
@@ -437,6 +438,7 @@ export function buildHopyPromptSections(args: {
     resolvedPlan: args.resolvedPlan,
   });
 
+  const threadMemoryBlock = args.threadMemoryBlock || "(なし)";
   const memoryBlock = args.memoryBlock || "(なし)";
   const learningBlock = args.learningBlock || "(なし)";
   const answerContract = buildHopyAnswerContract({
@@ -449,6 +451,8 @@ export function buildHopyPromptSections(args: {
     hopyCoreSystemPrompt: built.systemPrompt,
     hopyBaseSystemPrompt: `${built.developerPrompt}
 ${answerContract}
+チャット流れ要約ブロック:
+${threadMemoryBlock}
 既存MEMORIESブロック:
 ${memoryBlock}
 学習DBブロック:
@@ -462,15 +466,14 @@ ${learningBlock}`,
 HOPY 用の追加 prompt section を組み立てるファイル。
 stateForSystem から今回ターンの状態材料を受け取り、
 本文ルールと Compass 生成ルールと返却JSON契約を system prompt 文字列へ具体化して返す。
+thread memory / MEMORIES / learning の各ブロックを prompt へ載せる受け口もこのファイルが持つ。
 */
 
 /*
 【今回このファイルで修正したこと】
-- モデル返却の正式shapeを hopy_confirmed_payload.reply / hopy_confirmed_payload.state / hopy_confirmed_payload.compass に固定する出力契約を追加しました。
-- top-level の reply / state / assistant_state / compassText / compassPrompt / compass を返してはならないことを明記しました。
-- Plus / Pro では state_changed=true のときだけ hopy_confirmed_payload.compass.text / prompt を返し、state_changed=false では compass を付けないことを明記しました。
-- Free では hopy_confirmed_payload.compass 自体を返さないことを明記しました。
-- 既存の「サーバ計算済み状態値と一致させる」指示は維持しつつ、JSON の入れ場所そのものを唯一の正に合わせて固定しました。
+- buildHopyPromptSections(...) に threadMemoryBlock?: string を追加しました。
+- hopyBaseSystemPrompt に「チャット流れ要約ブロック」を追加し、thread memory を prompt 本文へ差し込める受け口を作りました。
+- 既存の MEMORIES ブロック、学習DBブロック、HOPY回答○ の唯一の正、Compass 契約には触れていません。
 */
 
 /* /app/api/chat/_lib/route/promptHopySections.ts */

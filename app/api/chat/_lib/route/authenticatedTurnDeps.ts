@@ -76,6 +76,8 @@ type ConfirmedAssistantTurn = {
   canonicalAssistantState: CanonicalAssistantState;
   compassText?: string;
   compassPrompt?: string;
+  threadSummary?: string;
+  thread_summary?: string;
 };
 
 export type ConfirmedStateFallback = {
@@ -276,6 +278,8 @@ export function resolveConfirmedTurnFromBuiltResult(
   }) as ConfirmedAssistantTurn & {
     compassText?: string;
     compassPrompt?: string;
+    threadSummary?: string;
+    thread_summary?: string;
   };
 
   confirmedTurn.canonicalAssistantState = buildCanonicalAssistantState({
@@ -293,6 +297,9 @@ export function resolveConfirmedTurnFromBuiltResult(
   const resolvedCompassPrompt = normalizeOptionalText(
     confirmedPayloadCompass?.prompt,
   );
+  const resolvedThreadSummary = normalizeOptionalText(
+    confirmedPayload.thread_summary,
+  );
 
   if (resolvedCompassText) {
     confirmedTurn.compassText = resolvedCompassText;
@@ -300,6 +307,11 @@ export function resolveConfirmedTurnFromBuiltResult(
 
   if (resolvedCompassPrompt) {
     confirmedTurn.compassPrompt = resolvedCompassPrompt;
+  }
+
+  if (resolvedThreadSummary) {
+    confirmedTurn.threadSummary = resolvedThreadSummary;
+    confirmedTurn.thread_summary = resolvedThreadSummary;
   }
 
   return confirmedTurn as ConfirmedAssistantTurn;
@@ -547,9 +559,9 @@ turnRecord は唯一の正の fallback に使わない。
 */
 /*
 【今回このファイルで修正したこと】
-- authenticated.ts が import している ConfirmedStateFallback 型を export し直しました。
-- createAuthenticatedTurnDeps(...) の params に confirmedStateFallback を戻し、既存呼び出し側との型整合を回復しました。
-- ただし confirmedTurn の復元は引き続き hopy_confirmed_payload のみを使い、fallback で唯一の正を再生成しないままにしています。
-- これにより build error だけを止め、唯一の正の流れはこのファイル内で増やしていません。
+- resolveConfirmedTurnFromBuiltResult(...) で hopy_confirmed_payload.thread_summary を読み取り、confirmedTurn へ載せるようにしました。
+- 保存先の受け取り名ぶれを避けるため、threadSummary と thread_summary の両方へ同じ値を載せました。
+- state_changed / compass / reply の唯一の正の流れには触れていません。
 */
+
 /* /app/api/chat/_lib/route/authenticatedTurnDeps.ts */
