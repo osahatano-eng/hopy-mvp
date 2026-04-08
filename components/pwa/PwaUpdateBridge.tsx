@@ -24,6 +24,14 @@ export default function PwaUpdateBridge() {
   const [versionLabel, setVersionLabel] = useState<string>("");
   const registrationRef = useRef<ServiceWorkerRegistration | null>(null);
   const hasReloadedRef = useRef(false);
+  const waitingCheckTimersRef = useRef<number[]>([]);
+
+  const clearWaitingCheckTimers = useCallback(() => {
+    waitingCheckTimersRef.current.forEach((timerId) => {
+      window.clearTimeout(timerId);
+    });
+    waitingCheckTimersRef.current = [];
+  }, []);
 
   const markWaitingWorker = useCallback(
     (registration: ServiceWorkerRegistration | null) => {
@@ -35,21 +43,36 @@ export default function PwaUpdateBridge() {
     [],
   );
 
+  const scheduleWaitingWorkerCheck = useCallback(
+    (registration: ServiceWorkerRegistration | null, retries = 8) => {
+      if (!registration) return;
+      if (markWaitingWorker(registration)) return;
+      if (retries <= 0) return;
+
+      const timerId = window.setTimeout(() => {
+        waitingCheckTimersRef.current = waitingCheckTimersRef.current.filter(
+          (currentId) => currentId !== timerId,
+        );
+        scheduleWaitingWorkerCheck(registration, retries - 1);
+      }, 250);
+
+      waitingCheckTimersRef.current.push(timerId);
+    },
+    [markWaitingWorker],
+  );
+
   const bindInstallingWorker = useCallback(
     (registration: ServiceWorkerRegistration, worker: ServiceWorker) => {
       const syncInstalledWorker = () => {
         if (worker.state !== "installed") return;
         if (!navigator.serviceWorker.controller) return;
-
-        window.setTimeout(() => {
-          markWaitingWorker(registration);
-        }, 0);
+        scheduleWaitingWorkerCheck(registration);
       };
 
       syncInstalledWorker();
       worker.addEventListener("statechange", syncInstalledWorker);
     },
-    [markWaitingWorker],
+    [scheduleWaitingWorkerCheck],
   );
 
   const requestActivation = useCallback(() => {
@@ -121,9 +144,14 @@ export default function PwaUpdateBridge() {
         registration.addEventListener("updatefound", handleUpdateFound);
 
         const triggerUpdateCheck = () => {
-          void registration.update().catch(() => {
-            // 更新確認失敗は致命ではないため握りつぶす
-          });
+          void registration
+            .update()
+            .then(() => {
+              scheduleWaitingWorkerCheck(registration, 4);
+            })
+            .catch(() => {
+              // 更新確認失敗は致命ではないため握りつぶす
+            });
         };
 
         const handleVisibilityChange = () => {
@@ -153,9 +181,10 @@ export default function PwaUpdateBridge() {
 
     return () => {
       cancelled = true;
+      clearWaitingCheckTimers();
       if (typeof cleanup === "function") cleanup();
     };
-  }, [bindInstallingWorker, markWaitingWorker]);
+  }, [bindInstallingWorker, clearWaitingCheckTimers, markWaitingWorker, scheduleWaitingWorkerCheck]);
 
   if (updateState === "idle") {
     return null;
@@ -201,10 +230,9 @@ PWA更新検知と、ユーザーへの再読み込み導線をつなぐUIブリ
 */
 
 /*【今回このファイルで修正したこと】
-1. installing worker に listener を付けた直後に、すでに installed 済みかどうかも即時確認するようにした
-2. statechange の未来イベント待ちだけで取りこぼしていた ready 化を、このファイル内だけで補強した
+1. installed 直後の1回確認だけでは waiting 反映を取りこぼすため、短時間だけ再確認する待機チェックを追加した
+2. registration.update() 実行後にも waiting 再確認を入れ、更新確認後の ready 化をこのファイル内だけで補強した
+3. waiting 確認用 timer を unmount 時に破棄し、このファイルの責務内で後始末まで閉じた
 */
 
-/* フルパス
-/components/pwa/PwaUpdateBridge.tsx
-*/
+/* /components/pwa/PwaUpdateBridge.tsx */
