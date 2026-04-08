@@ -490,9 +490,9 @@ export async function saveAssistantLearningLogs(params: {
 
   const outcome: AssistantLearningLogsOutcome = {
     responseGenerationLogOk: null,
-    responseGenerationLogError: null,
+    responseGenerationLogError: string | null,
     stateTransitionSignalOk: null,
-    stateTransitionSignalError: null,
+    stateTransitionSignalError: string | null,
   };
 
   if (!assistantMessageId) return outcome;
@@ -611,27 +611,22 @@ export async function saveConfirmedAssistantLearningEntry(params: {
     };
   }
 
-  const explicitFeedbackText = isLikelyExplicitLearningFeedback(userText)
-    ? userText
+  const normalizedUserText = String(userText ?? "").trim();
+  const explicitFeedbackText = isLikelyExplicitLearningFeedback(
+    normalizedUserText,
+  )
+    ? normalizedUserText
     : null;
-
-  if (!explicitFeedbackText) {
-    return {
-      attempted: false,
-      inserted: 0,
-      reason: "not_explicit_feedback",
-      error: null,
-    };
-  }
+  const learningSourceText = explicitFeedbackText ?? normalizedUserText;
 
   try {
     const candidates = extractLearningCandidates({
-      userMessage: userText,
+      userMessage: normalizedUserText,
       assistantReply: confirmedTurn.assistantText,
       stateLevel: confirmedTurn.currentStateLevel,
       currentPhase: confirmedTurn.currentPhase,
       explicitFeedback: explicitFeedbackText,
-      reactionSummary: explicitFeedbackText,
+      reactionSummary: learningSourceText,
       userId: authedUserId,
       sourceMessageId: assistantMessageId,
       sourceThreadId: resolvedConversationId,
@@ -703,3 +698,20 @@ export async function saveConfirmedAssistantLearningEntry(params: {
     };
   }
 }
+
+/*
+このファイルの正式役割
+authenticated learning 系の集約ファイル。
+prompt 用 learning 読み込み、phrase 学習保存、assistant learning log 保存、
+confirmed assistant learning 保存を担当する。
+*/
+
+/*
+【今回このファイルで修正したこと】
+- saveConfirmedAssistantLearningEntry(...) の not_explicit_feedback 早期 return を削除しました。
+- 明示フィードバックがある場合は explicitFeedback に載せ、通常会話でも reactionSummary と userMessage を使って learning candidate 抽出へ進むようにしました。
+- これにより Free / Plus / Pro すべてで「通常会話から learning を保存する」経路を開けました。
+- learning の prompt 使用可否、state_changed、Compass、memory 保存条件には触っていません。
+*/
+
+/* /app/api/chat/_lib/route/authenticatedLearning.ts */
