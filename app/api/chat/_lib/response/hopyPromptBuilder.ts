@@ -101,6 +101,39 @@ function isLowSignalInput(userInput: string): boolean {
   return false;
 }
 
+function hasExplicitForwardCommitment(userInput: string): boolean {
+  const normalized = normalizeText(userInput);
+  if (!normalized) return false;
+
+  const patterns = [
+    "進めていきます",
+    "進めます",
+    "進めてみます",
+    "進めていく",
+    "始めます",
+    "やります",
+    "やってみます",
+    "やっていきます",
+    "取り組みます",
+    "続けます",
+    "実行します",
+    "この方針でいきます",
+    "この方向でいきます",
+    "この形でいきます",
+    "このやり方でいきます",
+    "まずは",
+    "ここから",
+    "やることにしました",
+    "決めました",
+    "自己修正から",
+    "自己修正で",
+    "整理していきます",
+    "絞っていきます",
+  ];
+
+  return patterns.some((pattern) => normalized.includes(pattern));
+}
+
 function buildIdentitySection(): string {
   return [
     "あなたは HOPY です。",
@@ -120,6 +153,9 @@ function buildIdentitySection(): string {
     "prev_phase / prev_state_level には入力前参考状態を入れ、current_phase / state_level には今回ターン後の確定状態を入れてください。",
     "current_phase または state_level が prev と違うなら state_changed を true にし、両方同じときだけ false にしてください。",
     "入力前参考状態を current にそのまま写して固定してはいけません。",
+    "『まずはこれから進めます』『この方針でいきます』『始めます』のように、やることの絞り込みや着手意思が明確な入力は、軽い相づちではなく前進入力候補として扱ってください。",
+    "そのような回では、意味上前進しているなら整理(3)または収束(4)への遷移候補として扱ってよく、prev と current を同値固定しないでください。",
+    "ただし、決定完了や強い実行宣言でない限り 5 へ飛ばしてはいけません。",
     "自然な日本語で返してください。",
   ].join("\n");
 }
@@ -303,15 +339,45 @@ function buildExpressionAssetsSection(
   return ["使用可能な表現資産:", ...lines].join("\n");
 }
 
+function buildExplicitForwardCommitmentSection(userInput: string): string {
+  if (!hasExplicitForwardCommitment(userInput)) return "";
+
+  return [
+    "前進表明の解釈ルール:",
+    "- 今回の入力には、やることの絞り込み・着手方針・小さな実行意思の明示が含まれる可能性があります。",
+    "- 『まずは〜から進めます』『この方針でいきます』『始めます』『やっていきます』のような入力は、軽い相づちや軽い前向き短文と混同しないこと。",
+    "- このような入力は、混線維持ではなく、整理(3)または収束(4)へ向かう前進候補として扱ってよいこと。",
+    "- 方針が絞れた・次の一歩が定まった・小さくても着手意思が出たなら、current_phase / state_level を prev と同値固定しないこと。",
+    "- その場合は state_changed=true を正として返してよいこと。",
+    "- ただし、決定完了や強い実行宣言でない限り 5 へ飛ばさないこと。",
+  ].join("\n");
+}
+
 function buildTransitionSection(
   currentStateLevel: HopyStateLevel,
   transitionTargetLevel: HopyStateLevel | number | null | undefined,
   userInput: string,
 ): string {
   const lowSignal = isLowSignalInput(userInput);
+  const explicitForwardCommitment = hasExplicitForwardCommitment(userInput);
   const normalizedTarget = normalizeStateLevel(
     transitionTargetLevel ?? currentStateLevel,
   );
+
+  if (explicitForwardCommitment) {
+    return [
+      "状態遷移方針:",
+      `- 入力前の参考状態: ${currentStateLevel}/5`,
+      `- 参考上限目安: ${normalizedTarget}/5`,
+      "- 上の2値は今回ターンの確定結果ではありません。",
+      "- 今回の入力には、やることの絞り込み・着手方針・小さな実行意思の明示が含まれる可能性があります。",
+      "- 『まずは〜から進めます』『この方針でいきます』『始めます』のような入力は、軽い相づちではなく前進入力候補として扱うこと。",
+      "- 方針が絞れた・次の一歩が見えた・小さくても着手意思が出たなら、整理(3)または収束(4)への前進候補として current_phase / state_level を検討すること。",
+      "- その場合は prev と current を同値固定せず、state_changed=true を正として返してよいこと。",
+      "- ただし決定完了ではない限り 5 へ飛ばさないこと。",
+      "- Plus / Pro でその結果 state_changed=true なら Compass を必ず返すこと。",
+    ].join("\n");
+  }
 
   if (lowSignal) {
     return [
@@ -348,6 +414,20 @@ function buildTransitionSection(
 
 function buildThreeStepStructureSection(userInput: string): string {
   const lowSignal = isLowSignalInput(userInput);
+  const explicitForwardCommitment = hasExplicitForwardCommitment(userInput);
+
+  if (explicitForwardCommitment) {
+    return [
+      "HOPY回答構成:",
+      "- 本体は 理解 → 気づき → 方向 → 理由 です。",
+      "- 今回は、やることの絞り込みや着手意思が明示された入力として扱うこと。",
+      "- 理解では、選んだ方向や定まった一歩を受け止めること。",
+      "- 気づきでは、何が定まったのかを短く言語化すること。",
+      "- 方向では、次の一歩を一段はっきり示してよいこと。",
+      "- 理由では、その方向が自然な前進である理由を短く添えること。",
+      "- 整理(3)または収束(4)の前進候補としての自然さを優先し、5へは飛ばしすぎないこと。",
+    ].join("\n");
+  }
 
   if (lowSignal) {
     return [
@@ -379,6 +459,17 @@ function buildStateDensitySection(
   userInput: string,
 ): string {
   const lowSignal = isLowSignalInput(userInput);
+  const explicitForwardCommitment = hasExplicitForwardCommitment(userInput);
+
+  if (explicitForwardCommitment) {
+    return [
+      "参考状態別本文密度:",
+      "- 今回の入力には、方針の絞り込みや着手意思が含まれます。",
+      "- 入力前参考状態が低くても、今回ターンの確定状態まで混線(1)へ固定しないでください。",
+      "- やることが見えた、進め方が定まった、ここから始める意思が出たなら、整理(3)または収束(4)への前進候補として扱ってよいです。",
+      "- 決定完了ではない限り 5 を先取りしないでください。",
+    ].join("\n");
+  }
 
   if (lowSignal) {
     return [
@@ -463,6 +554,7 @@ function buildGenerationRulesSection(
   userInput: string,
 ): string {
   const lowSignal = isLowSignalInput(userInput);
+  const explicitForwardCommitment = hasExplicitForwardCommitment(userInput);
 
   const planSpecificRules =
     resolvedPlan === "pro"
@@ -476,6 +568,23 @@ function buildGenerationRulesSection(
         : [
             "- Free でも共感だけで終わらず、シンプルな方向提示まで到達すること",
           ];
+
+  if (explicitForwardCommitment) {
+    return [
+      "回答生成ルール:",
+      "- 今回の入力には、やることの絞り込み・着手方針・小さな実行意思の明示が含まれる可能性があります。",
+      "- このファイルで渡している入力前参考状態や参考上限目安は補助情報であり、その回の確定 state を意味しないこと。",
+      "- 今回のユーザー入力と今回生成した最終返答の意味から、その回の current_phase / state_level / state_changed を確定すること。",
+      "- prev_phase / prev_state_level には入力前参考状態を入れ、current_phase / state_level には今回ターン後の確定状態を入れること。",
+      "- 方針が絞れた・次の一歩が定まった・小さくても着手意思が出たなら、state_changed を true にしてよいこと。",
+      "- そのような回は、軽い前向き短文や軽い相づちと混同せず、整理(3)または収束(4)への前進候補として扱ってよいこと。",
+      "- ただし、決定完了や強い実行宣言でない限り 5 を先取りしないこと。",
+      "- 本文は 理解 → 気づき → 方向 → 理由 の順を基本に組み立てること。",
+      "- 方向では複数案を広げすぎず、ここから進める一歩を1本で示すこと。",
+      "- Plus / Pro でその結果 state_changed=true なら Compass を必ず返すこと。",
+      ...planSpecificRules,
+    ].join("\n");
+  }
 
   if (lowSignal) {
     return [
@@ -579,6 +688,23 @@ function buildConfirmedPayloadShapeSection(
 }
 
 function buildUserInputSection(userInput: string): string {
+  const explicitForwardCommitment = hasExplicitForwardCommitment(userInput);
+
+  if (explicitForwardCommitment) {
+    return [
+      "今回のユーザー入力:",
+      userInput || "(空入力)",
+      "",
+      "この入力の意味だけを見て返答を作ってください。",
+      "今回の入力には、やることの絞り込み・着手方針・小さな実行意思の明示が含まれる可能性があります。",
+      "『まずは〜から進めます』『この方針でいきます』『始めます』のような入力は、軽い相づちではなく前進入力候補として扱ってください。",
+      "方針が絞れた・次の一歩が定まった・小さくても着手意思が出たなら、整理(3)または収束(4)への前進候補として state_changed=true を検討してください。",
+      "ただし、決定完了や強い実行宣言でない限り 5 を前提にしないでください。",
+      "回答本文は、理解 → 気づき → 方向 → 理由 を土台にしてください。",
+      "方向では複数案を広げすぎず、ここから進める一歩を1本で示してください。",
+    ].join("\n");
+  }
+
   return [
     "今回のユーザー入力:",
     userInput || "(空入力)",
@@ -610,6 +736,8 @@ export function buildHopyPrompt(
       buildConfirmedPayloadShapeSection(resolvedPlan),
       "",
       buildSingleSourceOfTruthSection(resolvedPlan),
+      "",
+      buildExplicitForwardCommitmentSection(userInput),
       "",
       buildPolicySection(policy, userInput),
       "",
@@ -646,11 +774,10 @@ HOPY回答の核になる system / developer / user prompt を組み立て、状
 
 /*
 【今回このファイルで修正したこと】
-- buildConfirmedPayloadShapeSection を「最優先の返却JSON契約」として強化し、無効な自然文を混ぜるくらいなら JSON 契約を優先するよう明記しました。
-- developerPrompt の先頭を buildConfirmedPayloadShapeSection に変更し、JSON 契約を他の自然文指示より先に読ませる順番へ戻しました。
-- buildIdentitySection を短く整理し、自然文の思想は残しつつ、JSON 契約・唯一の正・Compass 条件を前に出しました。
-- buildGenerationRulesSection / buildUserInputSection の重複した自然文指示を整理し、返却JSON契約と競合しにくい密度へ下げました。
-- import / export / 関数名 / 型 / state_changed の判定ロジック / Compass 条件 / 保存復元前提には触っていません。
+- 明確な前進表明を拾う hasExplicitForwardCommitment を追加し、「まずは〜から進めます」「この方針でいきます」などを軽い短文と混同しないようにしました。
+- buildExplicitForwardCommitmentSection を追加し、やることの絞り込み・着手意思が出た回は整理(3)または収束(4)への前進候補として扱えるよう prompt を強めました。
+- buildTransitionSection / buildThreeStepStructureSection / buildStateDensitySection / buildGenerationRulesSection / buildUserInputSection に前進表明専用の指示を追加し、prev と current を同値固定しにくくしました。
+- JSON 契約、唯一の正、Plus / Pro の Compass 必須条件、型、export、保存復元前提には触っていません。
 */
 
 /* /app/api/chat/_lib/response/hopyPromptBuilder.ts */
