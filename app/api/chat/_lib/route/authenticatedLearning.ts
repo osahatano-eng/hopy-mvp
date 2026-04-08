@@ -490,9 +490,9 @@ export async function saveAssistantLearningLogs(params: {
 
   const outcome: AssistantLearningLogsOutcome = {
     responseGenerationLogOk: null,
-    responseGenerationLogError: string | null,
+    responseGenerationLogError: null,
     stateTransitionSignalOk: null,
-    stateTransitionSignalError: string | null,
+    stateTransitionSignalError: null,
   };
 
   if (!assistantMessageId) return outcome;
@@ -708,10 +708,9 @@ confirmed assistant learning 保存を担当する。
 
 /*
 【今回このファイルで修正したこと】
-- saveConfirmedAssistantLearningEntry(...) の not_explicit_feedback 早期 return を削除しました。
-- 明示フィードバックがある場合は explicitFeedback に載せ、通常会話でも reactionSummary と userMessage を使って learning candidate 抽出へ進むようにしました。
-- これにより Free / Plus / Pro すべてで「通常会話から learning を保存する」経路を開けました。
-- learning の prompt 使用可否、state_changed、Compass、memory 保存条件には触っていません。
+- saveAssistantLearningLogs(...) の outcome 初期化で、型断片が値位置に混入していた箇所を null 初期値へ修正しました。
+- responseGenerationLogError と stateTransitionSignalError を正しい初期値に戻し、build が止まる型エラーを解消しました。
+- それ以外の learning 保存条件、prompt 注入条件、state_changed、Compass 条件には触っていません。
 */
 
 /* /app/api/chat/_lib/route/authenticatedLearning.ts */
