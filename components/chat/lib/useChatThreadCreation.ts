@@ -79,7 +79,8 @@ export function useChatThreadCreation({
       const latestMessages = Array.isArray(messagesRef.current) ? messagesRef.current : [];
       const latestResolved = String(lastResolvedThreadIdRef.current ?? "").trim();
       const gotCanBeUsed =
-        Boolean(got) &&
+        typeof got === "string" &&
+        got.length > 0 &&
         !isTemporaryGuestThreadId(got) &&
         (latestMessages.length > 0 || got === latestResolved);
 
@@ -96,7 +97,8 @@ export function useChatThreadCreation({
       const latestMessages = Array.isArray(messagesRef.current) ? messagesRef.current : [];
       const latestResolved = String(lastResolvedThreadIdRef.current ?? "").trim();
       const preCanBeUsed =
-        Boolean(pre) &&
+        typeof pre === "string" &&
+        pre.length > 0 &&
         !isTemporaryGuestThreadId(pre) &&
         (latestMessages.length > 0 || pre === latestResolved);
 
@@ -230,9 +232,9 @@ export function useChatThreadCreation({
 
 /*
 【今回このファイルで修正したこと】
-1. setActiveThreadId の受け口型を Dispatch<SetStateAction<string | null>> から (v: string | null) => void に修正しました。
-2. これにより、ChatClient.tsx から渡している plain setter と型一致するようにしました。
-3. React namespace 型参照をやめ、MutableRefObject / Dispatch / SetStateAction を type import に統一しました。
+1. waitForActiveThreadId の返り値 string | null を、そのまま isTemporaryGuestThreadId へ渡していた型崩れを修正しました。
+2. gotCanBeUsed / preCanBeUsed を typeof value === "string" && value.length > 0 で先に絞ってから判定する形へ修正しました。
+3. これにより build を止めていた null 混入の型エラーだけをこのファイル内で解消しました。
 4. 新規チャットの表示ロジック、本文採用条件、HOPY回答○、Compass、confirmed payload、DB保存/復元には触っていません。
 */
 
