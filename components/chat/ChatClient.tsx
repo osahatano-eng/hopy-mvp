@@ -137,6 +137,8 @@ export default function ChatClient() {
   const atBottomRef = useRef(true);
 
   const pendingEmptyThreadIdRef = useRef<string | null>(null);
+  const threadMessagesCacheRef = useRef<Record<string, ChatMsg[]>>({});
+  const messagesOwnerThreadIdRef = useRef<string | null>(null);
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior | "auto" | "smooth" = "auto") => {
     atBottomRef.current = true;
@@ -260,6 +262,18 @@ export default function ChatClient() {
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
+
+  useEffect(() => {
+    if (!displayLoggedIn) return;
+
+    const tid = String(activeThreadIdRef.current ?? "").trim();
+    if (!tid) return;
+    if (isTemporaryGuestThreadId(tid)) return;
+    if (!Array.isArray(messages) || messages.length <= 0) return;
+
+    messagesOwnerThreadIdRef.current = tid;
+    threadMessagesCacheRef.current[tid] = messages;
+  }, [displayLoggedIn, messages]);
 
   useEffect(() => {
     if (!loading) return;
@@ -449,6 +463,12 @@ export default function ChatClient() {
         try {
           lastHydratedThreadIdRef.current = null;
         } catch {}
+        try {
+          threadMessagesCacheRef.current = {};
+        } catch {}
+        try {
+          messagesOwnerThreadIdRef.current = null;
+        } catch {}
         return;
       }
 
@@ -506,6 +526,12 @@ export default function ChatClient() {
       try {
         lastHydratedThreadIdRef.current = null;
       } catch {}
+      try {
+        threadMessagesCacheRef.current = {};
+      } catch {}
+      try {
+        messagesOwnerThreadIdRef.current = null;
+      } catch {}
       return;
     }
   }, [authReady, loggedIn, displayLoggedIn, signedOutCauseRef, resetOpeningDrag]);
@@ -538,6 +564,9 @@ export default function ChatClient() {
     } catch {}
     try {
       lastHydratedThreadIdRef.current = null;
+    } catch {}
+    try {
+      messagesOwnerThreadIdRef.current = null;
     } catch {}
   }, [authReady, displayLoggedIn, activeThreadId]);
 
@@ -737,6 +766,30 @@ export default function ChatClient() {
     setVisibleCount,
   });
 
+  const messagesForView = useMemo(() => {
+    if (!displayLoggedIn) return messages;
+
+    const activeTid = String(activeThreadId ?? "").trim();
+    if (!activeTid) return messages;
+    if (isTemporaryGuestThreadId(activeTid)) return messages;
+
+    const ownerTid = String(messagesOwnerThreadIdRef.current ?? "").trim();
+    if (!ownerTid || ownerTid === activeTid) {
+      return messages;
+    }
+
+    const cached = threadMessagesCacheRef.current[activeTid];
+    if (Array.isArray(cached) && cached.length > 0) {
+      return cached;
+    }
+
+    if (Array.isArray(messages) && messages.length === 0) {
+      return messages;
+    }
+
+    return [];
+  }, [displayLoggedIn, activeThreadId, messages]);
+
   const {
     viewMessages,
     viewRendered,
@@ -750,7 +803,7 @@ export default function ChatClient() {
     activeThreadId,
     threads,
     setThreads,
-    messages,
+    messages: messagesForView,
     visibleCount,
     uiLang,
     ui: viewUi,
@@ -1026,14 +1079,15 @@ ChatClientView
 このファイルで確認できた大事なこと
 1. このファイルは ChatClientView へ表示用データを受け渡す親である。
 2. loading の表示有無はこのファイルの state が握っている。
-3. したがって、回答本文が messages に載った時点で loading を閉じる防御終端はこのファイルで持てる。
+3. スレッド切り替え直後に messages が空へ倒れても、このファイル内で対象スレッドの直近本文キャッシュを表示へ返せる。
 */
 
 /*
 【今回このファイルで修正したこと】
-1. assistant回答本文が messages の末尾に載った時点で loading を閉じる防御終端を追加しました。
-2. pending / loading / streaming / isThinking の仮メッセージは終端条件に使わないようにしました。
-3. HOPY回答○ / Compass / state_changed / DB / 左カラム / 認証導線には触っていません。
+1. ログイン中スレッドの本文を threadId ごとにこのファイル内で保持するキャッシュを追加しました。
+2. activeThreadId 切り替え直後に messages が空になっても、対象スレッドの直近本文キャッシュを useChatClientViewState へ渡すようにしました。
+3. サインアウト時と一時ゲストスレッド解除時に、このキャッシュと所有 threadId を明示的にクリアするようにしました。
+4. HOPY回答○ / Compass / state_changed / DB保存 / 復元ロジック / API / ChatComposer には触っていません。
 */
 
 /* /components/chat/ChatClient.tsx */
