@@ -5,7 +5,7 @@ import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "re
 import { supabase } from "@/lib/supabaseClient";
 import styles from "./ChatApp.module.css";
 
-import { useAutoGrowTextarea } from "./hooks/useAutoGrowTextarea";
+import { useAutoGrowTextarea } from "./lib/hooks";
 import { useChatAppTranslationCache } from "./hooks/useChatAppTranslationCache";
 import { useChatAppTranslationRunner } from "./hooks/useChatAppTranslationRunner";
 import { getChatAppDisplayText } from "./lib/chatAppDisplayText";
@@ -586,9 +586,8 @@ export default function ChatApp() {
 ChatApp 全体の表示・送受信・ログイン状態・スクロール・composer 挙動をまとめるチャット画面本体です。
 
 【今回このファイルで修正したこと】
-Rail 呼び出し時の props 型不一致で build error になっていたため、
-このファイル内だけで Rail を表示用コンポーネントとして受け直し、
-呼び出し側の型チェックを止めました。
-あわせて busy={loading} を渡し、少なくとも現在見えている必須 props には合わせています。
-Rail 本体や props 定義ファイルには触れていません。
+useAutoGrowTextarea の import 先を ./hooks/useAutoGrowTextarea から ./lib/hooks へ修正しました。
+この修正は build error の解消だけを目的にしており、HOPY回答○ / Compass / state_changed / DB / Rail本体には触れていません。
 */
+
+/* /components/chat/ChatApp.tsx */
