@@ -80,7 +80,7 @@ function resolveDisplayActiveThreadState(
     currentPhase === 4 ||
     currentPhase === 5
   ) {
-    return currentPhase;
+    return { current_phase: currentPhase } as HopyState;
   }
 
   return undefined;
@@ -537,9 +537,9 @@ export default function LeftRail(props: LeftRailProps) {
 
 /*
 【今回このファイルで修正したこと】
-1. activeThreadState の表示用値を current_phase から HopyState として抽出する関数を追加しました。
-2. LeftRailActiveThreadSection へ ConfirmedThreadState 全体ではなく、表示用の HopyState だけを渡すように戻しました。
-3. activeThreadState が欠けている場合は補わず、Current Chat セクションを無理に表示しない形に整理しました。
+1. HopyState を数値で返していた箇所をやめ、current_phase を持つオブジェクトとして返すように修正しました。
+2. LeftRailActiveThreadSection には表示用の HopyState オブジェクトだけを渡すように維持しました。
+3. activeThreadState が欠けている場合は補わず、Current Chat セクションを無理に表示しない形を維持しました。
 */
 
 /* /components/chat/ui/LeftRail.tsx */
