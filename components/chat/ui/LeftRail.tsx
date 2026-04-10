@@ -13,6 +13,7 @@ import { useLeftRailController } from "./useLeftRailController";
 import { useLeftRailInlineStyles } from "./leftRailInlineStyles";
 import { useLeftRailDragStyle } from "./useLeftRailDragStyle";
 import type { LeftRailProps } from "./leftRailTypes";
+import type { HopyState } from "../lib/stateBadge";
 
 const APP_HEADER_HEIGHT_PX = 44;
 const SP_MAX_WIDTH_PX = 768;
@@ -58,6 +59,28 @@ function resolveConfirmedThreadState(
     currentPhase === 5
   ) {
     return value;
+  }
+
+  return undefined;
+}
+
+function resolveDisplayActiveThreadState(
+  value: LeftRailProps["activeThreadState"]
+): HopyState | undefined {
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+
+  const currentPhase = (value as { current_phase?: unknown }).current_phase;
+
+  if (
+    currentPhase === 1 ||
+    currentPhase === 2 ||
+    currentPhase === 3 ||
+    currentPhase === 4 ||
+    currentPhase === 5
+  ) {
+    return currentPhase;
   }
 
   return undefined;
@@ -169,8 +192,8 @@ export default function LeftRail(props: LeftRailProps) {
   void openLayer;
   void showCloseBtn;
 
-  const displayActiveThreadState = React.useMemo(() => {
-    return resolvedDirectActiveThreadState;
+  const displayActiveThreadState = React.useMemo<HopyState | undefined>(() => {
+    return resolveDisplayActiveThreadState(resolvedDirectActiveThreadState);
   }, [resolvedDirectActiveThreadState]);
 
   const {
@@ -393,7 +416,7 @@ export default function LeftRail(props: LeftRailProps) {
             />
           </div>
 
-          {activeIdSafe ? (
+          {activeIdSafe && displayActiveThreadState !== undefined ? (
             <div className={styles.block}>
               <LeftRailActiveThreadSection
                 uiLang={uiLang}
@@ -514,10 +537,9 @@ export default function LeftRail(props: LeftRailProps) {
 
 /*
 【今回このファイルで修正したこと】
-1. buildActiveThreadState を使った activeThreadState の再構成を削除しました。
-2. activeThreadState は受け取った確定値だけを通し、欠けている場合は補わず undefined のまま扱うようにしました。
-3. displayActiveThreadState で confirmedActiveThreadState へ逃がしていた別経路を削除しました。
-4. LeftRail 内では activeThreadState を唯一の表示経路として扱うように整理しました。
+1. activeThreadState の表示用値を current_phase から HopyState として抽出する関数を追加しました。
+2. LeftRailActiveThreadSection へ ConfirmedThreadState 全体ではなく、表示用の HopyState だけを渡すように戻しました。
+3. activeThreadState が欠けている場合は補わず、Current Chat セクションを無理に表示しない形に整理しました。
 */
 
 /* /components/chat/ui/LeftRail.tsx */
