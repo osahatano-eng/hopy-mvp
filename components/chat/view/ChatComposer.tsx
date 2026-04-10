@@ -86,6 +86,7 @@ export const ChatComposer = React.memo(function ChatComposer(props: {
   }, [onArmFocusGuard, onRunFocusGuard, onTrySend]);
 
   const canSendFromHero = Boolean(canSendNow);
+  const canRetryLastFailed = Boolean(lastFailed) && !loading && !threadBusy;
 
   const composerPlaceholder = String(ui.placeholder ?? "").trim();
   const hasTypedInput = String(input ?? "").trim().length > 0;
@@ -281,8 +282,8 @@ export const ChatComposer = React.memo(function ChatComposer(props: {
               className={`${styles.memBtn} ${styles.retryBtn}`}
               onClick={retryLastFailed}
               type="button"
-              disabled={!canSendFromHero}
-              aria-disabled={!canSendFromHero}
+              disabled={!canRetryLastFailed}
+              aria-disabled={!canRetryLastFailed}
               title={lastFailed.errorText}
             >
               {ui.failed} {ui.retry}
@@ -343,12 +344,15 @@ export const ChatComposer = React.memo(function ChatComposer(props: {
 export default ChatComposer;
 
 /*
-このファイルの正式役割:
-チャット入力欄の表示と、入力・フォーカス・送信操作を安全に受け持つ責務のファイル。
+【このファイルの正式役割】
+チャット入力欄の表示と、入力・フォーカス・送信操作を安全に受け持つ責務のファイルです。
 */
 
 /*
 【今回このファイルで修正したこと】
-Safari のキーボード開閉と競合しやすい onFocusScrollBottom 呼び出しを onFocus から外しました。
-入力欄 focus 時は独自の下端補助を追加せず、ブラウザ標準挙動を優先する形に戻しました。
+1. 再送ボタンの disabled 条件を canSendNow 連動から切り離しました。
+2. 再送ボタンは lastFailed が存在し、かつ loading 中でも threadBusy 中でもない時だけ押せるように固定しました。
+3. 通常送信ボタンの条件、HOPY回答○、Compass、state_changed、DB には触っていません。
 */
+
+/* /components/chat/view/ChatComposer.tsx */
