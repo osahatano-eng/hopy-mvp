@@ -67,6 +67,65 @@ function extractRenderableMessageText(value: unknown): string {
   return "";
 }
 
+function extractMessageThreadId(msg: ChatMsg | null | undefined): string {
+  const safe = msg as any;
+  if (!safe) return "";
+
+  const candidates = [
+    safe.thread_id,
+    safe.threadId,
+    safe.conversation_id,
+    safe.conversationId,
+    safe.chat_id,
+    safe.chatId,
+    safe.thread?.id,
+    safe.conversation?.id,
+  ];
+
+  for (const candidate of candidates) {
+    const tid = String(candidate ?? "").trim();
+    if (tid) return tid;
+  }
+
+  return "";
+}
+
+function resolveMessagesOwnerThreadId(messages: ChatMsg[] | null | undefined): string {
+  if (!Array.isArray(messages) || messages.length <= 0) return "";
+
+  const counts = new Map<string, number>();
+  let firstDetected = "";
+
+  for (const msg of messages) {
+    const tid = extractMessageThreadId(msg);
+    if (!tid) continue;
+
+    if (!firstDetected) {
+      firstDetected = tid;
+    }
+
+    counts.set(tid, (counts.get(tid) ?? 0) + 1);
+  }
+
+  if (!firstDetected) return "";
+
+  if (counts.size === 1) {
+    return firstDetected;
+  }
+
+  let winner = "";
+  let winnerCount = 0;
+
+  for (const [tid, count] of counts.entries()) {
+    if (count > winnerCount) {
+      winner = tid;
+      winnerCount = count;
+    }
+  }
+
+  return winner;
+}
+
 function isCompletedAssistantReplyMessage(msg: ChatMsg | null | undefined): boolean {
   const safe = msg as any;
   if (!safe) return false;
@@ -139,6 +198,7 @@ export default function ChatClient() {
   const pendingEmptyThreadIdRef = useRef<string | null>(null);
   const threadMessagesCacheRef = useRef<Record<string, ChatMsg[]>>({});
   const messagesOwnerThreadIdRef = useRef<string | null>(null);
+  const lastThreadDecisionRef = useRef<ThreadDecision | null>(null);
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior | "auto" | "smooth" = "auto") => {
     atBottomRef.current = true;
@@ -185,6 +245,126 @@ export default function ChatClient() {
     railOpen,
     enabled: true,
   });
+
+  const clearThreadViewRefs = useCallback((clearCache: boolean) => {
+    pendingEmptyThreadIdRef.current = null;
+    messagesOwnerThreadIdRef.current = null;
+
+    if (clearCache) {
+      threadMessagesCacheRef.current = {};
+    }
+  }, []);
+
+  const resetRailState = useCallback(() => {
+    setMemOpen(false);
+    setRailOpen(false);
+    resetOpeningDrag();
+  }, [resetOpeningDrag]);
+
+  const resetLoggedOutState = useCallback(
+    ({
+      clearMessages,
+      clearLoading,
+      clearActiveThreadRef,
+      clearLastThreadDecision,
+    }: {
+      clearMessages: boolean;
+      clearLoading: boolean;
+      clearActiveThreadRef: boolean;
+      clearLastThreadDecision: boolean;
+    }) => {
+      try {
+        clearActiveThreadId();
+      } catch {}
+
+      try {
+        setThreads([]);
+      } catch {}
+
+      try {
+        setActiveThreadId(null);
+      } catch {}
+
+      if (clearMessages) {
+        try {
+          setMessages([]);
+        } catch {}
+
+        try {
+          setVisibleCount(200);
+        } catch {}
+      }
+
+      try {
+        setUserState(null);
+      } catch {}
+
+      try {
+        setUserStateErr(null);
+      } catch {}
+
+      try {
+        setLastFailed(null);
+      } catch {}
+
+      try {
+        setThreadBusy(false);
+      } catch {}
+
+      if (clearLoading) {
+        try {
+          setLoading(false);
+        } catch {}
+      }
+
+      try {
+        resetRailState();
+      } catch {}
+
+      if (clearActiveThreadRef) {
+        try {
+          activeThreadIdRef.current = null;
+        } catch {}
+      }
+
+      if (clearLastThreadDecision) {
+        try {
+          lastThreadDecisionRef.current = null;
+        } catch {}
+      }
+
+      try {
+        clearThreadViewRefs(true);
+      } catch {}
+    },
+    [clearThreadViewRefs, resetRailState]
+  );
+
+  const clearTemporaryGuestSelection = useCallback(() => {
+    try {
+      clearActiveThreadId();
+    } catch {}
+
+    try {
+      setActiveThreadId(null);
+    } catch {}
+
+    try {
+      setMessages([]);
+    } catch {}
+
+    try {
+      setVisibleCount(200);
+    } catch {}
+
+    try {
+      activeThreadIdRef.current = null;
+    } catch {}
+
+    try {
+      clearThreadViewRefs(false);
+    } catch {}
+  }, [clearThreadViewRefs]);
 
   const auth = useChatAuth({
     supabase,
@@ -256,24 +436,29 @@ export default function ChatClient() {
     }
   }, [activeThreadId]);
 
-  const lastHydratedThreadIdRef = useRef<string | null>(null);
-
   const messagesRef = useRef<ChatMsg[]>([]);
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
 
+  const currentMessagesOwnerThreadId = useMemo(() => {
+    return resolveMessagesOwnerThreadId(messages);
+  }, [messages]);
+
   useEffect(() => {
     if (!displayLoggedIn) return;
+    if (!Array.isArray(messages) || messages.length <= 0) return;
 
-    const tid = String(activeThreadIdRef.current ?? "").trim();
+    const resolvedTid = String(currentMessagesOwnerThreadId ?? "").trim();
+    const fallbackTid = String(activeThreadIdRef.current ?? "").trim();
+    const tid = resolvedTid || fallbackTid;
+
     if (!tid) return;
     if (isTemporaryGuestThreadId(tid)) return;
-    if (!Array.isArray(messages) || messages.length <= 0) return;
 
     messagesOwnerThreadIdRef.current = tid;
     threadMessagesCacheRef.current[tid] = messages;
-  }, [displayLoggedIn, messages]);
+  }, [displayLoggedIn, messages, currentMessagesOwnerThreadId]);
 
   useEffect(() => {
     if (!loading) return;
@@ -287,50 +472,6 @@ export default function ChatClient() {
     } catch {}
   }, [loading, messages]);
 
-  useEffect(() => {
-    const tid = String(activeThreadId ?? "").trim();
-
-    if (!displayLoggedIn) {
-      lastHydratedThreadIdRef.current = null;
-      return;
-    }
-
-    if (!tid) {
-      lastHydratedThreadIdRef.current = null;
-      return;
-    }
-
-    if (isTemporaryGuestThreadId(tid)) {
-      lastHydratedThreadIdRef.current = tid;
-      return;
-    }
-
-    const prevTid = String(lastHydratedThreadIdRef.current ?? "").trim();
-
-    if (!prevTid) {
-      lastHydratedThreadIdRef.current = tid;
-      return;
-    }
-
-    if (prevTid === tid) return;
-
-    lastHydratedThreadIdRef.current = tid;
-
-    try {
-      setMessages([]);
-    } catch {}
-
-    try {
-      setVisibleCount(200);
-    } catch {}
-
-    try {
-      atBottomRef.current = true;
-      setAtBottom(true);
-    } catch {}
-  }, [displayLoggedIn, activeThreadId]);
-
-  const lastThreadDecisionRef = useRef<ThreadDecision | null>(null);
   const noteThreadDecision = useCallback((tid: string, reason: string) => {
     lastThreadDecisionRef.current = { id: tid, at: Date.now(), reason };
   }, []);
@@ -427,114 +568,24 @@ export default function ChatClient() {
 
     if (!loggedIn) {
       if (!signedOutCauseRef.current) {
-        try {
-          clearActiveThreadId();
-        } catch {}
-        try {
-          setThreads([]);
-        } catch {}
-        try {
-          setActiveThreadId(null);
-        } catch {}
-        try {
-          setUserState(null);
-        } catch {}
-        try {
-          setUserStateErr(null);
-        } catch {}
-        try {
-          setLastFailed(null);
-        } catch {}
-        try {
-          setThreadBusy(false);
-        } catch {}
-        try {
-          setMemOpen(false);
-        } catch {}
-        try {
-          setRailOpen(false);
-        } catch {}
-        try {
-          resetOpeningDrag();
-        } catch {}
-        try {
-          pendingEmptyThreadIdRef.current = null;
-        } catch {}
-        try {
-          lastHydratedThreadIdRef.current = null;
-        } catch {}
-        try {
-          threadMessagesCacheRef.current = {};
-        } catch {}
-        try {
-          messagesOwnerThreadIdRef.current = null;
-        } catch {}
+        resetLoggedOutState({
+          clearMessages: false,
+          clearLoading: false,
+          clearActiveThreadRef: false,
+          clearLastThreadDecision: false,
+        });
         return;
       }
 
-      try {
-        clearActiveThreadId();
-      } catch {}
-      try {
-        setEmail("");
-      } catch {}
-      try {
-        setThreads([]);
-      } catch {}
-      try {
-        setActiveThreadId(null);
-      } catch {}
-      try {
-        setMessages([]);
-      } catch {}
-      try {
-        setVisibleCount(200);
-      } catch {}
-      try {
-        setUserState(null);
-      } catch {}
-      try {
-        setUserStateErr(null);
-      } catch {}
-      try {
-        setLastFailed(null);
-      } catch {}
-      try {
-        setThreadBusy(false);
-      } catch {}
-      try {
-        setLoading(false);
-      } catch {}
-      try {
-        setMemOpen(false);
-      } catch {}
-      try {
-        setRailOpen(false);
-      } catch {}
-      try {
-        resetOpeningDrag();
-      } catch {}
-      try {
-        activeThreadIdRef.current = null;
-      } catch {}
-      try {
-        lastThreadDecisionRef.current = null;
-      } catch {}
-      try {
-        pendingEmptyThreadIdRef.current = null;
-      } catch {}
-      try {
-        lastHydratedThreadIdRef.current = null;
-      } catch {}
-      try {
-        threadMessagesCacheRef.current = {};
-      } catch {}
-      try {
-        messagesOwnerThreadIdRef.current = null;
-      } catch {}
+      resetLoggedOutState({
+        clearMessages: true,
+        clearLoading: true,
+        clearActiveThreadRef: true,
+        clearLastThreadDecision: true,
+      });
       return;
     }
-  }, [authReady, loggedIn, displayLoggedIn, signedOutCauseRef, resetOpeningDrag]);
+  }, [authReady, loggedIn, displayLoggedIn, signedOutCauseRef, resetLoggedOutState]);
 
   useEffect(() => {
     if (!authReady) return;
@@ -544,31 +595,8 @@ export default function ChatClient() {
     if (!tid) return;
     if (!isTemporaryGuestThreadId(tid)) return;
 
-    try {
-      clearActiveThreadId();
-    } catch {}
-    try {
-      setActiveThreadId(null);
-    } catch {}
-    try {
-      setMessages([]);
-    } catch {}
-    try {
-      setVisibleCount(200);
-    } catch {}
-    try {
-      pendingEmptyThreadIdRef.current = null;
-    } catch {}
-    try {
-      activeThreadIdRef.current = null;
-    } catch {}
-    try {
-      lastHydratedThreadIdRef.current = null;
-    } catch {}
-    try {
-      messagesOwnerThreadIdRef.current = null;
-    } catch {}
-  }, [authReady, displayLoggedIn, activeThreadId]);
+    clearTemporaryGuestSelection();
+  }, [authReady, displayLoggedIn, activeThreadId, clearTemporaryGuestSelection]);
 
   useAutoGrowTextarea(inputRef as React.RefObject<HTMLTextAreaElement>, input, 420);
 
@@ -624,10 +652,6 @@ export default function ChatClient() {
   const onChangeLang = useCallback((next: "ja" | "en") => {
     const safeNext = next === "en" ? "en" : "ja";
     setUiLang((prev) => (prev === safeNext ? prev : safeNext));
-
-    try {
-      localStorage.setItem("hopy_lang", safeNext);
-    } catch {}
 
     try {
       window.dispatchEvent(new CustomEvent("hopy:lang-change", { detail: { lang: safeNext } }));
@@ -773,22 +797,42 @@ export default function ChatClient() {
     if (!activeTid) return messages;
     if (isTemporaryGuestThreadId(activeTid)) return messages;
 
+    const currentOwnerTid = String(currentMessagesOwnerThreadId ?? "").trim();
+    if (currentOwnerTid) {
+      if (currentOwnerTid === activeTid) {
+        return messages;
+      }
+
+      const cached = threadMessagesCacheRef.current[activeTid];
+      if (Array.isArray(cached)) {
+        const cachedOwnerTid = resolveMessagesOwnerThreadId(cached);
+        if (!cachedOwnerTid || cachedOwnerTid === activeTid) {
+          return cached;
+        }
+
+        delete threadMessagesCacheRef.current[activeTid];
+      }
+
+      return [];
+    }
+
     const ownerTid = String(messagesOwnerThreadIdRef.current ?? "").trim();
     if (!ownerTid || ownerTid === activeTid) {
       return messages;
     }
 
     const cached = threadMessagesCacheRef.current[activeTid];
-    if (Array.isArray(cached) && cached.length > 0) {
-      return cached;
-    }
+    if (Array.isArray(cached)) {
+      const cachedOwnerTid = resolveMessagesOwnerThreadId(cached);
+      if (!cachedOwnerTid || cachedOwnerTid === activeTid) {
+        return cached;
+      }
 
-    if (Array.isArray(messages) && messages.length === 0) {
-      return messages;
+      delete threadMessagesCacheRef.current[activeTid];
     }
 
     return [];
-  }, [displayLoggedIn, activeThreadId, messages]);
+  }, [displayLoggedIn, activeThreadId, messages, currentMessagesOwnerThreadId]);
 
   const {
     viewMessages,
@@ -949,6 +993,26 @@ export default function ChatClient() {
     return viewActiveThreadId || null;
   }, [displayLoggedIn, activeThreadId, viewActiveThreadId]);
 
+  const shouldHoldBlankThreadStage = useMemo(() => {
+    if (!displayLoggedIn) return false;
+    if (!threadBusy) return false;
+    if (viewRendered.length > 0) return false;
+    if (messagesForView.length > 0) return false;
+
+    const activeTid = String(activeThreadIdForView ?? activeThreadId ?? "").trim();
+    if (!activeTid) return false;
+    if (isTemporaryGuestThreadId(activeTid)) return false;
+
+    return true;
+  }, [
+    displayLoggedIn,
+    threadBusy,
+    viewRendered.length,
+    messagesForView.length,
+    activeThreadIdForView,
+    activeThreadId,
+  ]);
+
   if (shouldHoldSignedOutScreen) {
     return (
       <main
@@ -1004,6 +1068,7 @@ export default function ChatClient() {
           : null
       }
       threadBusy={displayLoggedIn ? threadBusy : false}
+      shouldHoldBlankThreadStage={displayLoggedIn ? shouldHoldBlankThreadStage : false}
       memOpen={memOpen}
       setMemOpen={setMemOpen}
       railOpen={railOpen}
@@ -1050,44 +1115,14 @@ export default function ChatClient() {
 チャット画面の親本体ファイル。
 messages / threads / activeThreadId / rendered / visibleTexts など、
 表示に必要な値をまとめて ChatClientView へ渡す。
-
-このファイルが受け取るもの
-入力中の input
-messages
-threads
-activeThreadId
-userState
-uiLang
-useChatSend など各 hook から返る状態
-useChatClientViewState から返る
-- viewRendered
-- viewVisibleTexts
-- viewMessages
-- viewActiveThread
-- viewActiveThreadId
-
-このファイルが渡すもの
-ChatClientView
-- rendered={viewRendered}
-- visibleTexts={viewVisibleTexts}
-- messages={viewMessages}
-- activeThread
-- activeThreadState
-- userState
-そのほか画面描画に必要な各種 props
-
-このファイルで確認できた大事なこと
-1. このファイルは ChatClientView へ表示用データを受け渡す親である。
-2. loading の表示有無はこのファイルの state が握っている。
-3. スレッド切り替え直後に messages が空へ倒れても、このファイル内で対象スレッドの直近本文キャッシュを表示へ返せる。
 */
 
 /*
 【今回このファイルで修正したこと】
-1. ログイン中スレッドの本文を threadId ごとにこのファイル内で保持するキャッシュを追加しました。
-2. activeThreadId 切り替え直後に messages が空になっても、対象スレッドの直近本文キャッシュを useChatClientViewState へ渡すようにしました。
-3. サインアウト時と一時ゲストスレッド解除時に、このキャッシュと所有 threadId を明示的にクリアするようにしました。
-4. HOPY回答○ / Compass / state_changed / DB保存 / 復元ロジック / API / ChatComposer には触っていません。
+1. 現在の messages 自体から owner thread_id を推定する helper を追加しました。
+2. cache 保存時に、activeThreadIdRef.current へ寄せず、messages 自体が属する thread_id を優先して保存するようにしました。
+3. messagesForView で cache を返す前に、その cache が本当に activeThreadId の本文かを検証し、別 thread_id の cache は採用しないようにしました。
+4. HOPY回答○ / Compass / state_changed / confirmed payload / DB保存 / DB復元の唯一の正には触っていません。
 */
 
 /* /components/chat/ChatClient.tsx */

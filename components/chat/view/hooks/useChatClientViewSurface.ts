@@ -35,6 +35,10 @@ export function useChatClientViewSurface(args: {
     threadBusy,
   } = args;
 
+  void activeThreadId;
+  void userStateErr;
+  void lastFailed;
+
   const workspaceMode = Boolean(loggedIn);
   const guestMode = !workspaceMode;
   const busy = Boolean(loading || threadBusy);
@@ -103,7 +107,6 @@ export function useChatClientViewSurface(args: {
   const hasRenderableChatContent = renderedLength > 0;
   const hasAnyChatContent = hasRenderableChatContent || messagesLength > 0;
 
-  const shouldHoldBlankThreadStage = false;
   const shouldShowWorkspaceHero = false;
 
   const shouldShowGuestHero = React.useMemo(() => {
@@ -152,7 +155,6 @@ export function useChatClientViewSurface(args: {
     labels,
     guestCopy,
     hasAnyChatContent,
-    shouldHoldBlankThreadStage,
     shouldShowWorkspaceHero,
     shouldShowGuestHero,
     shouldShowPreparing,
@@ -161,3 +163,22 @@ export function useChatClientViewSurface(args: {
     overlayUserState,
   };
 }
+
+/*
+このファイルの正式役割:
+ChatClientView 用の表示補助値だけを整理して返す surface hook。
+確定済みの入力状態・表示状態・文言を UI 用に整える責務を持ち、
+HOPY の状態や Compass や hold 条件を再判定する場所ではない。
+*/
+
+/*
+【今回このファイルで修正したこと】
+1. useChatClientViewSurface.ts 内に残っていた shouldHoldBlankThreadStage の生成を削除しました。
+2. return から shouldHoldBlankThreadStage を削除し、このフックが hold 条件の責務を持たない形に戻しました。
+3. 未使用の受け取り引数でビルドが不安定にならないように void で明示しました。
+4. HOPY唯一の正である state_changed、HOPY回答○、Compass、DB保存、DB復元の判定には触れていません。
+*/
+
+/*
+/components/chat/view/hooks/useChatClientViewSurface.ts
+*/

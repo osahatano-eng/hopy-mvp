@@ -30,6 +30,7 @@ type ChatClientViewExtendedProps = ChatClientViewProps & {
   onLeftRailOpeningDragTouchStart?: (e: React.TouchEvent<HTMLElement>) => void;
   onLeftRailOpeningDragTouchMove?: (e: React.TouchEvent<HTMLElement>) => void;
   onLeftRailOpeningDragTouchEnd?: () => void;
+  shouldHoldBlankThreadStage?: boolean;
 };
 
 function safeUUID(): string {
@@ -112,6 +113,7 @@ export default function ChatClientView(props: ChatClientViewExtendedProps) {
     onLeftRailOpeningDragTouchStart,
     onLeftRailOpeningDragTouchMove,
     onLeftRailOpeningDragTouchEnd,
+    shouldHoldBlankThreadStage: shouldHoldBlankThreadStageFromClient = false,
   } = props;
 
   const disableNewChat = Boolean(disableNewChatProp);
@@ -140,7 +142,6 @@ export default function ChatClientView(props: ChatClientViewExtendedProps) {
     uiForComposer,
     labels,
     guestCopy,
-    shouldHoldBlankThreadStage,
     shouldShowWorkspaceHero,
     shouldShowGuestHero,
     shouldShowPreparing,
@@ -387,7 +388,10 @@ export default function ChatClientView(props: ChatClientViewExtendedProps) {
       const prev = createOpRef.current;
 
       const reusePrev =
-        !incoming && Boolean(prev.id) && now - (prev.at || 0) >= 0 && now - (prev.at || 0) <= CREATE_REQ_REUSE_MS;
+        !incoming &&
+        Boolean(prev.id) &&
+        now - (prev.at || 0) >= 0 &&
+        now - (prev.at || 0) <= CREATE_REQ_REUSE_MS;
 
       const clientRequestId = incoming || (reusePrev ? prev.id : safeUUID());
       createOpRef.current = { id: clientRequestId, at: now };
@@ -571,7 +575,7 @@ export default function ChatClientView(props: ChatClientViewExtendedProps) {
       userStateErr,
       shouldShowGuestHero,
       shouldShowWorkspaceHero,
-      shouldHoldBlankThreadStage,
+      shouldHoldBlankThreadStage: shouldHoldBlankThreadStageFromClient,
       shouldShowPreparing,
       showRecoverUi,
       showStuckUi,
@@ -600,7 +604,7 @@ export default function ChatClientView(props: ChatClientViewExtendedProps) {
       userStateErr,
       shouldShowGuestHero,
       shouldShowWorkspaceHero,
-      shouldHoldBlankThreadStage,
+      shouldHoldBlankThreadStageFromClient,
       shouldShowPreparing,
       showRecoverUi,
       showStuckUi,
@@ -742,6 +746,12 @@ Chat画面の表示統合ファイル。
 
 /*
 【今回このファイルで修正したこと】
-1. SPで入力欄focus時に下方向スクロール補正が走らないように、onFocusScrollBottom をモバイル時だけ止めました。
-2. HOPY唯一の正、state 1..5、Compass、threads、messages、auth、left rail の挙動は触っていません。
+1. ChatClientView.tsx 内で shouldHoldBlankThreadStage を OR 再合成していた処理を削除しました。
+2. ChatClient.tsx から受け取った shouldHoldBlankThreadStage だけを ChatMessagePane.tsx へそのまま中継するように戻しました。
+3. useChatClientViewSurface からの hold 値をこのファイルで再判定・再合成しないようにして、中継責務へ寄せました。
+4. HOPY唯一の正である state_changed、HOPY回答○、Compass、DB保存、DB復元の判定には触れていません。
+*/
+
+/*
+/components/chat/ChatClientView.tsx
 */

@@ -1,4 +1,3 @@
-// /components/chat/view/ChatStream.tsx
 "use client";
 
 import React, { useMemo } from "react";
@@ -77,25 +76,23 @@ function ChatStreamInner(props: {
     return { paddingTop: inset };
   }, [inset]);
 
-  const viewItems: ViewItem[] = useMemo(() => {
-    return getChatStreamViewItems({
-      rendered,
-      visibleTexts,
-      uiLang,
-    });
-  }, [rendered, visibleTexts, uiLang]);
+  const viewItems: ViewItem[] = getChatStreamViewItems({
+    rendered,
+    visibleTexts,
+    uiLang,
+  });
 
   const shouldShowWorkspaceFallback =
     rendered.length === 0 && visibleTexts.size === 0 && viewItems.length === 0 && !loading;
 
-  const hasTrailingAssistantMessage = useMemo(() => {
+  const hasTrailingAssistantMessage = (() => {
     for (let i = viewItems.length - 1; i >= 0; i--) {
       const it = viewItems[i];
       if (it.kind !== "msg") continue;
       return it.role === "assistant";
     }
     return false;
-  }, [viewItems]);
+  })();
 
   const fallbackCopy = useMemo(() => {
     return getChatStreamFallbackCopy({
@@ -107,36 +104,34 @@ function ChatStreamInner(props: {
     });
   }, [uiLang, shouldShowPreparing, shouldShowRecover, shouldShowStuck, userStateErr]);
 
-  const messageListNode = useMemo(() => {
-    return viewItems.map((it) => {
-      if (it.kind === "divider") {
-        return <DayDivider key={it.key} label={it.label} />;
-      }
+  const messageListNode = viewItems.map((it) => {
+    if (it.kind === "divider") {
+      return <DayDivider key={it.key} label={it.label} />;
+    }
 
-      if (it.kind === "compass") {
-        return <ChatStreamCompass key={it.key} item={it} />;
-      }
+    if (it.kind === "compass") {
+      return <ChatStreamCompass key={it.key} item={it} />;
+    }
 
-      const role = it.role;
+    const role = it.role;
 
-      return (
-        <MessageRow
-          key={it.key}
-          role={role as any}
-          text={it.text}
-          uiLang={uiLang}
-          msgKey={it.msgKey}
-          dataRole={role === "user" ? "user" : "assistant"}
-          isLastUser={it.isLastUser}
-          assistantStateDot={
-            role === "assistant" && it.assistantDot?.show ? (
-              <AssistantStateDot meta={it.assistantDot as AssistantDotMeta} />
-            ) : undefined
-          }
-        />
-      );
-    });
-  }, [viewItems, uiLang]);
+    return (
+      <MessageRow
+        key={it.key}
+        role={role as any}
+        text={it.text}
+        uiLang={uiLang}
+        msgKey={it.msgKey}
+        dataRole={role === "user" ? "user" : "assistant"}
+        isLastUser={it.isLastUser}
+        assistantStateDot={
+          role === "assistant" && it.assistantDot?.show ? (
+            <AssistantStateDot meta={it.assistantDot as AssistantDotMeta} />
+          ) : undefined
+        }
+      />
+    );
+  });
 
   return (
     <div className={styles.streamWrap} ref={scrollerRef} style={streamWrapStyle}>
@@ -185,6 +180,24 @@ function ChatStreamInner(props: {
   );
 }
 
-export const ChatStream = React.memo(ChatStreamInner);
+export const ChatStream = ChatStreamInner;
 
 export default ChatStream;
+
+/*
+【このファイルの正式役割】
+チャット本文の描画ファイル。
+受け取った rendered / visibleTexts を、そのまま表示用 viewItems に変換し、
+MessageRow / DayDivider / Compass / LoadingRow を描画する。
+このファイルは本文採用や thread 判定を持たず、表示だけを担当する。
+*/
+
+/*
+【今回このファイルで修正したこと】
+1. rendered / visibleTexts を参照同一性前提で握り続ける useMemo を外し、毎回その時点の描画入力から viewItems を作るようにしました。
+2. messageListNode も useMemo から外し、旧描画キャッシュを残さないようにしました。
+3. export の React.memo を外し、親の再描画時に ChatStream 側が古い本文を保持し続けない形へ戻しました。
+4. HOPY唯一の正である state_changed / HOPY回答○ / Compass判定 / DB保存 / DB復元の意味判定には触れていません。
+*/
+
+/* /components/chat/view/ChatStream.tsx */

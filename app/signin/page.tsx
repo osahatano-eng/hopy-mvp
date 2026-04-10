@@ -7,8 +7,6 @@ import styles from "./page.module.css";
 
 type Lang = "en" | "ja";
 
-const OAUTH_EXCHANGE_LOCK_KEY = "hopy_signin_oauth_exchange_lock";
-
 function safeLang(x: any): Lang {
   return x === "ja" ? "ja" : "en";
 }
@@ -25,33 +23,6 @@ function canUseStorage(kind: "localStorage" | "sessionStorage") {
   } catch {
     return false;
   }
-}
-
-function readOauthExchangeLock(): string {
-  try {
-    if (!canUseStorage("sessionStorage")) return "";
-    return String(window.sessionStorage.getItem(OAUTH_EXCHANGE_LOCK_KEY) ?? "");
-  } catch {
-    return "";
-  }
-}
-
-function writeOauthExchangeLock(code: string) {
-  try {
-    if (!code) return;
-    if (!canUseStorage("sessionStorage")) return;
-    window.sessionStorage.setItem(OAUTH_EXCHANGE_LOCK_KEY, code);
-  } catch {}
-}
-
-function clearOauthExchangeLock(expectedCode?: string) {
-  try {
-    if (!canUseStorage("sessionStorage")) return;
-    const current = String(window.sessionStorage.getItem(OAUTH_EXCHANGE_LOCK_KEY) ?? "");
-    if (!current) return;
-    if (expectedCode && current !== expectedCode) return;
-    window.sessionStorage.removeItem(OAUTH_EXCHANGE_LOCK_KEY);
-  } catch {}
 }
 
 async function sleep(ms: number) {
@@ -170,8 +141,6 @@ export default function SignInPage() {
         await supabase.auth.signOut({ scope: "local" });
       } catch {}
 
-      clearOauthExchangeLock();
-
       const stores: Array<"localStorage" | "sessionStorage"> = ["localStorage", "sessionStorage"];
 
       for (const kind of stores) {
@@ -246,7 +215,6 @@ export default function SignInPage() {
       const url = new URL(location.href);
       const sp = url.searchParams;
 
-      const codeInUrl = sp.get("code") || "";
       const had =
         sp.has("code") ||
         sp.has("error") ||
@@ -261,8 +229,6 @@ export default function SignInPage() {
 
       const next = `${url.pathname}${sp.toString() ? `?${sp.toString()}` : ""}${url.hash || ""}`;
       history.replaceState(null, "", next);
-
-      clearOauthExchangeLock(codeInUrl);
 
       try {
         setHasOauthParams(false);
@@ -404,14 +370,6 @@ export default function SignInPage() {
     const exchangeOauthCodeIfNeeded = async () => {
       if (!hasCode || !code) return null;
 
-      const currentLock = readOauthExchangeLock();
-      if (currentLock === code) {
-        pushDebug("ex:locked");
-        return null;
-      }
-
-      writeOauthExchangeLock(code);
-
       try {
         pushDebug("ex:start");
 
@@ -469,8 +427,6 @@ export default function SignInPage() {
 
         pushDebug("ex:throw");
         return null;
-      } finally {
-        clearOauthExchangeLock(code);
       }
     };
 
@@ -745,8 +701,6 @@ export default function SignInPage() {
     if (busy) return;
     setBusy(true);
     try {
-      clearOauthExchangeLock();
-
       await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
@@ -864,9 +818,9 @@ Google OAuth の開始・復帰・セッション確定・/chat への遷移を�
 
 /*
 【今回このファイルで修正したこと】
-1. useEffect の cleanup で clearOauthExchangeLock(code) を呼ばないように修正しました。
-2. これにより、dev の Strict Mode 再マウント時に OAuth exchange lock を自分で外してしまう不具合を止めました。
-3. それ以外のロジックには触っていません。
+1. sessionStorage の独自 OAuth exchange lock 依存を削除しました。
+2. exchangeCodeForSession を独自 lock で止めず、Supabase 側の fallback で収束させる形に戻しました。
+3. これにより、devtool / dev の再実行時でも code exchange を自分で止めにくくしました。
 */
 
 /* /app/signin/page.tsx */

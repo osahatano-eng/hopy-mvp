@@ -464,27 +464,8 @@ export function useThreadSwitch(params: {
     inflightThreadIdRef.current = nextId;
 
     const isAlive = () => !disposed && seq === switchSeqRef.current;
-
-    const guardedSetMessages: Dispatch<SetStateAction<ChatMsg[]>> = (next) => {
-      if (!isAlive()) return;
-      try {
-        p.setMessages(next as any);
-      } catch {}
-    };
-
-    const guardedSetVisibleCount: Dispatch<SetStateAction<number>> = (next) => {
-      if (!isAlive()) return;
-      try {
-        p.setVisibleCount(next as any);
-      } catch {}
-    };
-
-    const guardedScrollToBottom = (behavior?: ScrollBehavior | "auto" | "smooth") => {
-      if (!isAlive()) return;
-      try {
-        p.scrollToBottom(behavior);
-      } catch {}
-    };
+    const isCurrentSelection = () => String(activeThreadIdRef.current ?? "").trim() === nextId;
+    const canCommitCurrentThread = () => isAlive() && isCurrentSelection();
 
     const run = async () => {
       const prevGood = lastGoodThreadIdRef.current;
@@ -504,28 +485,15 @@ export function useThreadSwitch(params: {
         p.setLastFailed?.(null);
         p.setUserStateErr?.(null);
 
-        try {
-          guardedSetMessages([]);
-          guardedSetVisibleCount(200);
-        } catch {}
-
-        try {
-          guardedScrollToBottom("auto");
-        } catch {}
-
         const t0 =
           typeof performance !== "undefined" && typeof performance.now === "function"
             ? performance.now()
             : Date.now();
 
+        let loadedMessages: ChatMsg[] = [];
+
         try {
-          await loadMessages({
-            supabase: p.supabase,
-            threadId: nextId,
-            setMessages: guardedSetMessages,
-            setVisibleCount: guardedSetVisibleCount,
-            scrollToBottom: guardedScrollToBottom,
-          });
+          loadedMessages = await loadMessages(p.supabase, nextId);
         } catch (e) {
           const reason = `messages load failed: ${errText(e)}`;
           logWarn("[useThreadSwitch] loadMessages failed -> recover", {
@@ -569,9 +537,32 @@ export function useThreadSwitch(params: {
             ? performance.now()
             : Date.now();
 
-        if (isAlive()) {
-          lastGoodThreadIdRef.current = nextId;
+        if (!canCommitCurrentThread()) {
+          logInfo("[useThreadSwitch] ignore stale thread payload", {
+            source,
+            nextId,
+            currentActiveThreadId: String(activeThreadIdRef.current ?? "").trim(),
+            seq,
+          });
+          return;
         }
+
+        try {
+          p.setMessages(loadedMessages);
+        } catch {}
+
+        try {
+          p.setVisibleCount(Math.max(200, loadedMessages.length));
+        } catch {}
+
+        microtask(() => {
+          if (!canCommitCurrentThread()) return;
+          try {
+            p.scrollToBottom("auto");
+          } catch {}
+        });
+
+        lastGoodThreadIdRef.current = nextId;
 
         logInfo("[useThreadSwitch] switched", {
           source,
@@ -580,9 +571,10 @@ export function useThreadSwitch(params: {
           seq,
         });
 
-        if (isAlive()) {
-          microtask(() => p.inputRef?.current?.focus?.());
-        }
+        microtask(() => {
+          if (!canCommitCurrentThread()) return;
+          p.inputRef?.current?.focus?.();
+        });
       } finally {
         try {
           if (inflightThreadIdRef.current === nextId) {
@@ -590,11 +582,13 @@ export function useThreadSwitch(params: {
           }
         } catch {}
 
-        try {
-          p.setThreadBusy(false);
-        } catch {}
+        if (canCommitCurrentThread()) {
+          try {
+            p.setThreadBusy(false);
+          } catch {}
 
-        lastSwitchSourceRef.current = "unknown";
+          lastSwitchSourceRef.current = "unknown";
+        }
       }
     };
 
@@ -616,6 +610,9 @@ export function useThreadSwitch(params: {
 
 /*
 【今回このファイルで修正したこと】
-selectThreadRef と renameThreadRef の useRef に null 初期値を追加し、
-引数なし useRef 呼び出しによる build エラーを止めました。
+1. loadMessages() へ setMessages / setVisibleCount / scrollToBottom を渡すのをやめ、取得は loadMessages(supabase, threadId) だけに絞りました。
+2. 本文採用、setMessages、setVisibleCount、scrollToBottom を useThreadSwitch.ts の1箇所へ戻し、「現在の activeThreadId に一致する最新要求だけを1回反映する」形に修正しました。
+3. 先行クリア、HOPY回答○、Compass、state_changed、confirmed payload、DB保存、DB復元の唯一の正には触っていません。
 */
+
+/* /components/chat/lib/useThreadSwitch.ts */

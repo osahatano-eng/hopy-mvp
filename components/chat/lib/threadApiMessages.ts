@@ -6,7 +6,7 @@ import type { Dispatch, SetStateAction } from "react";
 
 import type { ChatMsg } from "./chatTypes";
 
-import { logInfo, logWarn, microtask, normMsg, sleep } from "./threadApiSupport";
+import { logInfo, logWarn, normMsg, sleep } from "./threadApiSupport";
 import {
   isAuthNotReadyError,
   isConversationIdMissingError,
@@ -62,13 +62,6 @@ function safeBoolOrNull(v: any): boolean | null {
 function safeTextOrNull(v: any): string | null {
   const s = String(v ?? "").trim();
   return s || null;
-}
-
-function normalizeMergeText(v: any): string {
-  return String(v ?? "")
-    .replace(/\r\n/g, "\n")
-    .replace(/\s+/g, " ")
-    .trim();
 }
 
 function resolveMessageStableId(msg: ChatMsg): string | null {
@@ -171,35 +164,6 @@ function buildRenderedMessageSignature(msg: ChatMsg): string {
     compassText,
     compassPrompt,
   });
-}
-
-function buildAssistantMergeSignature(msg: ChatMsg): string {
-  const raw = msg as any;
-
-  const role = String(raw?.role ?? "").trim();
-  const content = normalizeMergeText(
-    raw?.content ??
-      raw?.reply ??
-      raw?.hopy_confirmed_payload?.reply ??
-      "",
-  );
-
-  return JSON.stringify({
-    role,
-    content,
-  });
-}
-
-function buildAssistantSignatureKey(msg: ChatMsg): string | null {
-  const raw = msg as any;
-  if (String(raw?.role ?? "").trim() !== "assistant") return null;
-
-  const stableId = resolveMessageStableId(msg);
-  if (stableId) {
-    return `assistant-id:${stableId}`;
-  }
-
-  return `assistant:${buildAssistantMergeSignature(msg)}`;
 }
 
 function dedupeLoadedMessages(messages: ChatMsg[]): ChatMsg[] {
@@ -339,226 +303,13 @@ function mapRowsToMessages(rows: any[]): ChatMsg[] {
   return dedupeLoadedMessages(mapped);
 }
 
-function buildMessageIdentityKey(msg: ChatMsg, index: number): string {
-  const stableId = resolveMessageStableId(msg);
-  if (stableId) return `id:${stableId}`;
-
-  const raw = msg as any;
-  const role = String(raw?.role ?? "").trim();
-  const content = String(raw?.content ?? "");
-  const createdAt = String(raw?.created_at ?? "").trim();
-  return `fallback:${index}:${role}:${createdAt}:${content}`;
-}
-
-function buildMessageMergeKey(msg: ChatMsg, index: number): string {
-  const stableId = resolveMessageStableId(msg);
-  if (stableId) return `id:${stableId}`;
-
-  const raw = msg as any;
-
-  if (String(raw?.role ?? "").trim() === "assistant") {
-    return `assistant:${buildAssistantMergeSignature(msg)}`;
-  }
-
-  return `fallback:${index}:${buildMessageIdentityKey(msg, index)}`;
-}
-
-function mergePreferRicherMessage(prevMsg: ChatMsg, nextMsg: ChatMsg): ChatMsg {
-  const prevRaw = prevMsg as any;
-  const nextRaw = nextMsg as any;
-
-  const merged: any = {
-    ...prevRaw,
-    ...nextRaw,
-  };
-
-  const nextCompassText = resolveCompassText(nextRaw);
-  const nextCompassPrompt = resolveCompassPrompt(nextRaw);
-  const prevCompassText = resolveCompassText(prevRaw);
-  const prevCompassPrompt = resolveCompassPrompt(prevRaw);
-
-  const resolvedCompassText = nextCompassText ?? prevCompassText;
-  const resolvedCompassPrompt = nextCompassPrompt ?? prevCompassPrompt;
-
-  if (resolvedCompassText || resolvedCompassPrompt) {
-    merged.compass = {
-      ...(resolvedCompassText ? { text: resolvedCompassText } : {}),
-      ...(resolvedCompassPrompt ? { prompt: resolvedCompassPrompt } : {}),
-    };
-
-    if (resolvedCompassText) {
-      merged.compass_text = resolvedCompassText;
-    } else {
-      delete merged.compass_text;
-    }
-
-    if (resolvedCompassPrompt) {
-      merged.compass_prompt = resolvedCompassPrompt;
-    } else {
-      delete merged.compass_prompt;
-    }
-  } else {
-    delete merged.compass;
-    delete merged.compass_text;
-    delete merged.compass_prompt;
-  }
-
-  const nextConfirmed = nextRaw?.hopy_confirmed_payload;
-  const prevConfirmed = prevRaw?.hopy_confirmed_payload;
-
-  if (!nextConfirmed && prevConfirmed) {
-    merged.hopy_confirmed_payload = prevConfirmed;
-  } else if (nextConfirmed || prevConfirmed) {
-    merged.hopy_confirmed_payload = {
-      ...(prevConfirmed ?? {}),
-      ...(nextConfirmed ?? {}),
-    };
-
-    if (resolvedCompassText || resolvedCompassPrompt) {
-      merged.hopy_confirmed_payload.compass = {
-        ...(resolvedCompassText ? { text: resolvedCompassText } : {}),
-        ...(resolvedCompassPrompt ? { prompt: resolvedCompassPrompt } : {}),
-      };
-    }
-
-    const resolvedState =
-      nextRaw?.state ??
-      nextRaw?.assistant_state ??
-      nextRaw?.hopy_state ??
-      nextConfirmed?.state ??
-      prevRaw?.state ??
-      prevRaw?.assistant_state ??
-      prevRaw?.hopy_state ??
-      prevConfirmed?.state;
-
-    if (resolvedState) {
-      merged.hopy_confirmed_payload.state = resolvedState;
-    }
-
-    const resolvedReply =
-      safeTextOrNull(nextRaw?.content) ??
-      safeTextOrNull(nextRaw?.reply) ??
-      safeTextOrNull(nextConfirmed?.reply) ??
-      safeTextOrNull(prevRaw?.content) ??
-      safeTextOrNull(prevRaw?.reply) ??
-      safeTextOrNull(prevConfirmed?.reply);
-
-    if (resolvedReply) {
-      merged.hopy_confirmed_payload.reply = resolvedReply;
-    }
-
-    const resolvedAssistantMessageId =
-      safeTextOrNull(nextConfirmed?.assistant_message_id) ??
-      safeTextOrNull(nextRaw?.assistant_message_id) ??
-      safeTextOrNull(nextRaw?.id) ??
-      safeTextOrNull(prevConfirmed?.assistant_message_id) ??
-      safeTextOrNull(prevRaw?.assistant_message_id) ??
-      safeTextOrNull(prevRaw?.id);
-
-    if (resolvedAssistantMessageId) {
-      merged.hopy_confirmed_payload.assistant_message_id = resolvedAssistantMessageId;
-      merged.hopy_confirmed_payload.thread_summary = {
-        ...(prevConfirmed?.thread_summary ?? {}),
-        ...(nextConfirmed?.thread_summary ?? {}),
-        latest_reply_id: resolvedAssistantMessageId,
-      };
-    }
-  }
-
-  if (!nextRaw?.state && prevRaw?.state) {
-    merged.state = prevRaw.state;
-  }
-  if (!nextRaw?.assistant_state && prevRaw?.assistant_state) {
-    merged.assistant_state = prevRaw.assistant_state;
-  }
-  if (!nextRaw?.hopy_state && prevRaw?.hopy_state) {
-    merged.hopy_state = prevRaw.hopy_state;
-  }
-
-  if (!resolveMessageStableId(nextMsg)) {
-    const prevStableId = resolveMessageStableId(prevMsg);
-    if (prevStableId && !merged.id) {
-      merged.id = prevStableId;
-    }
-  }
-
-  if (!nextRaw?.created_at && prevRaw?.created_at) {
-    merged.created_at = prevRaw.created_at;
-  }
-
-  return merged as ChatMsg;
-}
-
-function reconcileLoadedMessages(prev: ChatMsg[], next: ChatMsg[]): ChatMsg[] {
-  const prevList = dedupeLoadedMessages(Array.isArray(prev) ? prev : []);
-  const nextList = dedupeLoadedMessages(Array.isArray(next) ? next : []);
-
-  if (prevList.length <= 0) return nextList;
-  if (nextList.length <= 0) return prevList;
-
-  const prevMap = new Map<string, ChatMsg>();
-  const prevAssistantSigMap = new Map<string, ChatMsg>();
-  const matchedPrevKeys = new Set<string>();
-
-  prevList.forEach((msg, index) => {
-    const primaryKey = buildMessageMergeKey(msg, index);
-    prevMap.set(primaryKey, msg);
-
-    const assistantSigKey = buildAssistantSignatureKey(msg);
-    if (assistantSigKey) {
-      prevAssistantSigMap.set(assistantSigKey, msg);
-    }
-  });
-
-  const mergedNext = nextList.map((msg, index) => {
-    const primaryKey = buildMessageMergeKey(msg, index);
-    const assistantSigKey = buildAssistantSignatureKey(msg);
-
-    const matchedPrev =
-      prevMap.get(primaryKey) ??
-      (assistantSigKey ? prevAssistantSigMap.get(assistantSigKey) : undefined);
-
-    if (!matchedPrev) return msg;
-
-    matchedPrevKeys.add(buildRenderedMessageSignature(matchedPrev));
-    return mergePreferRicherMessage(matchedPrev, msg);
-  });
-
-  const remainingPrev = prevList.filter((msg) => {
-    const sig = buildRenderedMessageSignature(msg);
-    return !matchedPrevKeys.has(sig);
-  });
-
-  const reconciled = dedupeLoadedMessages([...remainingPrev, ...mergedNext]);
-
-  reconciled.sort((a, b) => {
-    const aRaw = a as any;
-    const bRaw = b as any;
-
-    const aCreated = String(aRaw?.created_at ?? "").trim();
-    const bCreated = String(bRaw?.created_at ?? "").trim();
-
-    if (aCreated && bCreated && aCreated !== bCreated) {
-      return aCreated.localeCompare(bCreated);
-    }
-
-    const aId = String(resolveMessageStableId(a) ?? "").trim();
-    const bId = String(resolveMessageStableId(b) ?? "").trim();
-
-    if (aId && bId && aId !== bId) {
-      return aId.localeCompare(bId);
-    }
-
-    return 0;
-  });
-
-  return reconciled;
-}
-
 /**
- * ✅ loadMessages: 2つの呼び出し形を正式サポート
+ * ✅ loadMessages:
  * 1) loadMessages(supabase, threadId) -> Promise<ChatMsg[]>
- * 2) loadMessages({supabase, threadId, setMessages, setVisibleCount, scrollToBottom}) -> Promise<ChatMsg[]>
+ * 2) loadMessages({ supabase, threadId, ... }) -> Promise<ChatMsg[]>
+ *
+ * このファイルは messages を取得して返すだけに固定する。
+ * UI更新(setMessages / setVisibleCount / scrollToBottom)はここで行わない。
  */
 export async function loadMessages(supabase: SupabaseClient, threadId: string): Promise<ChatMsg[]>;
 export async function loadMessages(args: LoadMessagesStateArgs): Promise<ChatMsg[]>;
@@ -568,25 +319,9 @@ export async function loadMessages(a1: any, a2?: any): Promise<ChatMsg[]> {
   const supabase: SupabaseClient = isStateMode ? (a1.supabase as SupabaseClient) : (a1 as SupabaseClient);
   const threadId: string = isStateMode ? String(a1.threadId ?? "") : String(a2 ?? "");
 
-  const setMessages: Dispatch<SetStateAction<ChatMsg[]>> | null = isStateMode ? (a1.setMessages as any) : null;
-  const setVisibleCountSafe: Dispatch<SetStateAction<number>> | null = isStateMode ? (a1.setVisibleCount as any) : null;
-  const scrollToBottom: ((b?: ScrollBehavior | "auto" | "smooth") => void) | null = isStateMode ? a1.scrollToBottom : null;
-
   const tid = String(threadId ?? "").trim();
 
   if (!tid) {
-    if (isStateMode) {
-      try {
-        setMessages?.([]);
-      } catch {}
-      try {
-        setVisibleCountSafe?.(200);
-      } catch {}
-      try {
-        microtask(() => scrollToBottom?.("auto"));
-      } catch {}
-      return [];
-    }
     return [];
   }
 
@@ -676,20 +411,6 @@ export async function loadMessages(a1: any, a2?: any): Promise<ChatMsg[]> {
       fixed: fixed.length,
     });
 
-    if (isStateMode) {
-      try {
-        setMessages?.((prev) =>
-          reconcileLoadedMessages(Array.isArray(prev) ? prev : [], fixed),
-        );
-      } catch {}
-      try {
-        setVisibleCountSafe?.(Math.max(200, fixed.length));
-      } catch {}
-      try {
-        microtask(() => scrollToBottom?.("auto"));
-      } catch {}
-    }
-
     return fixed;
   };
 
@@ -721,14 +442,12 @@ export default loadMessages;
 このファイルの正式役割
 スレッド再読込時の messages 復元ファイル。
 DB の messages テーブルから必要な列を取り、
-クライアント描画用の ChatMsg[] に戻す。
+クライアント描画用の ChatMsg[] に戻して返す。
+このファイルは取得だけを担当し、UI更新は担当しない。
 
 このファイルが受け取るもの
 supabase
 threadId
-setMessages
-setVisibleCount
-scrollToBottom
 
 このファイルが渡すもの
 再読込後の ChatMsg[]
@@ -746,13 +465,9 @@ Compass 観点でこのファイルの意味
 
 /*
 【今回このファイルで修正したこと】
-- DB 復元時に current_phase と state_level、prev_phase と prev_state_level を
-  同じ値へ潰さず、それぞれ別キーのまま復元するように修正した。
-- これにより、hopy_confirmed_payload.state の唯一の正を、
-  再読込後も current_phase / state_level / prev_phase / prev_state_level の
-  4項目としてそのまま保持できるようにした。
-- 既存の assistant 同一判定や Compass 復元ロジックには触れていない。
+1. loadMessages() の state mode に残っていた setMessages / setVisibleCount / scrollToBottom の実行責務を削除しました。
+2. tid 空時の setMessages([]) / setVisibleCount(200) / scrollToBottom("auto") も削除し、このファイルを取得専用に戻しました。
+3. current_phase / state_level / prev_phase / prev_state_level / state_changed / compass / hopy_confirmed_payload の復元ロジックには触っていません。
 */
-// このファイルの正式役割: スレッド再読込時の messages 復元ファイル
 
-/* このファイルの正式役割 */
+/* /components/chat/lib/threadApiMessages.ts */

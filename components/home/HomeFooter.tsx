@@ -1,6 +1,6 @@
 // /components/home/HomeFooter.tsx
+import Image from "next/image";
 import Link from "next/link";
-import HopyCompassIcon from "@/components/icons/HopyCompassIcon";
 import styles from "./HomeFooter.module.css";
 
 export default function HomeFooter() {
@@ -11,12 +11,14 @@ export default function HomeFooter() {
       <div className={styles.inner}>
         <div className={styles.topRow}>
           <div className={styles.brand}>
-            <HopyCompassIcon
-              className={styles.mark}
-              width={18}
-              height={18}
+            <Image
+              src="/brand/hopy-icon-master.svg"
+              alt=""
+              className={styles.brandIcon}
+              width={20}
+              height={20}
               aria-hidden="true"
-              title=""
+              priority
             />
             <span className={styles.brandText}>HOPY</span>
           </div>
@@ -45,3 +47,13 @@ export default function HomeFooter() {
     </footer>
   );
 }
+
+/* /components/home/HomeFooter.tsx */
+/* 【今回このファイルで修正したこと】
+存在しない HopyCompassIcon の import と使用をやめ、
+正式なブランド画像 /brand/hopy-icon-master.svg を next/image で表示する形へ戻しました。
+*/
+/* このファイルの正式役割
+サイト下部のフッターを表示するファイルです。
+ブランド表示、フッターリンク、コピーライト表示だけを担います。
+*/

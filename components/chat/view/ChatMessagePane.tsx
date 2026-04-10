@@ -108,14 +108,24 @@ export const ChatMessagePane = React.memo(function ChatMessagePane(props: Props)
     topInset,
   } = props;
 
-  void shouldHoldBlankThreadStage;
-
   const hasRenderedContent = rendered.length > 0;
   const resolvedShouldShowPreparing =
     shouldShowPreparing && !showRecoverUi && !showStuckUi;
+
+  const shouldHoldBlankFallbackUi =
+    shouldHoldBlankThreadStage &&
+    !hasRenderedContent &&
+    !loading &&
+    !resolvedShouldShowPreparing &&
+    !showRecoverUi &&
+    !showStuckUi;
+
   const shouldShowPreparingHero =
-    resolvedShouldShowPreparing && !hasRenderedContent;
-  const shouldShowGuestIntroMotion = guestMode && shouldShowGuestHero;
+    resolvedShouldShowPreparing && !hasRenderedContent && !shouldHoldBlankFallbackUi;
+
+  const shouldShowGuestIntroMotion =
+    guestMode && shouldShowGuestHero && !shouldHoldBlankFallbackUi;
+
   const shouldShowWorkspaceWaitingHero =
     workspaceMode &&
     !hasRenderedContent &&
@@ -123,14 +133,16 @@ export const ChatMessagePane = React.memo(function ChatMessagePane(props: Props)
     !resolvedShouldShowPreparing &&
     !showRecoverUi &&
     !showStuckUi &&
+    !shouldHoldBlankFallbackUi &&
     shouldShowWorkspaceHero;
 
   const shouldRenderStream =
-    hasRenderedContent ||
-    showRecoverUi ||
-    showStuckUi ||
-    (resolvedShouldShowPreparing && hasRenderedContent) ||
-    (!resolvedShouldShowPreparing && loading);
+    !shouldHoldBlankFallbackUi &&
+    (hasRenderedContent ||
+      showRecoverUi ||
+      showStuckUi ||
+      (resolvedShouldShowPreparing && hasRenderedContent) ||
+      (!resolvedShouldShowPreparing && loading));
 
   const streamNode = (
     <ChatStream
@@ -161,7 +173,7 @@ export const ChatMessagePane = React.memo(function ChatMessagePane(props: Props)
   if (guestMode) {
     return (
       <>
-        {shouldRenderStream ? (
+        {shouldHoldBlankFallbackUi ? null : shouldRenderStream ? (
           streamNode
         ) : shouldShowPreparingHero ? (
           <PreparingHero
@@ -175,6 +187,7 @@ export const ChatMessagePane = React.memo(function ChatMessagePane(props: Props)
         )}
 
         {shouldShowJump &&
+          !shouldHoldBlankFallbackUi &&
           !shouldShowGuestIntroMotion &&
           !shouldShowPreparingHero && (
             <JumpButton ariaLabel={jumpAria} onClick={onJumpToBottom} />
@@ -185,7 +198,7 @@ export const ChatMessagePane = React.memo(function ChatMessagePane(props: Props)
 
   return (
     <>
-      {shouldRenderStream ? (
+      {shouldHoldBlankFallbackUi ? null : shouldRenderStream ? (
         streamNode
       ) : shouldShowPreparingHero ? (
         <PreparingHero uiLang={uiLang} fallbackLabel={labels.preparingLabel} />
@@ -196,6 +209,7 @@ export const ChatMessagePane = React.memo(function ChatMessagePane(props: Props)
       )}
 
       {shouldShowJump &&
+        !shouldHoldBlankFallbackUi &&
         !shouldShowWorkspaceWaitingHero &&
         !shouldShowPreparingHero && (
           <JumpButton ariaLabel={jumpAria} onClick={onJumpToBottom} />
@@ -204,8 +218,10 @@ export const ChatMessagePane = React.memo(function ChatMessagePane(props: Props)
   );
 });
 
+export default ChatMessagePane;
+
 /*
-このファイルの正式役割
+【このファイルの正式役割】
 チャット本文エリアの表示切替ファイル。
 stream / preparing / guest intro / workspace hero / jump button の
 どれを表示するかを、受け取った表示条件だけで切り替える。
@@ -213,8 +229,9 @@ stream / preparing / guest intro / workspace hero / jump button の
 
 /*
 【今回このファイルで修正したこと】
-- workspace の待機画面表示条件から shouldHoldBlankThreadStage を外しました。
-- これにより、既存スレッド切替時に「復元より先に待機画面」が出る経路を、このファイル内で止めました。
-- HOPY唯一の正である state / Compass / 復元本文の意味判定には触っていません。
+- shouldHoldBlankThreadStage を無視せず、空の中間状態では fallback UI を出さないようにしました。
+- これにより、スレッド切り替え直後に本文未復元の一時状態で初期画面や待機画面へ落ちる経路を、このファイル内で止めました。
+- HOPY唯一の正である state_changed / HOPY回答○ / Compass / DB保存 / DB復元の意味判定には触っていません。
 */
-// このファイルの正式役割: チャット本文エリアの表示切替ファイル
+
+/* /components/chat/view/ChatMessagePane.tsx */
