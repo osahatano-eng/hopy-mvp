@@ -42,12 +42,15 @@ export function useChatClientViewSurface(args: {
   const guestMode = !workspaceMode;
   const busy = Boolean(loading || threadBusy);
 
+  const activeThreadIdSafe = String(activeThreadId ?? "").trim();
+  const hasActiveThreadSelection = activeThreadIdSafe.length > 0;
+
   const hasDraftInput = normalizedInput.trim().length > 0;
   const hasRenderableChatContent = renderedLength > 0 || messagesLength > 0;
   const hasAnyChatContent = hasRenderableChatContent;
 
   const autoWorkspaceHeroDismissed = Boolean(
-    busy || hasAnyChatContent || hasDraftInput || lastFailed,
+    busy || hasAnyChatContent || hasDraftInput || lastFailed || hasActiveThreadSelection,
   );
 
   const [manualWorkspaceHeroDismissed, setManualWorkspaceHeroDismissed] =
@@ -128,8 +131,15 @@ export function useChatClientViewSurface(args: {
   const shouldShowWorkspaceHero = React.useMemo(() => {
     if (!workspaceMode) return false;
     if (workspaceHeroDismissed) return false;
+    if (hasActiveThreadSelection) return false;
     return !busy && !hasAnyChatContent;
-  }, [workspaceMode, workspaceHeroDismissed, busy, hasAnyChatContent]);
+  }, [
+    workspaceMode,
+    workspaceHeroDismissed,
+    hasActiveThreadSelection,
+    busy,
+    hasAnyChatContent,
+  ]);
 
   const shouldShowGuestHero = React.useMemo(() => {
     if (!guestMode) return false;
@@ -139,20 +149,34 @@ export function useChatClientViewSurface(args: {
   const shouldShowPreparing = React.useMemo(() => {
     if (!workspaceMode) return false;
     if (shouldShowWorkspaceHero) return false;
+    if (hasActiveThreadSelection) return false;
     return busy && !hasAnyChatContent;
-  }, [workspaceMode, shouldShowWorkspaceHero, busy, hasAnyChatContent]);
+  }, [
+    workspaceMode,
+    shouldShowWorkspaceHero,
+    hasActiveThreadSelection,
+    busy,
+    hasAnyChatContent,
+  ]);
 
   const shouldShowStuck = React.useMemo(() => {
     if (!workspaceMode) return false;
     if (!busy) return false;
-    return !hasAnyChatContent && !activeThreadId;
-  }, [workspaceMode, busy, hasAnyChatContent, activeThreadId]);
+    return !hasAnyChatContent && !hasActiveThreadSelection;
+  }, [workspaceMode, busy, hasAnyChatContent, hasActiveThreadSelection]);
 
   const shouldShowRecover = React.useMemo(() => {
     if (!workspaceMode) return false;
     if (busy) return false;
+    if (hasActiveThreadSelection) return false;
     return !hasAnyChatContent && Boolean(lastFailed);
-  }, [workspaceMode, busy, hasAnyChatContent, lastFailed]);
+  }, [
+    workspaceMode,
+    busy,
+    hasActiveThreadSelection,
+    hasAnyChatContent,
+    lastFailed,
+  ]);
 
   const [showRecoverUi, setShowRecoverUi] = React.useState(false);
   const [showStuckUi, setShowStuckUi] = React.useState(false);
@@ -206,9 +230,9 @@ HOPY の状態や Compass や hold 条件を再判定する場所ではない。
 
 /*
 【今回このファイルで修正したこと】
-1. workspaceHeroDismissed を固定値 false のまま返していた処理をやめ、busy・本文有無・入力有無・送信失敗有無から自動で閉じる形へ戻しました。
-2. 新規チャット送信後に待機画面が残り続けないよう、shouldShowWorkspaceHero / shouldShowPreparing / shouldShowStuck / shouldShowRecover の表示条件を整理しました。
-3. hasRenderableChatContent は renderedLength だけでなく messagesLength も含めて判定し、送信直後の表示切替を落としにくくしました。
+1. activeThreadId の有無を hasActiveThreadSelection として明示し、選択中スレッドがある間は待機画面系を出さないように修正しました。
+2. shouldShowWorkspaceHero / shouldShowPreparing / shouldShowStuck / shouldShowRecover の表示条件に activeThreadId 条件を統一して入れました。
+3. autoWorkspaceHeroDismissed にも activeThreadId 条件を追加し、スレッド選択中に待機画面へ戻らないようにしました。
 4. HOPY唯一の正である state_changed、HOPY回答○、Compass、DB保存、DB復元の判定には触っていません。
 */
 
