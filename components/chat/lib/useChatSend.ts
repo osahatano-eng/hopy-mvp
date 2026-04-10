@@ -20,7 +20,6 @@ import {
   normalizeForSend,
   pickLang,
   pickReply,
-  safeLoadPersistedActiveThreadId,
   safePersistActiveThreadId,
   safeReadJson,
 } from "./chatSendShared";
@@ -164,6 +163,16 @@ function mergeConfirmedMeaningFields(
   return next as ChatMsg;
 }
 
+function attachThreadIdToMessage(message: ChatMsg, threadId: string | null): ChatMsg {
+  const tid = String(threadId ?? "").trim();
+  if (!tid) return message;
+
+  return {
+    ...(message as any),
+    thread_id: tid,
+  } as ChatMsg;
+}
+
 function buildConfirmedAssistantMessage<TState>(args: {
   message: ChatMsg;
   payload: ApiResponse<TState>;
@@ -173,6 +182,7 @@ function buildConfirmedAssistantMessage<TState>(args: {
   confirmedPayload: ConfirmedMeaningPayload | null;
   compassText: string | null;
   compassPrompt: string | null;
+  resolvedThreadId: string | null;
 }): ChatMsg {
   const {
     message,
@@ -183,10 +193,13 @@ function buildConfirmedAssistantMessage<TState>(args: {
     confirmedPayload,
     compassText,
     compassPrompt,
+    resolvedThreadId,
   } = args;
 
-  let next: ChatMsg = {
-    ...message,
+  let next: ChatMsg = attachThreadIdToMessage(message, resolvedThreadId);
+
+  next = {
+    ...next,
     content: reply,
     lang: pickLang(payload, requestLang),
   };
@@ -330,87 +343,58 @@ export function useChatSend<TState>(params: {
       const msgLang = detectUserLang(text);
       const requestLang: Lang = uiLang;
 
-      const userMsgId = mkTempId();
-      const userMsg: ChatMsg = {
-        id: userMsgId,
-        role: "user",
-        content: text,
-        lang: msgLang,
-        created_at: new Date().toISOString(),
-      };
-
-      const pendingId = mkTempId();
       const pendingStartedAt = Date.now();
-      const pendingMsg: ChatMsg = {
-        id: pendingId,
-        role: "assistant",
-        content: resolveWaitingMessage(requestLang, 0, text),
-        lang: requestLang,
-        created_at: new Date().toISOString(),
-      };
+      let pendingId = "";
+      let userMsgId = "";
+      let pendingMessageTimer: number | null = null;
 
-      setMessages((prev) => [...prev, userMsg, pendingMsg]);
-      setVisibleCount((v) => Math.max(v, 200));
-
-      const pendingMessageTimer =
-        typeof window !== "undefined"
-          ? window.setInterval(() => {
-              const nextText = resolveWaitingMessage(
-                requestLang,
-                Date.now() - pendingStartedAt,
-                text
-              );
-
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === pendingId
-                    ? {
-                        ...m,
-                        content: nextText,
-                      }
-                    : m
-                )
-              );
-            }, WAITING_MESSAGE_INTERVAL_MS)
-          : null;
+      const provisionalThreadId = String(
+        conversationIdSeed ?? activeThreadId ?? ""
+      ).trim();
 
       const FETCH_TIMEOUT_MS = 90000;
       const controller =
         typeof AbortController !== "undefined" ? new AbortController() : null;
-      const timer = controller
-        ? window.setTimeout(() => {
-            try {
-              controller.abort();
-            } catch {}
-          }, FETCH_TIMEOUT_MS)
-        : null;
+      const timer =
+        controller && typeof window !== "undefined"
+          ? window.setTimeout(() => {
+              try {
+                controller.abort();
+              } catch {}
+            }, FETCH_TIMEOUT_MS)
+          : null;
 
       try {
+        userMsgId = mkTempId();
+        const userMsg: ChatMsg = attachThreadIdToMessage(
+          {
+            id: userMsgId,
+            role: "user",
+            content: text,
+            lang: msgLang,
+            created_at: new Date().toISOString(),
+          },
+          provisionalThreadId || null
+        );
+
+        setMessages((prev) => [...prev, userMsg]);
+        setVisibleCount((v) => Math.max(v, 200));
+
         const auth = await resolveAuthContextForSendWithTimeout(supabase);
         const isLoggedIn = auth.isLoggedIn;
         const accessToken = auth.accessToken;
 
         if (isLoggedIn) {
           if (!cid || isTemporaryGuestThreadId(cid)) {
-            const current = String(activeThreadId ?? "").trim();
-            if (current && !isTemporaryGuestThreadId(current)) {
-              cid = current;
-            } else {
-              const persisted = String(
-                safeLoadPersistedActiveThreadId() ?? ""
-              ).trim();
-              if (persisted && !isTemporaryGuestThreadId(persisted)) {
-                cid = persisted;
-              } else if (typeof ensureThreadId === "function") {
-                const ensured = String((await ensureThreadId()) ?? "").trim();
-                if (ensured && !isTemporaryGuestThreadId(ensured)) {
-                  cid = ensured;
-                } else {
-                  cid = "";
-                }
+            if (typeof ensureThreadId === "function") {
+              const ensured = String((await ensureThreadId()) ?? "").trim();
+              if (ensured && !isTemporaryGuestThreadId(ensured)) {
+                cid = ensured;
               } else {
                 cid = "";
               }
+            } else {
+              cid = "";
             }
           }
 
@@ -420,6 +404,55 @@ export function useChatSend<TState>(params: {
         } else {
           cid = "";
         }
+
+        const displayThreadId = String(
+          (isLoggedIn ? cid : "") || provisionalThreadId || ""
+        ).trim();
+
+        if (displayThreadId) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === userMsgId ? attachThreadIdToMessage(m, displayThreadId) : m
+            )
+          );
+        }
+
+        pendingId = mkTempId();
+        const pendingMsg: ChatMsg = attachThreadIdToMessage(
+          {
+            id: pendingId,
+            role: "assistant",
+            content: resolveWaitingMessage(requestLang, 0, text),
+            lang: requestLang,
+            created_at: new Date().toISOString(),
+          },
+          displayThreadId || null
+        );
+
+        setMessages((prev) => [...prev, pendingMsg]);
+        setVisibleCount((v) => Math.max(v, 200));
+
+        pendingMessageTimer =
+          typeof window !== "undefined"
+            ? window.setInterval(() => {
+                const nextText = resolveWaitingMessage(
+                  requestLang,
+                  Date.now() - pendingStartedAt,
+                  text
+                );
+
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === pendingId
+                      ? {
+                          ...m,
+                          content: nextText,
+                        }
+                      : m
+                  )
+                );
+              }, WAITING_MESSAGE_INTERVAL_MS)
+            : null;
 
         const endpoint = getChatEndpoint();
         const memory_block =
@@ -505,23 +538,6 @@ export function useChatSend<TState>(params: {
           });
         }
 
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === pendingId
-              ? buildConfirmedAssistantMessage({
-                  message: m,
-                  payload,
-                  reply,
-                  requestLang,
-                  normalizedAssistantState,
-                  confirmedPayload,
-                  compassText,
-                  compassPrompt,
-                })
-              : m
-          )
-        );
-
         const confirmedThreadSummary = confirmedPayload?.thread_summary ?? null;
         const legacyThread = pickThread(payload);
 
@@ -539,6 +555,26 @@ export function useChatSend<TState>(params: {
           payloadConversationId ||
           cid ||
           pickThreadId(payload);
+
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === pendingId
+              ? buildConfirmedAssistantMessage({
+                  message: m,
+                  payload,
+                  reply,
+                  requestLang,
+                  normalizedAssistantState,
+                  confirmedPayload,
+                  compassText,
+                  compassPrompt,
+                  resolvedThreadId: threadIdForReload,
+                })
+              : m.id === userMsgId
+                ? attachThreadIdToMessage(m, threadIdForReload)
+                : m
+          )
+        );
 
         if (threadIdForReload && isLoggedIn) {
           try {
@@ -687,7 +723,9 @@ export function useChatSend<TState>(params: {
           errText = formatErrorText(kind, message);
         }
 
-        setMessages((prev) => prev.filter((m) => m.id !== pendingId));
+        if (pendingId) {
+          setMessages((prev) => prev.filter((m) => m.id !== pendingId));
+        }
 
         setLastFailed({
           text,
@@ -759,7 +797,8 @@ export function useChatSend<TState>(params: {
         const text = normalizeForSend(raw);
         if (!text) return;
 
-        const conversationIdSeed = String(activeThreadId ?? "").trim() || null;
+        const rawActiveThreadId = String(activeThreadId ?? "").trim();
+        const conversationIdSeed = rawActiveThreadId || null;
 
         setInput("");
         microtask(() => setInput(""));
@@ -777,7 +816,7 @@ export function useChatSend<TState>(params: {
         sendGateRef.current = false;
       }
     },
-    [loading, input, clampText, setInput, sendCore, uiLang, activeThreadId]
+    [loading, input, clampText, activeThreadId, setInput, sendCore, uiLang]
   );
 
   const retryLastFailed = useCallback(
@@ -855,15 +894,17 @@ export function useChatSend<TState>(params: {
 このファイルの正式役割
 送信フロー全体を管理し、pending追加、API送信、assistant message確定反映、state反映、thread反映、retry をつなぐ親ファイル。
 */
+
 /*
 【今回このファイルで修正したこと】
-1. pending初回文言の resolveWaitingMessage に user input の text を渡すようにしました。
-2. 5秒ごとの pending更新時にも resolveWaitingMessage へ user input の text を渡すようにしました。
-3. これにより chatSendWaitingMessages.ts 側の入力適応分類が実際に反映されるようにしました。
-4. 送信本体、API、状態反映、Compass、retry の流れには触れていません。
+1. user message を、認証確認・thread解決の前に先に表示へ積む順番へ修正しました。
+2. pending assistant message は、認証確認・thread解決の後に追加する形へ修正しました。
+3. 送信直後の仮表示には activeThreadId をそのまま使い、最終確定した thread_id は後から user/pending の両方へ反映する形にしました。
+4. sendMessage 側で事前に ensureThreadId を待たないようにし、送信直後の本文表示を遅らせない形へ修正しました。
+5. これにより、新規チャット送信直後に待機画面のまま固まる症状と、ユーザー発話とHOPY回答の同時出し症状の直接原因だけをこのファイルで狙って修正しました。
+6. HOPY回答○、Compass、confirmed payload、DB保存/復元の意味判定には触っていません。
 */
 
 /*
-このファイルの正式役割
-送信フロー全体を管理し、pending追加、API送信、assistant message確定反映、state反映、thread反映、retry をつなぐ親ファイル。
+/components/chat/lib/useChatSend.ts
 */

@@ -106,12 +106,31 @@ export function useRenderMessages(params: {
 
   const derivedCacheRef = useRef<Map<string, MessageDerivedCache>>(new Map());
 
+  const effectiveVisibleCount = useMemo(() => {
+    const total = messages.length;
+    if (total <= 0) return 0;
+
+    const rawVisibleCount = Number.isFinite(visibleCount)
+      ? Math.trunc(visibleCount)
+      : total;
+
+    if (rawVisibleCount <= 0) {
+      return total;
+    }
+
+    if (rawVisibleCount === 1 && total >= 2) {
+      return 2;
+    }
+
+    return rawVisibleCount;
+  }, [messages.length, visibleCount]);
+
   const visibleMessages = useMemo(() => {
     const total = messages.length;
-    if (visibleCount >= total) return messages;
-    const start = Math.max(0, total - visibleCount);
+    if (effectiveVisibleCount >= total) return messages;
+    const start = Math.max(0, total - effectiveVisibleCount);
     return messages.slice(start);
-  }, [messages, visibleCount]);
+  }, [messages, effectiveVisibleCount]);
 
   const readTranslatedText = useMemo(() => {
     return createTranslatedTextReader(tmap, uiLang);
@@ -225,8 +244,9 @@ Compass の表示生成は後段の chatStreamViewItems.ts 側で行う。
 
 /*
 【今回このファイルで修正したこと】
-- rendered の upstream 生成から compass item を外した。
-- useRenderMessages.ts を msg / divider のみを返す責務へ戻した。
-- Compass の表示生成責務を後段の chatStreamViewItems.ts に一本化し、経路の二重化を止めた。
+1. visibleCount をそのまま描画枚数の正にせず、effectiveVisibleCount を追加しました。
+2. messages が存在するのに visibleCount <= 0 で本文が空へ落ちる経路を止めました。
+3. visibleCount === 1 かつ messages が2件以上あるとき、直近2件を描画対象に残すようにしました。
+4. これにより、送信直後の user message / pending assistant が visibleCount の追従遅れで落ちる経路を、このファイル内で止めました。
 */
-// このファイルの正式役割: チャット本文メッセージ列を画面描画用の rendered / visibleTexts に変換するファイル
+/* /components/chat/lib/useRenderMessages.ts */

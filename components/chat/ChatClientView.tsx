@@ -141,6 +141,7 @@ export default function ChatClientView(props: ChatClientViewExtendedProps) {
     uiForComposer,
     labels,
     guestCopy,
+    hasAnyChatContent,
     shouldShowWorkspaceHero,
     shouldShowGuestHero,
     shouldShowPreparing,
@@ -154,6 +155,11 @@ export default function ChatClientView(props: ChatClientViewExtendedProps) {
   const resolvedOverlayActiveThread = React.useMemo(() => {
     return activeThread ?? null;
   }, [activeThread]);
+
+  const resolvedShouldHoldBlankThreadStage = React.useMemo(() => {
+    if (!shouldHoldBlankThreadStageFromClient) return false;
+    return !hasAnyChatContent;
+  }, [shouldHoldBlankThreadStageFromClient, hasAnyChatContent]);
 
   const loggedInRef = React.useRef(false);
   const busyRef = React.useRef(false);
@@ -340,8 +346,10 @@ export default function ChatClientView(props: ChatClientViewExtendedProps) {
       if (busyRef.current) return;
 
       const currentActiveId = String(activeThreadIdRef.current ?? "").trim();
+      const shouldReturnToPendingThread =
+        Boolean(currentActiveId) && Boolean(resolvedShouldHoldBlankThreadStage);
 
-      if (currentActiveId) {
+      if (shouldReturnToPendingThread) {
         try {
           window.dispatchEvent(
             new CustomEvent("hopy:workspace-clear", {
@@ -419,7 +427,7 @@ export default function ChatClientView(props: ChatClientViewExtendedProps) {
 
       closeRailForViewport();
     },
-    [closeRailForViewport, setWorkspaceHeroDismissed],
+    [closeRailForViewport, setWorkspaceHeroDismissed, resolvedShouldHoldBlankThreadStage],
   );
 
   const onRenameThread = React.useCallback(
@@ -574,7 +582,7 @@ export default function ChatClientView(props: ChatClientViewExtendedProps) {
       userStateErr,
       shouldShowGuestHero,
       shouldShowWorkspaceHero,
-      shouldHoldBlankThreadStage: shouldHoldBlankThreadStageFromClient,
+      shouldHoldBlankThreadStage: resolvedShouldHoldBlankThreadStage,
       shouldShowPreparing,
       showRecoverUi,
       showStuckUi,
@@ -603,7 +611,7 @@ export default function ChatClientView(props: ChatClientViewExtendedProps) {
       userStateErr,
       shouldShowGuestHero,
       shouldShowWorkspaceHero,
-      shouldHoldBlankThreadStageFromClient,
+      resolvedShouldHoldBlankThreadStage,
       shouldShowPreparing,
       showRecoverUi,
       showStuckUi,
@@ -745,9 +753,10 @@ Chat画面の表示統合ファイル。
 
 /*
 【今回このファイルで修正したこと】
-1. activeThreadId を使った hasConcreteActiveThread / hero / preparing の再判定を削除しました。
-2. useChatClientViewSurface から受け取った shouldShowWorkspaceHero / shouldShowGuestHero / shouldShowPreparing を、そのまま ChatMessagePane へ中継する形に戻しました。
-3. HOPY唯一の正である state_changed、HOPY回答○、Compass、DB保存、DB復元の判定には触っていません。
+1. shouldHoldBlankThreadStageFromClient をそのまま本文表示へ流すのをやめ、本文が1件もない時だけ true になる resolvedShouldHoldBlankThreadStage に絞りました。
+2. これにより、新規チャット送信後に messages/rendered が入った時点で、待機画面より本文表示を優先するように戻しました。
+3. onCreateThread の pending thread 復帰条件も、本文なしの待機段階の時だけにそろえました。
+4. HOPY回答○、Compass、confirmed payload、DB保存・復元の唯一の正には触っていません。
 */
 
 /* /components/chat/ChatClientView.tsx */

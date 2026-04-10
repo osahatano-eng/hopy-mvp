@@ -35,24 +35,45 @@ export function useChatClientViewSurface(args: {
     threadBusy,
   } = args;
 
-  void activeThreadId;
   void userState;
   void userStateErr;
-  void lastFailed;
-  void normalizedInput;
 
   const workspaceMode = Boolean(loggedIn);
   const guestMode = !workspaceMode;
   const busy = Boolean(loading || threadBusy);
 
-  const workspaceHeroDismissed = false;
+  const hasDraftInput = normalizedInput.trim().length > 0;
+  const hasRenderableChatContent = renderedLength > 0 || messagesLength > 0;
+  const hasAnyChatContent = hasRenderableChatContent;
+
+  const autoWorkspaceHeroDismissed = Boolean(
+    busy || hasAnyChatContent || hasDraftInput || lastFailed,
+  );
+
+  const [manualWorkspaceHeroDismissed, setManualWorkspaceHeroDismissed] =
+    React.useState(false);
+
+  React.useEffect(() => {
+    if (autoWorkspaceHeroDismissed) {
+      setManualWorkspaceHeroDismissed(false);
+    }
+  }, [autoWorkspaceHeroDismissed]);
+
+  const workspaceHeroDismissed =
+    autoWorkspaceHeroDismissed || manualWorkspaceHeroDismissed;
 
   const setWorkspaceHeroDismissed = React.useCallback(
-    (_next: boolean | ((prev: boolean) => boolean)) => {},
+    (next: boolean | ((prev: boolean) => boolean)) => {
+      setManualWorkspaceHeroDismissed((prev) =>
+        typeof next === "function" ? next(prev) : next,
+      );
+    },
     [],
   );
 
-  const dismissWorkspaceHero = React.useCallback(() => {}, []);
+  const dismissWorkspaceHero = React.useCallback(() => {
+    setManualWorkspaceHeroDismissed(true);
+  }, []);
 
   const uiForComposer = React.useMemo<UiDict>(() => {
     return {
@@ -65,11 +86,22 @@ export function useChatClientViewSurface(args: {
 
   const labels = React.useMemo(() => {
     const reloadLabel = uiLang === "en" ? "Reload" : "再読み込み";
-    const resetLabel = uiLang === "en" ? "Reset local data & reload" : "ローカルデータをリセットして再読み込み";
-    const preparingLabel = uiLang === "en" ? "Preparing your workspace…" : "ワークスペースを準備中…";
+    const resetLabel =
+      uiLang === "en"
+        ? "Reset local data & reload"
+        : "ローカルデータをリセットして再読み込み";
+    const preparingLabel =
+      uiLang === "en"
+        ? "Preparing your workspace…"
+        : "ワークスペースを準備中…";
     const stuckLabel =
-      uiLang === "en" ? "Loading is stuck. Please reload." : "読み込みが止まりました。再読み込みしてください。";
-    const recoverTitle = uiLang === "en" ? "Workspace could not be loaded." : "ワークスペースを読み込めませんでした。";
+      uiLang === "en"
+        ? "Loading is stuck. Please reload."
+        : "読み込みが止まりました。再読み込みしてください。";
+    const recoverTitle =
+      uiLang === "en"
+        ? "Workspace could not be loaded."
+        : "ワークスペースを読み込めませんでした。";
     return {
       reloadLabel,
       resetLabel,
@@ -83,7 +115,9 @@ export function useChatClientViewSurface(args: {
     return {
       heroTitle: "HOPY",
       heroSub:
-        uiLang === "en" ? "A quiet companion for clear thinking." : "思考を澄ませる、静かな伴走者。",
+        uiLang === "en"
+          ? "A quiet companion for clear thinking."
+          : "思考を澄ませる、静かな伴走者。",
       cta:
         uiLang === "en"
           ? "Log in to start a new saved chat"
@@ -91,19 +125,34 @@ export function useChatClientViewSurface(args: {
     };
   }, [uiLang]);
 
-  const hasRenderableChatContent = renderedLength > 0;
-  const hasAnyChatContent = hasRenderableChatContent || messagesLength > 0;
-
-  const shouldShowWorkspaceHero = false;
+  const shouldShowWorkspaceHero = React.useMemo(() => {
+    if (!workspaceMode) return false;
+    if (workspaceHeroDismissed) return false;
+    return !busy && !hasAnyChatContent;
+  }, [workspaceMode, workspaceHeroDismissed, busy, hasAnyChatContent]);
 
   const shouldShowGuestHero = React.useMemo(() => {
     if (!guestMode) return false;
-    return !hasRenderableChatContent;
-  }, [guestMode, hasRenderableChatContent]);
+    return !busy && !hasAnyChatContent;
+  }, [guestMode, busy, hasAnyChatContent]);
 
-  const shouldShowPreparing = false;
-  const shouldShowStuck = false;
-  const shouldShowRecover = false;
+  const shouldShowPreparing = React.useMemo(() => {
+    if (!workspaceMode) return false;
+    if (shouldShowWorkspaceHero) return false;
+    return busy && !hasAnyChatContent;
+  }, [workspaceMode, shouldShowWorkspaceHero, busy, hasAnyChatContent]);
+
+  const shouldShowStuck = React.useMemo(() => {
+    if (!workspaceMode) return false;
+    if (!busy) return false;
+    return !hasAnyChatContent && !activeThreadId;
+  }, [workspaceMode, busy, hasAnyChatContent, activeThreadId]);
+
+  const shouldShowRecover = React.useMemo(() => {
+    if (!workspaceMode) return false;
+    if (busy) return false;
+    return !hasAnyChatContent && Boolean(lastFailed);
+  }, [workspaceMode, busy, hasAnyChatContent, lastFailed]);
 
   const [showRecoverUi, setShowRecoverUi] = React.useState(false);
   const [showStuckUi, setShowStuckUi] = React.useState(false);
@@ -157,9 +206,9 @@ HOPY の状態や Compass や hold 条件を再判定する場所ではない。
 
 /*
 【今回このファイルで修正したこと】
-1. userState を使った overlayUserState の表示経路を削除しました。
-2. overlayUserState は常に null を返す形にして、この hook から余計な状態経路を外しました。
-3. userState / userStateErr / lastFailed / normalizedInput / activeThreadId は互換性維持のため引数には残しつつ、この hook 内では使わない形にそろえました。
+1. workspaceHeroDismissed を固定値 false のまま返していた処理をやめ、busy・本文有無・入力有無・送信失敗有無から自動で閉じる形へ戻しました。
+2. 新規チャット送信後に待機画面が残り続けないよう、shouldShowWorkspaceHero / shouldShowPreparing / shouldShowStuck / shouldShowRecover の表示条件を整理しました。
+3. hasRenderableChatContent は renderedLength だけでなく messagesLength も含めて判定し、送信直後の表示切替を落としにくくしました。
 4. HOPY唯一の正である state_changed、HOPY回答○、Compass、DB保存、DB復元の判定には触っていません。
 */
 

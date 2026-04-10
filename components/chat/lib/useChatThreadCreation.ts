@@ -7,6 +7,7 @@ import type { ChatMsg } from "./chatTypes";
 import { loadMessages } from "./threadApi";
 import { mergeLoadedMessagesPreservingAssistantState } from "./chatMessageState";
 import { isTemporaryGuestThreadId, microtask } from "./chatThreadIdentity";
+import { resolveMessagesOwnerThreadId } from "./chatClientMessageMeta";
 
 type Params = {
   displayLoggedIn: boolean;
@@ -38,6 +39,8 @@ export function useChatThreadCreation({
   setVisibleCount,
 }: Params) {
   const ensureThreadInflightRef = useRef(false);
+  const lastResolvedThreadIdRef = useRef<string>("");
+  const resolvingThreadMessagesRef = useRef<Set<string>>(new Set());
 
   const waitForActiveThreadId = useCallback(
     async (tries: number, delayMs: number): Promise<string | null> => {
@@ -55,7 +58,16 @@ export function useChatThreadCreation({
     if (!displayLoggedIn) return null;
 
     const current = String(activeThreadIdRef.current ?? "").trim();
-    if (current && !isTemporaryGuestThreadId(current)) return current;
+    const currentMessages = Array.isArray(messagesRef.current) ? messagesRef.current : [];
+    const lastResolved = String(lastResolvedThreadIdRef.current ?? "").trim();
+    const currentCanBeUsed =
+      Boolean(current) &&
+      !isTemporaryGuestThreadId(current) &&
+      (currentMessages.length > 0 || current === lastResolved);
+
+    if (currentCanBeUsed) {
+      return current;
+    }
 
     if (current && isTemporaryGuestThreadId(current)) {
       return null;
@@ -63,7 +75,14 @@ export function useChatThreadCreation({
 
     if (ensureThreadInflightRef.current) {
       const got = await waitForActiveThreadId(30, 20);
-      if (got && !isTemporaryGuestThreadId(got)) return got;
+      const latestMessages = Array.isArray(messagesRef.current) ? messagesRef.current : [];
+      const latestResolved = String(lastResolvedThreadIdRef.current ?? "").trim();
+      const gotCanBeUsed =
+        Boolean(got) &&
+        !isTemporaryGuestThreadId(got) &&
+        (latestMessages.length > 0 || got === latestResolved);
+
+      if (gotCanBeUsed) return got;
       return null;
     }
 
@@ -73,7 +92,14 @@ export function useChatThreadCreation({
       setThreadBusy(true);
 
       const pre = await waitForActiveThreadId(8, 18);
-      if (pre && !isTemporaryGuestThreadId(pre)) return pre;
+      const latestMessages = Array.isArray(messagesRef.current) ? messagesRef.current : [];
+      const latestResolved = String(lastResolvedThreadIdRef.current ?? "").trim();
+      const preCanBeUsed =
+        Boolean(pre) &&
+        !isTemporaryGuestThreadId(pre) &&
+        (latestMessages.length > 0 || pre === latestResolved);
+
+      if (preCanBeUsed) return pre;
 
       return null;
     } catch (e: any) {
@@ -86,10 +112,14 @@ export function useChatThreadCreation({
         setThreadBusy(false);
       } catch {}
     }
-  }, [displayLoggedIn, activeThreadIdRef, setThreadBusy, setUserStateErr, waitForActiveThreadId]);
-
-  const lastResolvedThreadIdRef = useRef<string>("");
-  const resolvingThreadMessagesRef = useRef<Set<string>>(new Set());
+  }, [
+    displayLoggedIn,
+    activeThreadIdRef,
+    messagesRef,
+    setThreadBusy,
+    setUserStateErr,
+    waitForActiveThreadId,
+  ]);
 
   const onThreadIdResolved = useCallback(
     (id: string) => {
@@ -119,6 +149,15 @@ export function useChatThreadCreation({
         noteThreadDecision(tid, "onThreadIdResolved:setActiveThreadId");
       } catch {}
 
+      const currentMessagesSnapshot = Array.isArray(messagesRef.current) ? messagesRef.current : [];
+      const snapshotOwnerThreadId = String(resolveMessagesOwnerThreadId(currentMessagesSnapshot) ?? "").trim();
+
+      const preserveCurrentMessages =
+        current === tid ||
+        (isTemporaryGuestThreadId(current) &&
+          Boolean(snapshotOwnerThreadId) &&
+          snapshotOwnerThreadId === current);
+
       try {
         setActiveThreadId(tid);
       } catch {}
@@ -129,15 +168,21 @@ export function useChatThreadCreation({
       microtask(() => {
         (async () => {
           try {
-            const currentMessagesSnapshot = Array.isArray(messagesRef.current) ? messagesRef.current : [];
             const nextMessages = await loadMessages(supabase, tid);
-            if (!Array.isArray(nextMessages) || nextMessages.length <= 0) return;
 
             if (String(activeThreadIdRef.current ?? "").trim() !== tid) return;
+            if (!Array.isArray(nextMessages)) return;
 
-            const mergedMessages = mergeLoadedMessagesPreservingAssistantState(currentMessagesSnapshot, nextMessages);
+            const committedMessages =
+              nextMessages.length > 0
+                ? preserveCurrentMessages
+                  ? mergeLoadedMessagesPreservingAssistantState(currentMessagesSnapshot, nextMessages)
+                  : nextMessages
+                : preserveCurrentMessages
+                  ? currentMessagesSnapshot
+                  : [];
 
-            guardedSetMessages(mergedMessages);
+            guardedSetMessages(committedMessages);
             setVisibleCount(200);
             setUserStateErr(null);
 
@@ -175,3 +220,22 @@ export function useChatThreadCreation({
     onThreadIdResolved,
   };
 }
+
+/*
+このファイルの正式役割：
+新規スレッド作成後に確定した thread_id を active として採用し、
+その thread に属する messages だけを現在表示へ反映するためのフック。
+*/
+
+/*
+【今回このファイルで修正したこと】
+1. 新規 thread 確定時に現在 messages を引き継ぐ条件を、activeThreadId だけでなく messages の実所有 thread でも確認するようにしました。
+2. 仮 thread 中でも、snapshot の owner が現在の仮 thread と一致する場合だけ preserve するように絞りました。
+3. これにより、旧スレッド本文を持ったまま仮 thread に入っていた場合は、その旧本文を新規確定 thread へ持ち込まないようにしました。
+4. 反対に、新規チャット開始後に仮 thread 上で積まれた messages だけは、そのまま確定 thread へ引き継げるよう維持しました。
+5. HOPY回答○、Compass、confirmed payload、DB保存/復元には触っていません。
+*/
+
+/*
+/components/chat/lib/useChatThreadCreation.ts
+*/

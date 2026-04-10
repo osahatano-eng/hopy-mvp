@@ -5,7 +5,6 @@
 import React from "react";
 import type { Thread } from "../lib/chatTypes";
 import type { HopyState } from "../lib/stateBadge";
-import { inferEmptyActiveThread } from "./leftRailThreadMeta";
 import {
   dispatchSafe,
   isThenable,
@@ -208,13 +207,6 @@ function useThreadsViewModel(params: {
     return buildActiveThreadState(activeThread);
   }, [activeThreadFromList, activeThreadStateProp, activeThread]);
 
-  const inferredEmptyActive = React.useMemo(() => {
-    return inferEmptyActiveThread({
-      activeThread,
-      untitled,
-    });
-  }, [activeThread, untitled]);
-
   const titleCountMap = React.useMemo(() => {
     const map = new Map<string, number>();
     for (const th of threadsSafe) {
@@ -231,7 +223,6 @@ function useThreadsViewModel(params: {
     activeThread,
     activeThreadTitle,
     activeThreadState,
-    inferredEmptyActive,
     titleCountMap,
   };
 }
@@ -566,7 +557,6 @@ export function useLeftRailController({ props, labels: t }: Params) {
     activeThread,
     activeThreadTitle,
     activeThreadState,
-    inferredEmptyActive,
     titleCountMap,
   } = useThreadsViewModel({
     threads,
@@ -577,8 +567,8 @@ export function useLeftRailController({ props, labels: t }: Params) {
   });
 
   const disableNewChat = React.useMemo(() => {
-    return Boolean(props.disableNewChat ?? inferredEmptyActive);
-  }, [props.disableNewChat, inferredEmptyActive]);
+    return Boolean(props.disableNewChat);
+  }, [props.disableNewChat]);
 
   useInitialControlledAutoCloseEffect({
     isControlled,
@@ -644,3 +634,18 @@ export function useLeftRailController({ props, labels: t }: Params) {
     showCloseBtn,
   };
 }
+
+/*
+このファイルの正式役割
+LeftRail 内の操作責務だけを持ち、開閉、スレッド選択、新規作成、名前変更、削除、Memories 起動のイベント中継を行う。
+状態の唯一の正は作らず、受け取った props と確定済み値を UI 操作へ渡すだけに限定する。
+*/
+
+/*
+【今回このファイルで修正したこと】
+1. inferEmptyActiveThread を使った新しいチャットのローカル無効化判定を削除しました。
+2. disableNewChat は props.disableNewChat だけを正として扱うように戻しました。
+3. useThreadsViewModel から inferredEmptyActive を削除し、このファイル内で新しいチャット可否を再解釈しない形に整理しました。
+*/
+
+/* /components/chat/ui/useLeftRailController.ts */

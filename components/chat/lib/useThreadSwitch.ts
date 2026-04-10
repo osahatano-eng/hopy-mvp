@@ -123,6 +123,42 @@ function isTemporaryGuestThreadId(value: string) {
   return true;
 }
 
+function isExplicitThreadSelectionDetail(detail: any): boolean {
+  if (!detail || typeof detail !== "object") return false;
+
+  if (detail.select === true) return true;
+  if (detail.selected === true) return true;
+  if (detail.activate === true) return true;
+  if (detail.active === true) return true;
+  if (detail.forceSelect === true) return true;
+  if (detail.open === true) return true;
+
+  const reason = String(detail.reason ?? "").trim().toLowerCase();
+  if (!reason) return false;
+
+  if (
+    reason === "select" ||
+    reason === "switch" ||
+    reason === "open" ||
+    reason === "new-thread" ||
+    reason === "thread-created"
+  ) {
+    return true;
+  }
+
+  if (
+    reason.startsWith("select:") ||
+    reason.startsWith("switch:") ||
+    reason.startsWith("open:") ||
+    reason.startsWith("new-thread:") ||
+    reason.startsWith("thread-created:")
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
 export function useThreadSwitch(params: {
   supabase: SupabaseClient<any>;
   activeThreadId: string | null;
@@ -406,9 +442,26 @@ export function useThreadSwitch(params: {
 
         const current = String(activeThreadIdRef.current ?? "").trim();
         const existsInCurrentList = hasThreadId(threadsRef.current, id);
+        const isExplicit = isExplicitThreadSelectionDetail(d);
 
         if (!current && via !== "direct" && existsInCurrentList) {
           logInfo("[useThreadSwitch] ignore passive thread event while hero/no-selection", {
+            id,
+            via,
+            reason: String(d.reason ?? "").trim() || null,
+          });
+          return;
+        }
+
+        if (
+          current &&
+          id !== current &&
+          via !== "direct" &&
+          existsInCurrentList &&
+          !isExplicit
+        ) {
+          logInfo("[useThreadSwitch] ignore passive existing-thread event while another thread is active", {
+            current,
             id,
             via,
             reason: String(d.reason ?? "").trim() || null,
@@ -481,6 +534,7 @@ export function useThreadSwitch(params: {
     const isAlive = () => !disposed && seq === switchSeqRef.current;
     const isCurrentSelection = () => String(activeThreadIdRef.current ?? "").trim() === nextId;
     const canCommitCurrentThread = () => isAlive() && isCurrentSelection();
+    const canFinalizeBusy = () => isAlive();
 
     const run = async () => {
       const prevGood = String(lastGoodThreadIdRef.current ?? "").trim();
@@ -580,10 +634,12 @@ export function useThreadSwitch(params: {
 
         microtask(() => {
           if (!canCommitCurrentThread()) return;
-          p.inputRef?.current?.focus?.();
+          try {
+            p.inputRef?.current?.focus?.();
+          } catch {}
         });
       } finally {
-        if (canCommitCurrentThread()) {
+        if (canFinalizeBusy()) {
           try {
             p.setThreadBusy(false);
           } catch {}
@@ -611,10 +667,10 @@ export function useThreadSwitch(params: {
 
 /*
 【今回このファイルで修正したこと】
-1. 本文同期に不要だった inflightThreadIdRef の重複抑止責務を削除しました。
-2. 本文採用の正を switchSeqRef と activeThreadId 一致へ寄せ、採用フローを軽くしました。
-3. 読込失敗時の復元分岐を最小限に整理し、不要な再セット経路を削除しました。
-4. HOPY回答○、Compass、state_changed、confirmed payload、DB保存、DB復元の唯一の正には触っていません。
+1. hopy:thread 受信時に、明示選択ではない既存スレッドイベントまで selectThread へ流れていた経路を止めました。
+2. すでに選択中スレッドがある状態では、既存スレッド一覧に存在する別スレッドの受動イベントでは activeThreadId を奪わないようにしました。
+3. 新規スレッド生成や明示選択で使えるように、select/selected/activate/active/forceSelect/open と reason 系の明示選択フラグだけは通すようにしました。
+4. 本文採用条件、HOPY回答○、Compass、state_changed、confirmed payload、DB保存、DB復元の唯一の正には触っていません。
 */
 
 /* /components/chat/lib/useThreadSwitch.ts */

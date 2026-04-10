@@ -1,12 +1,12 @@
 // /components/chat/ChatClient.tsx
 "use client";
 
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
 import type { ChatMsg, Thread } from "./lib/chatTypes";
 import { clampText, detectUserLang } from "./lib/text";
-import { useAutoGrowTextarea, useComposerHeight, usePreventHorizontalScroll, useVisualViewportBottom } from "./lib/hooks";
+import { useAutoGrowTextarea, usePreventHorizontalScroll } from "./lib/hooks";
 
 import ChatClientView from "./ChatClientView";
 
@@ -17,14 +17,26 @@ import { useChatSend, type FailedSend } from "./lib/useChatSend";
 
 import { normalizeHopyState, type HopyState } from "./lib/stateBadge";
 import { clearActiveThreadId } from "./lib/threadStore";
+import {
+  isCompletedAssistantReplyMessage,
+  resolveMessagesOwnerThreadId,
+} from "./lib/chatClientMessageMeta";
 
-import { cleanForDecision, initHopyApiDebugTools, initHopyImeDebugTools } from "./lib/debugTools";
+import {
+  cleanForDecision,
+  initHopyApiDebugTools,
+  initHopyImeDebugTools,
+} from "./lib/debugTools";
 import { useImeStabilizer } from "./lib/useImeStabilizer";
-import { readInitialUiLang, buildThinkingLabel, buildUi } from "./lib/chatClientUi";
+import { buildThinkingLabel, buildUi } from "./lib/chatClientUi";
 import { useChatAuth } from "./lib/useChatAuth";
+import { useChatClientLanguage } from "./lib/useChatClientLanguage";
+import { useChatClientSignedOutFlow } from "./lib/useChatClientSignedOutFlow";
+import { useChatClientViewportVars } from "./lib/useChatClientViewportVars";
 import { useChatThreadEvents } from "./lib/useChatThreadEvents";
 import { useChatClientViewState } from "./lib/useChatClientViewState";
 import { useChatThreadCreation } from "./lib/useChatThreadCreation";
+import { useChatClientBootScroll } from "./lib/useChatClientBootScroll";
 import { isTemporaryGuestThreadId } from "./lib/chatThreadIdentity";
 import { useLeftRailSwipeOpen } from "./view/hooks/useLeftRailSwipeOpen";
 import { useLeftRailOpeningDrag } from "./view/hooks/useLeftRailOpeningDrag";
@@ -35,129 +47,6 @@ import { resolveMergedUserStateForView } from "./view/resolveMergedUserStateForV
 type ThreadDecision = { id: string; at: number; reason: string };
 
 const EMPTY_THREADS: Thread[] = [];
-
-function extractRenderableMessageText(value: unknown): string {
-  if (typeof value === "string") {
-    return value.trim();
-  }
-
-  if (Array.isArray(value)) {
-    const joined = value
-      .map((item) => extractRenderableMessageText(item))
-      .filter(Boolean)
-      .join(" ")
-      .trim();
-    return joined;
-  }
-
-  if (value && typeof value === "object") {
-    const safe = value as Record<string, unknown>;
-
-    return extractRenderableMessageText(
-      safe.text ??
-        safe.content ??
-        safe.body ??
-        safe.reply ??
-        safe.message ??
-        safe.value ??
-        safe.parts,
-    );
-  }
-
-  return "";
-}
-
-function extractMessageThreadId(msg: ChatMsg | null | undefined): string {
-  const safe = msg as any;
-  if (!safe) return "";
-
-  const candidates = [
-    safe.thread_id,
-    safe.threadId,
-    safe.conversation_id,
-    safe.conversationId,
-    safe.chat_id,
-    safe.chatId,
-    safe.thread?.id,
-    safe.conversation?.id,
-  ];
-
-  for (const candidate of candidates) {
-    const tid = String(candidate ?? "").trim();
-    if (tid) return tid;
-  }
-
-  return "";
-}
-
-function resolveMessagesOwnerThreadId(messages: ChatMsg[] | null | undefined): string {
-  if (!Array.isArray(messages) || messages.length <= 0) return "";
-
-  const counts = new Map<string, number>();
-  let firstDetected = "";
-
-  for (const msg of messages) {
-    const tid = extractMessageThreadId(msg);
-    if (!tid) continue;
-
-    if (!firstDetected) {
-      firstDetected = tid;
-    }
-
-    counts.set(tid, (counts.get(tid) ?? 0) + 1);
-  }
-
-  if (!firstDetected) return "";
-
-  if (counts.size === 1) {
-    return firstDetected;
-  }
-
-  let winner = "";
-  let winnerCount = 0;
-
-  for (const [tid, count] of counts.entries()) {
-    if (count > winnerCount) {
-      winner = tid;
-      winnerCount = count;
-    }
-  }
-
-  return winner;
-}
-
-function isCompletedAssistantReplyMessage(msg: ChatMsg | null | undefined): boolean {
-  const safe = msg as any;
-  if (!safe) return false;
-
-  const role = String(safe.role ?? "").trim().toLowerCase();
-  if (role !== "assistant") return false;
-
-  const status = String(safe.status ?? "").trim().toLowerCase();
-  if (status === "pending" || status === "loading" || status === "streaming") {
-    return false;
-  }
-
-  if (
-    safe.pending === true ||
-    safe.loading === true ||
-    safe.streaming === true ||
-    safe.isThinking === true
-  ) {
-    return false;
-  }
-
-  const text = extractRenderableMessageText(
-    safe.text ??
-      safe.content ??
-      safe.body ??
-      safe.reply ??
-      safe.message ??
-      safe.parts,
-  );
-
-  return Boolean(text);
-}
 
 export default function ChatClient() {
   usePreventHorizontalScroll(true);
@@ -171,7 +60,8 @@ export default function ChatClient() {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [loading, setLoading] = useState(false);
-  const [uiLang, setUiLang] = useState(() => readInitialUiLang());
+
+  const { uiLang, onChangeLang } = useChatClientLanguage();
 
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const rootRef = useRef<HTMLElement | null>(null);
@@ -197,22 +87,26 @@ export default function ChatClient() {
 
   const pendingEmptyThreadIdRef = useRef<string | null>(null);
   const lastThreadDecisionRef = useRef<ThreadDecision | null>(null);
+  const activeThreadIdRef = useRef<string | null>(null);
 
-  const scrollToBottom = useCallback((behavior: ScrollBehavior | "auto" | "smooth" = "auto") => {
-    atBottomRef.current = true;
-    setAtBottom(true);
+  const scrollToBottom = useCallback(
+    (behavior: ScrollBehavior | "auto" | "smooth" = "auto") => {
+      atBottomRef.current = true;
+      setAtBottom(true);
 
-    try {
-      const sc = scrollerRef.current;
-      if (!sc) return;
+      try {
+        const sc = scrollerRef.current;
+        if (!sc) return;
 
-      if (behavior === "smooth") {
-        sc.scrollTo({ top: sc.scrollHeight, behavior: "smooth" });
-      } else {
-        sc.scrollTop = sc.scrollHeight;
-      }
-    } catch {}
-  }, []);
+        if (behavior === "smooth") {
+          sc.scrollTo({ top: sc.scrollHeight, behavior: "smooth" });
+        } else {
+          sc.scrollTop = sc.scrollHeight;
+        }
+      } catch {}
+    },
+    []
+  );
 
   const openRail = useCallback(() => {
     setRailOpen(true);
@@ -254,111 +148,6 @@ export default function ChatClient() {
     resetOpeningDrag();
   }, [resetOpeningDrag]);
 
-  const resetLoggedOutState = useCallback(
-    ({
-      clearMessages,
-      clearLoading,
-      clearActiveThreadRef,
-      clearLastThreadDecision,
-    }: {
-      clearMessages: boolean;
-      clearLoading: boolean;
-      clearActiveThreadRef: boolean;
-      clearLastThreadDecision: boolean;
-    }) => {
-      try {
-        clearActiveThreadId();
-      } catch {}
-
-      try {
-        setThreads([]);
-      } catch {}
-
-      try {
-        setActiveThreadId(null);
-      } catch {}
-
-      if (clearMessages) {
-        try {
-          setMessages([]);
-        } catch {}
-
-        try {
-          setVisibleCount(200);
-        } catch {}
-      }
-
-      try {
-        setUserState(null);
-      } catch {}
-
-      try {
-        setUserStateErr(null);
-      } catch {}
-
-      try {
-        setLastFailed(null);
-      } catch {}
-
-      try {
-        setThreadBusy(false);
-      } catch {}
-
-      if (clearLoading) {
-        try {
-          setLoading(false);
-        } catch {}
-      }
-
-      try {
-        resetRailState();
-      } catch {}
-
-      if (clearActiveThreadRef) {
-        try {
-          activeThreadIdRef.current = null;
-        } catch {}
-      }
-
-      if (clearLastThreadDecision) {
-        try {
-          lastThreadDecisionRef.current = null;
-        } catch {}
-      }
-
-      try {
-        clearThreadViewRefs();
-      } catch {}
-    },
-    [clearThreadViewRefs, resetRailState]
-  );
-
-  const clearTemporaryGuestSelection = useCallback(() => {
-    try {
-      clearActiveThreadId();
-    } catch {}
-
-    try {
-      setActiveThreadId(null);
-    } catch {}
-
-    try {
-      setMessages([]);
-    } catch {}
-
-    try {
-      setVisibleCount(200);
-    } catch {}
-
-    try {
-      activeThreadIdRef.current = null;
-    } catch {}
-
-    try {
-      clearThreadViewRefs();
-    } catch {}
-  }, [clearThreadViewRefs]);
-
   const auth = useChatAuth({
     supabase,
     setEmail,
@@ -373,51 +162,28 @@ export default function ChatClient() {
     loggedInRef,
   } = auth;
 
-  const prevDisplayLoggedInRef = useRef(false);
-  const [signedOutFromLoggedIn, setSignedOutFromLoggedIn] = useState(false);
+  const { shouldHoldSignedOutScreen } = useChatClientSignedOutFlow({
+    authReady,
+    displayLoggedIn,
+    loggedIn,
+    logoutRedirecting,
+    signedOutCauseRef,
+    activeThreadId,
+    activeThreadIdRef,
+    clearThreadViewRefs,
+    resetRailState,
+    setEmail,
+    setMessages,
+    setLoading,
+    setVisibleCount,
+    setThreads,
+    setActiveThreadId,
+    setThreadBusy,
+    setLastFailed,
+    setUserState,
+    setUserStateErr,
+  });
 
-  const justSignedOut =
-    authReady &&
-    prevDisplayLoggedInRef.current &&
-    !displayLoggedIn;
-
-  useEffect(() => {
-    if (!authReady) return;
-
-    if (displayLoggedIn) {
-      setSignedOutFromLoggedIn(false);
-      prevDisplayLoggedInRef.current = true;
-      return;
-    }
-
-    if (prevDisplayLoggedInRef.current) {
-      setSignedOutFromLoggedIn(true);
-    }
-
-    prevDisplayLoggedInRef.current = false;
-  }, [authReady, displayLoggedIn]);
-
-  const shouldHoldSignedOutScreen =
-    authReady &&
-    !displayLoggedIn &&
-    Boolean(
-      logoutRedirecting ||
-        signedOutCauseRef.current ||
-        signedOutFromLoggedIn ||
-        justSignedOut,
-    );
-
-  useEffect(() => {
-    if (!shouldHoldSignedOutScreen) return;
-
-    try {
-      if (window.location.pathname !== "/") {
-        window.location.replace("/");
-      }
-    } catch {}
-  }, [shouldHoldSignedOutScreen]);
-
-  const activeThreadIdRef = useRef<string | null>(null);
   useEffect(() => {
     activeThreadIdRef.current = activeThreadId;
 
@@ -506,7 +272,10 @@ export default function ChatClient() {
       setThreads((prev) => {
         const exists = prev.some((t) => String((t as any)?.id ?? "").trim() === tid);
         if (exists) return prev;
-        return [{ id: tid, title: defaultTitle, state_level: 1, current_phase: 1 } as Thread, ...prev];
+        return [
+          { id: tid, title: defaultTitle, state_level: 1, current_phase: 1 } as Thread,
+          ...prev,
+        ];
       });
     },
     [uiLang]
@@ -535,106 +304,13 @@ export default function ChatClient() {
   });
   void imeTick;
 
-  useEffect(() => {
-    if (!authReady) return;
-
-    if (!displayLoggedIn) {
-      try {
-        setEmail("");
-      } catch {}
-    }
-
-    if (!loggedIn) {
-      if (!signedOutCauseRef.current) {
-        resetLoggedOutState({
-          clearMessages: false,
-          clearLoading: false,
-          clearActiveThreadRef: false,
-          clearLastThreadDecision: false,
-        });
-        return;
-      }
-
-      resetLoggedOutState({
-        clearMessages: true,
-        clearLoading: true,
-        clearActiveThreadRef: true,
-        clearLastThreadDecision: true,
-      });
-      return;
-    }
-  }, [authReady, loggedIn, displayLoggedIn, signedOutCauseRef, resetLoggedOutState]);
-
-  useEffect(() => {
-    if (!authReady) return;
-    if (!displayLoggedIn) return;
-
-    const tid = String(activeThreadId ?? "").trim();
-    if (!tid) return;
-    if (!isTemporaryGuestThreadId(tid)) return;
-
-    clearTemporaryGuestSelection();
-  }, [authReady, displayLoggedIn, activeThreadId, clearTemporaryGuestSelection]);
-
   useAutoGrowTextarea(inputRef as React.RefObject<HTMLTextAreaElement>, input, 420);
 
-  const composerHRaw = useComposerHeight(composerRef as React.RefObject<HTMLElement>, 96);
-  const vvBottomRaw = useVisualViewportBottom();
-  const composerH = Math.max(0, Math.round(Number.isFinite(composerHRaw) ? composerHRaw : 0));
-  const vvBottom = Math.max(0, Math.round(Number.isFinite(vvBottomRaw) ? vvBottomRaw : 0));
-  const composerOffset = composerH + 24 + vvBottom;
-
-  const lastAppliedViewportVarsRef = useRef<{
-    composerH: number;
-    vvBottom: number;
-    composerOffset: number;
-  } | null>(null);
-
-  useEffect(() => {
-    const el = rootRef.current;
-    if (!el) return;
-
-    const prev = lastAppliedViewportVarsRef.current;
-    if (
-      prev &&
-      prev.composerH === composerH &&
-      prev.vvBottom === vvBottom &&
-      prev.composerOffset === composerOffset
-    ) {
-      return;
-    }
-
-    el.style.setProperty("--composerH", `${composerH}px`);
-    el.style.setProperty("--vvBottom", `${vvBottom}px`);
-    el.style.setProperty("--composerOffset", `${composerOffset}px`);
-
-    lastAppliedViewportVarsRef.current = {
-      composerH,
-      vvBottom,
-      composerOffset,
-    };
-  }, [composerH, vvBottom, composerOffset]);
-
-  useEffect(() => {
-    try {
-      const saved = String(localStorage.getItem("hopy_lang") || "").toLowerCase();
-      const next = saved === "en" ? "en" : "ja";
-      setUiLang((prev) => (prev === next ? prev : next));
-    } catch {}
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem("hopy_lang", uiLang);
-  }, [uiLang]);
-
-  const onChangeLang = useCallback((next: "ja" | "en") => {
-    const safeNext = next === "en" ? "en" : "ja";
-    setUiLang((prev) => (prev === safeNext ? prev : safeNext));
-
-    try {
-      window.dispatchEvent(new CustomEvent("hopy:lang-change", { detail: { lang: safeNext } }));
-    } catch {}
-  }, []);
+  useChatClientViewportVars({
+    rootRef,
+    composerRef,
+    composerHeightFallback: 96,
+  });
 
   const { tmap } = useTranslateCache({ uiLang, messages });
 
@@ -656,10 +332,15 @@ export default function ChatClient() {
 
   const stateUnknownShort = ui.stateUnknownShort;
 
-  const guardedSetMessages = useCallback<React.Dispatch<React.SetStateAction<ChatMsg[]>>>((updater) => {
+  const guardedSetMessages = useCallback<
+    React.Dispatch<React.SetStateAction<ChatMsg[]>>
+  >((updater) => {
     setMessages((prev) => {
       try {
-        const next = typeof updater === "function" ? (updater as (prevState: ChatMsg[]) => ChatMsg[])(prev) : updater;
+        const next =
+          typeof updater === "function"
+            ? (updater as (prevState: ChatMsg[]) => ChatMsg[])(prev)
+            : updater;
         return Array.isArray(next) ? next : prev;
       } catch {
         return prev;
@@ -672,11 +353,29 @@ export default function ChatClient() {
       const tid = String(nextId ?? "").trim();
 
       if (!tid) {
-        const current = String(activeThreadIdRef.current ?? "").trim();
+        try {
+          clearActiveThreadId();
+        } catch {}
 
-        if (current && !isTemporaryGuestThreadId(current)) {
-          return;
-        }
+        try {
+          activeThreadIdRef.current = null;
+        } catch {}
+
+        try {
+          clearThreadViewRefs();
+        } catch {}
+
+        try {
+          guardedSetMessages([]);
+        } catch {}
+
+        try {
+          setVisibleCount(200);
+        } catch {}
+
+        try {
+          noteThreadDecision("", reason);
+        } catch {}
 
         setActiveThreadId(null);
         return;
@@ -694,7 +393,7 @@ export default function ChatClient() {
 
       setActiveThreadId(tid);
     },
-    [noteThreadDecision]
+    [clearThreadViewRefs, guardedSetMessages, noteThreadDecision]
   );
 
   const setActiveThreadIdFromInit = useCallback(
@@ -741,19 +440,16 @@ export default function ChatClient() {
     setUserStateErr,
   });
 
-  const bootPendingRef = useRef(false);
-  useEffect(() => {
-    const tid = String(activeThreadId ?? "").trim();
-    if (!tid) return;
-    bootPendingRef.current = true;
-  }, [activeThreadId]);
-
   const normalizedInput = cleanForDecision(input);
 
-  const {
-    ensureThreadId,
-    onThreadIdResolved,
-  } = useChatThreadCreation({
+  const setActiveThreadIdFromThreadCreation = useCallback(
+    (v: string | null) => {
+      applyResolvedActiveThreadId(v, "useChatThreadCreation:setActiveThreadId");
+    },
+    [applyResolvedActiveThreadId]
+  );
+
+  const { ensureThreadId, onThreadIdResolved } = useChatThreadCreation({
     displayLoggedIn,
     activeThreadIdRef,
     messagesRef,
@@ -764,7 +460,7 @@ export default function ChatClient() {
     guardedSetMessages,
     supabase,
     scrollToBottom,
-    setActiveThreadId,
+    setActiveThreadId: setActiveThreadIdFromThreadCreation,
     setVisibleCount,
   });
 
@@ -773,15 +469,33 @@ export default function ChatClient() {
 
     const activeTid = String(activeThreadId ?? "").trim();
     if (!activeTid) return [];
-    if (isTemporaryGuestThreadId(activeTid)) return messages;
 
     const ownerTid = String(currentMessagesOwnerThreadId ?? "").trim();
+
+    if (isTemporaryGuestThreadId(activeTid)) {
+      if (ownerTid === activeTid) {
+        return messages;
+      }
+
+      if (!ownerTid && loading && messages.length > 0) {
+        return messages;
+      }
+
+      return [];
+    }
+
     if (!ownerTid || ownerTid === activeTid) {
       return messages;
     }
 
     return [];
-  }, [displayLoggedIn, activeThreadId, messages, currentMessagesOwnerThreadId]);
+  }, [
+    displayLoggedIn,
+    activeThreadId,
+    messages,
+    currentMessagesOwnerThreadId,
+    loading,
+  ]);
 
   const {
     viewMessages,
@@ -806,25 +520,22 @@ export default function ChatClient() {
 
   void activeThreadStateLevel;
 
-  const {
-    normalizedResolvedViewUserState,
-    mergedUserStateForView,
-  } = resolveMergedUserStateForView({
-    viewUserState,
-  });
+  const { normalizedResolvedViewUserState, mergedUserStateForView } =
+    resolveMergedUserStateForView({
+      viewUserState,
+    });
 
-  const hasPendingEmptyThread = Boolean(String(pendingEmptyThreadIdRef.current ?? "").trim());
-  const isViewingPendingEmptyThread = isTemporaryGuestThreadId(String(activeThreadId ?? "").trim());
+  const isViewingPendingEmptyThread = isTemporaryGuestThreadId(
+    String(activeThreadId ?? "").trim()
+  );
 
-  const {
-    resolvedActiveThreadForView,
-    resolvedActiveThreadState,
-  } = resolveActiveThreadStateForView({
-    displayLoggedIn,
-    isViewingPendingEmptyThread,
-    viewActiveThread,
-    normalizedResolvedViewUserState,
-  });
+  const { resolvedActiveThreadForView, resolvedActiveThreadState } =
+    resolveActiveThreadStateForView({
+      displayLoggedIn,
+      isViewingPendingEmptyThread,
+      viewActiveThread,
+      normalizedResolvedViewUserState,
+    });
 
   useBroadcastUserStateLabel({
     displayLoggedIn,
@@ -844,34 +555,13 @@ export default function ChatClient() {
     }
   }, [activeThreadId]);
 
-  const scrollToBottomRef = useRef(scrollToBottom);
-  useEffect(() => {
-    scrollToBottomRef.current = scrollToBottom;
-  }, [scrollToBottom]);
-
-  useLayoutEffect(() => {
-    if (!bootPendingRef.current) return;
-    if (!String(activeThreadId ?? "").trim()) return;
-    if (viewRendered.length <= 0) return;
-
-    bootPendingRef.current = false;
-    atBottomRef.current = true;
-    setAtBottom(true);
-
-    const go = () => {
-      try {
-        scrollToBottomRef.current("auto");
-      } catch {}
-    };
-
-    try {
-      requestAnimationFrame(() => {
-        requestAnimationFrame(go);
-      });
-    } catch {
-      go();
-    }
-  }, [activeThreadId, viewRendered.length, scrollToBottom]);
+  useChatClientBootScroll({
+    activeThreadId,
+    viewRenderedLength: viewRendered.length,
+    scrollToBottom,
+    atBottomRef,
+    setAtBottom,
+  });
 
   const login = useCallback(async () => {
     await supabase.auth.signInWithOAuth({
@@ -923,12 +613,7 @@ export default function ChatClient() {
 
   const shouldBootScreen = !shouldHoldSignedOutScreen && !authReady && !displayLoggedIn;
 
-  const disableNewChat =
-    displayLoggedIn &&
-    !hasPendingEmptyThread &&
-    !isViewingPendingEmptyThread &&
-    messages.length === 0 &&
-    !Boolean(normalizedInput);
+  const disableNewChat = Boolean(displayLoggedIn && threadBusy);
 
   const activeThreadIdForView = useMemo(() => {
     if (!displayLoggedIn) return null;
@@ -939,18 +624,21 @@ export default function ChatClient() {
 
   const shouldHoldBlankThreadStage = useMemo(() => {
     if (!displayLoggedIn) return false;
-    if (!threadBusy) return false;
+    if (loading) return false;
     if (viewRendered.length > 0) return false;
     if (messagesForView.length > 0) return false;
 
     const activeTid = String(activeThreadIdForView ?? activeThreadId ?? "").trim();
     if (!activeTid) return false;
-    if (isTemporaryGuestThreadId(activeTid)) return false;
+
+    if (!isTemporaryGuestThreadId(activeTid)) {
+      return false;
+    }
 
     return true;
   }, [
     displayLoggedIn,
-    threadBusy,
+    loading,
     viewRendered.length,
     messagesForView.length,
     activeThreadIdForView,
@@ -984,7 +672,11 @@ export default function ChatClient() {
         aria-label="booting chat"
       >
         <div style={{ fontSize: 14, opacity: 0.75 }}>
-          {displayLoggedIn ? (uiLang === "en" ? "Preparing chat…" : "チャットを準備中…") : "Loading..."}
+          {displayLoggedIn
+            ? uiLang === "en"
+              ? "Preparing chat…"
+              : "チャットを準備中…"
+            : "Loading..."}
         </div>
       </main>
     );
@@ -1057,16 +749,18 @@ export default function ChatClient() {
 /*
 このファイルの正式役割
 チャット画面の親本体ファイル。
-messages / threads / activeThreadId / rendered / visibleTexts など、
-表示に必要な値をまとめて ChatClientView へ渡す。
+state / ref / hook 呼び出し / 値の受け渡しをまとめ、
+ChatClientView へ表示用の値を接続する。
+親は読むだけ・つなぐだけに寄せる。
 */
 
 /*
 【今回このファイルで修正したこと】
-1. threadMessagesCacheRef / messagesOwnerThreadIdRef を削除し、ChatClient.tsx 内での本文キャッシュ採用をやめました。
-2. messagesForView は「現在の activeThreadId に一致する messages だけを渡す」形へ絞りました。
-3. activeThreadIdForView の viewActiveThreadId fallback を削除し、選択の正を activeThreadId だけに戻しました。
-4. messages 読込責務、HOPY回答○、Compass、state_changed、confirmed payload、DB保存、DB復元の唯一の正には触っていません。
+1. 仮 thread_id 中で ownerThreadId がまだ空でも、送信中かつ messages が存在する場合は messagesForView に通すよう修正しました。
+2. shouldHoldBlankThreadStage が通常 thread の threadBusy まで抱え込んでいた待機画面責務をこの親から外し、仮空スレッド時だけに限定しました。
+3. 送信中は shouldHoldBlankThreadStage を false にし、本文表示の入口を待機画面が握り続けないよう修正しました。
+4. これにより、この親ファイル内で重複していた本文採用条件と待機画面条件の衝突を減らしました。
+5. HOPY回答○、Compass、confirmed payload、DB保存・復元には触っていません。
 */
 
 /* /components/chat/ChatClient.tsx */

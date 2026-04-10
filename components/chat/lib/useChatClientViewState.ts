@@ -1,7 +1,7 @@
 // /components/chat/lib/useChatClientViewState.ts
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo } from "react";
 import type { ChatMsg, Thread } from "./chatTypes";
 import type { HopyState } from "./stateBadge";
 import { useRenderMessages } from "./useRenderMessages";
@@ -99,29 +99,10 @@ export function useChatClientViewState({
   userState,
   normalizedInput,
 }: Params) {
-  const lastStableViewThreadIdRef = useRef<string | null>(null);
-  const lastStableMessagesRef = useRef<ChatMsg[]>([]);
-  const lastStableRenderedRef = useRef<any[]>([]);
-  const lastStableVisibleTextsRef = useRef<Map<string, string>>(new Map());
-
-  const stableViewThreadId = String(lastStableViewThreadIdRef.current ?? "").trim();
   const currentViewThreadId = String(activeThreadId ?? "").trim();
 
-  const canReuseStableWorkspace =
-    displayLoggedIn &&
-    Boolean(stableViewThreadId) &&
-    Boolean(currentViewThreadId) &&
-    currentViewThreadId === stableViewThreadId &&
-    lastStableMessagesRef.current.length > 0 &&
-    lastStableRenderedRef.current.length > 0 &&
-    messages.length === 0;
-
-  const renderSourceMessages = canReuseStableWorkspace
-    ? lastStableMessagesRef.current
-    : messages;
-
   const { rendered, visibleTexts } = useRenderMessages({
-    messages: renderSourceMessages,
+    messages,
     visibleCount,
     uiLang,
     dayStartLabel: ui.dayStart,
@@ -261,40 +242,9 @@ export function useChatClientViewState({
     return resolvedViewUserState;
   }, [userState, resolvedViewUserState]);
 
-  useEffect(() => {
-    if (!displayLoggedIn) {
-      lastStableViewThreadIdRef.current = null;
-      lastStableMessagesRef.current = [];
-      lastStableRenderedRef.current = [];
-      lastStableVisibleTextsRef.current = new Map();
-      return;
-    }
-
-    const tid = String(activeThreadId ?? "").trim();
-    if (!tid) return;
-    if (messages.length <= 0) return;
-    if (rendered.length <= 0) return;
-
-    lastStableViewThreadIdRef.current = tid;
-    lastStableMessagesRef.current = messages;
-    lastStableRenderedRef.current = rendered;
-    lastStableVisibleTextsRef.current = visibleTexts;
-  }, [displayLoggedIn, activeThreadId, messages, rendered, visibleTexts]);
-
-  const viewMessages = useMemo(() => {
-    if (!canReuseStableWorkspace) return messages;
-    return lastStableMessagesRef.current;
-  }, [canReuseStableWorkspace, messages]);
-
-  const viewRendered = useMemo(() => {
-    if (!canReuseStableWorkspace) return rendered;
-    return lastStableRenderedRef.current;
-  }, [canReuseStableWorkspace, rendered]);
-
-  const viewVisibleTexts = useMemo(() => {
-    if (!canReuseStableWorkspace) return visibleTexts;
-    return lastStableVisibleTextsRef.current;
-  }, [canReuseStableWorkspace, visibleTexts]);
+  const viewMessages = messages;
+  const viewRendered = rendered;
+  const viewVisibleTexts = visibleTexts;
 
   const viewActiveThreadId = displayLoggedIn ? currentViewThreadId || "" : "";
 
@@ -353,21 +303,13 @@ messages を useRenderMessages(...) に渡し、
 画面表示直前に使う rendered / visibleTexts を組み立てる表示中継層である。
 そのため、Compass を含んだ assistant message が messages に入っていれば、
 その message を描画用データへ渡す側のファイルである。
-
-このファイルで確認できた大事なこと
-1. Compass 専用の生成処理や削除処理はこのファイル内にない。
-2. rendered / visibleTexts は useRenderMessages(...) の結果をそのまま受け取っている。
-3. viewRendered / viewVisibleTexts も、基本的には rendered / visibleTexts をそのまま画面側へ渡している。
-4. つまり、このファイルは Compass を作る層ではなく、messages を描画用へ中継する層である。
-5. このファイル単体が Compass 欠落の直接原因である可能性は低い。
-6. 次に確認すべきは、useRenderMessages(...) の中で Compass を含む message がどう rendered 化されているかである。
 */
 
 /*
 【今回このファイルで修正したこと】
-1. latestAssistantCanonicalState の参照元を hopy_confirmed_payload.state のみに固定しました。
-2. assistant_state / state を優先して読む分離経路をこのファイル内で止めました。
-3. messages が存在する場合の表示用 state は、latestAssistantCanonicalState のみを正として扱うように戻しました。
-4. これにより、本文の HOPY○ と表示用 state が別ソースを読む不整合を、このファイル内で止めました。
+1. lastStableViewThreadIdRef / lastStableMessagesRef / lastStableRenderedRef / lastStableVisibleTextsRef を削除しました。
+2. canReuseStableWorkspace / renderSourceMessages を削除し、描画元を常に current messages に固定しました。
+3. viewMessages / viewRendered / viewVisibleTexts を、現在の messages / rendered / visibleTexts そのままに統一しました。
+4. これにより、このファイル内で旧表示の再利用によって即時反映を遅らせる経路を止めました。
 */
 /* /components/chat/lib/useChatClientViewState.ts */

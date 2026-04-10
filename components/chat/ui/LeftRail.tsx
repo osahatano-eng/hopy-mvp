@@ -11,7 +11,6 @@ import LeftRailNavRow from "./LeftRailNavRow";
 import LeftRailAccountSection from "./LeftRailAccountSection";
 import { useLeftRailController } from "./useLeftRailController";
 import { useLeftRailInlineStyles } from "./leftRailInlineStyles";
-import { buildActiveThreadState } from "./leftRailState";
 import { useLeftRailDragStyle } from "./useLeftRailDragStyle";
 import type { LeftRailProps } from "./leftRailTypes";
 
@@ -43,25 +42,25 @@ function getRailText(uiLang: string) {
 }
 
 function resolveConfirmedThreadState(
-  value: LeftRailProps["activeThreadState"],
-  activeThread: LeftRailProps["activeThread"],
-): NonNullable<LeftRailProps["activeThreadState"]> {
-  if (value && typeof value === "object") {
-    const currentPhase = (value as { current_phase?: unknown }).current_phase;
-    if (
-      currentPhase === 1 ||
-      currentPhase === 2 ||
-      currentPhase === 3 ||
-      currentPhase === 4 ||
-      currentPhase === 5
-    ) {
-      return value as NonNullable<LeftRailProps["activeThreadState"]>;
-    }
+  value: LeftRailProps["activeThreadState"]
+): LeftRailProps["activeThreadState"] {
+  if (!value || typeof value !== "object") {
+    return undefined;
   }
 
-  return buildActiveThreadState(
-    activeThread
-  ) as NonNullable<LeftRailProps["activeThreadState"]>;
+  const currentPhase = (value as { current_phase?: unknown }).current_phase;
+
+  if (
+    currentPhase === 1 ||
+    currentPhase === 2 ||
+    currentPhase === 3 ||
+    currentPhase === 4 ||
+    currentPhase === 5
+  ) {
+    return value;
+  }
+
+  return undefined;
 }
 
 export default function LeftRail(props: LeftRailProps) {
@@ -98,11 +97,9 @@ export default function LeftRail(props: LeftRailProps) {
   const t = React.useMemo(() => buildLeftRailLabels(uiLang), [uiLang]);
   const railText = React.useMemo(() => getRailText(uiLang), [uiLang]);
 
-  const resolvedDirectActiveThreadState = React.useMemo<
-    NonNullable<LeftRailProps["activeThreadState"]>
-  >(() => {
-    return resolveConfirmedThreadState(activeThreadState, activeThread);
-  }, [activeThreadState, activeThread]);
+  const resolvedDirectActiveThreadState = React.useMemo<LeftRailProps["activeThreadState"]>(() => {
+    return resolveConfirmedThreadState(activeThreadState);
+  }, [activeThreadState]);
 
   const controllerProps = React.useMemo<LeftRailProps>(
     () => ({
@@ -151,7 +148,6 @@ export default function LeftRail(props: LeftRailProps) {
     hasThreads,
     activeIdSafe,
     activeThreadTitle,
-    activeThreadState: confirmedActiveThreadState,
     disableNewChat: disableNewChatSafe,
     activeMenuOpen,
     activeMenuRef,
@@ -174,9 +170,8 @@ export default function LeftRail(props: LeftRailProps) {
   void showCloseBtn;
 
   const displayActiveThreadState = React.useMemo(() => {
-    if (resolvedDirectActiveThreadState) return resolvedDirectActiveThreadState;
-    return confirmedActiveThreadState;
-  }, [resolvedDirectActiveThreadState, confirmedActiveThreadState]);
+    return resolvedDirectActiveThreadState;
+  }, [resolvedDirectActiveThreadState]);
 
   const {
     overlayStyle,
@@ -461,7 +456,11 @@ export default function LeftRail(props: LeftRailProps) {
 
           {showRecover ? (
             <div className={styles.block}>
-              <div className={styles.label} style={styles.recoverLabel ? undefined : undefined} title={String(userStateErr ?? "")}>
+              <div
+                className={styles.label}
+                style={styles.recoverLabel ? undefined : undefined}
+                title={String(userStateErr ?? "")}
+              >
                 {t.recoverTitle}
               </div>
 
@@ -515,7 +514,10 @@ export default function LeftRail(props: LeftRailProps) {
 
 /*
 【今回このファイルで修正したこと】
-1. onOpenMemories() の直接呼び出しを onOpenMemories?.() に変更しました。
-2. onOpenMemories が undefined の可能性を含む型でも build が止まらないようにしました。
-3. LeftRail の表示構造、Current Chat、Threads、Recover、AccountSection、状態表示の責務には触れていません。
+1. buildActiveThreadState を使った activeThreadState の再構成を削除しました。
+2. activeThreadState は受け取った確定値だけを通し、欠けている場合は補わず undefined のまま扱うようにしました。
+3. displayActiveThreadState で confirmedActiveThreadState へ逃がしていた別経路を削除しました。
+4. LeftRail 内では activeThreadState を唯一の表示経路として扱うように整理しました。
 */
+
+/* /components/chat/ui/LeftRail.tsx */
