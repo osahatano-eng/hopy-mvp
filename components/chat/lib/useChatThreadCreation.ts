@@ -2,6 +2,7 @@
 "use client";
 
 import { useCallback, useRef } from "react";
+import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ChatMsg } from "./chatTypes";
 import { loadMessages } from "./threadApi";
@@ -11,17 +12,17 @@ import { resolveMessagesOwnerThreadId } from "./chatClientMessageMeta";
 
 type Params = {
   displayLoggedIn: boolean;
-  activeThreadIdRef: React.MutableRefObject<string | null>;
-  messagesRef: React.MutableRefObject<ChatMsg[]>;
-  setThreadBusy: React.Dispatch<React.SetStateAction<boolean>>;
-  setUserStateErr: React.Dispatch<React.SetStateAction<string | null>>;
+  activeThreadIdRef: MutableRefObject<string | null>;
+  messagesRef: MutableRefObject<ChatMsg[]>;
+  setThreadBusy: Dispatch<SetStateAction<boolean>>;
+  setUserStateErr: Dispatch<SetStateAction<string | null>>;
   ensureThreadExists: (threadId: string) => void;
   noteThreadDecision: (tid: string, reason: string) => void;
-  guardedSetMessages: React.Dispatch<React.SetStateAction<ChatMsg[]>>;
+  guardedSetMessages: Dispatch<SetStateAction<ChatMsg[]>>;
   supabase: SupabaseClient;
   scrollToBottom: (behavior?: ScrollBehavior | "auto" | "smooth") => void;
-  setActiveThreadId: React.Dispatch<React.SetStateAction<string | null>>;
-  setVisibleCount: React.Dispatch<React.SetStateAction<number>>;
+  setActiveThreadId: (v: string | null) => void;
+  setVisibleCount: Dispatch<SetStateAction<number>>;
 };
 
 export function useChatThreadCreation({
@@ -229,11 +230,10 @@ export function useChatThreadCreation({
 
 /*
 【今回このファイルで修正したこと】
-1. 新規 thread 確定時に現在 messages を引き継ぐ条件を、activeThreadId だけでなく messages の実所有 thread でも確認するようにしました。
-2. 仮 thread 中でも、snapshot の owner が現在の仮 thread と一致する場合だけ preserve するように絞りました。
-3. これにより、旧スレッド本文を持ったまま仮 thread に入っていた場合は、その旧本文を新規確定 thread へ持ち込まないようにしました。
-4. 反対に、新規チャット開始後に仮 thread 上で積まれた messages だけは、そのまま確定 thread へ引き継げるよう維持しました。
-5. HOPY回答○、Compass、confirmed payload、DB保存/復元には触っていません。
+1. setActiveThreadId の受け口型を Dispatch<SetStateAction<string | null>> から (v: string | null) => void に修正しました。
+2. これにより、ChatClient.tsx から渡している plain setter と型一致するようにしました。
+3. React namespace 型参照をやめ、MutableRefObject / Dispatch / SetStateAction を type import に統一しました。
+4. 新規チャットの表示ロジック、本文採用条件、HOPY回答○、Compass、confirmed payload、DB保存/復元には触っていません。
 */
 
 /*
