@@ -38,34 +38,20 @@ export function useChatClientViewSurface(args: {
   void activeThreadId;
   void userStateErr;
   void lastFailed;
+  void normalizedInput;
 
   const workspaceMode = Boolean(loggedIn);
   const guestMode = !workspaceMode;
   const busy = Boolean(loading || threadBusy);
 
-  const [workspaceHeroDismissed, setWorkspaceHeroDismissed] = React.useState(false);
+  const workspaceHeroDismissed = false;
 
-  React.useEffect(() => {
-    if (!workspaceMode) {
-      setWorkspaceHeroDismissed(false);
-      return;
-    }
+  const setWorkspaceHeroDismissed = React.useCallback(
+    (_next: boolean | ((prev: boolean) => boolean)) => {},
+    [],
+  );
 
-    if (renderedLength > 0) {
-      setWorkspaceHeroDismissed(false);
-      return;
-    }
-  }, [workspaceMode, renderedLength]);
-
-  const dismissWorkspaceHero = React.useCallback(() => {
-    if (!workspaceMode) return;
-    setWorkspaceHeroDismissed(true);
-  }, [workspaceMode]);
-
-  React.useEffect(() => {
-    if (!workspaceMode) return;
-    if (String(normalizedInput ?? "").trim()) setWorkspaceHeroDismissed(true);
-  }, [workspaceMode, normalizedInput]);
+  const dismissWorkspaceHero = React.useCallback(() => {}, []);
 
   const uiForComposer = React.useMemo<UiDict>(() => {
     return {
@@ -173,12 +159,10 @@ HOPY の状態や Compass や hold 条件を再判定する場所ではない。
 
 /*
 【今回このファイルで修正したこと】
-1. useChatClientViewSurface.ts 内に残っていた shouldHoldBlankThreadStage の生成を削除しました。
-2. return から shouldHoldBlankThreadStage を削除し、このフックが hold 条件の責務を持たない形に戻しました。
-3. 未使用の受け取り引数でビルドが不安定にならないように void で明示しました。
+1. 未使用だった workspaceHeroDismissed の state / effect / 実処理 callback を削除しました。
+2. 互換性維持のため、setWorkspaceHeroDismissed / dismissWorkspaceHero は no-op のまま返す形にしました。
+3. この hook を「表示補助値だけを返す」責務へ戻しました。
 4. HOPY唯一の正である state_changed、HOPY回答○、Compass、DB保存、DB復元の判定には触れていません。
 */
 
-/*
-/components/chat/view/hooks/useChatClientViewSurface.ts
-*/
+/* /components/chat/view/hooks/useChatClientViewSurface.ts */

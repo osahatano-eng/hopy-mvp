@@ -229,8 +229,8 @@ stream / preparing / guest intro / workspace hero / jump button の
 
 /*
 【今回このファイルで修正したこと】
-- shouldHoldBlankThreadStage を無視せず、空の中間状態では fallback UI を出さないようにしました。
-- これにより、スレッド切り替え直後に本文未復元の一時状態で初期画面や待機画面へ落ちる経路を、このファイル内で止めました。
+- workspaceHeroLocked の独自 state と effect を削除しました。
+- 描画層での待機画面の記憶責務を消し、受け取った shouldShowWorkspaceHero をそのまま使う形に戻しました。
 - HOPY唯一の正である state_changed / HOPY回答○ / Compass / DB保存 / DB復元の意味判定には触っていません。
 */
 

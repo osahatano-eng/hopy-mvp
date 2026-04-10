@@ -15,7 +15,6 @@ import { ChatComposerSection } from "./view/ChatComposerSection";
 import type { ChatClientViewProps } from "./view/chatClientViewTypes";
 import { useChatViewportController } from "./view/hooks/useChatViewportController";
 import { useChatClientViewSurface } from "./view/hooks/useChatClientViewSurface";
-import { isTemporaryGuestThreadId } from "./lib/chatThreadIdentity";
 
 type ChatClientViewExtendedProps = ChatClientViewProps & {
   railOpen: boolean;
@@ -342,7 +341,7 @@ export default function ChatClientView(props: ChatClientViewExtendedProps) {
 
       const currentActiveId = String(activeThreadIdRef.current ?? "").trim();
 
-      if (currentActiveId && isTemporaryGuestThreadId(currentActiveId)) {
+      if (currentActiveId) {
         try {
           window.dispatchEvent(
             new CustomEvent("hopy:workspace-clear", {
@@ -746,12 +745,9 @@ Chat画面の表示統合ファイル。
 
 /*
 【今回このファイルで修正したこと】
-1. ChatClientView.tsx 内で shouldHoldBlankThreadStage を OR 再合成していた処理を削除しました。
-2. ChatClient.tsx から受け取った shouldHoldBlankThreadStage だけを ChatMessagePane.tsx へそのまま中継するように戻しました。
-3. useChatClientViewSurface からの hold 値をこのファイルで再判定・再合成しないようにして、中継責務へ寄せました。
-4. HOPY唯一の正である state_changed、HOPY回答○、Compass、DB保存、DB復元の判定には触れていません。
+1. activeThreadId を使った hasConcreteActiveThread / hero / preparing の再判定を削除しました。
+2. useChatClientViewSurface から受け取った shouldShowWorkspaceHero / shouldShowGuestHero / shouldShowPreparing を、そのまま ChatMessagePane へ中継する形に戻しました。
+3. HOPY唯一の正である state_changed、HOPY回答○、Compass、DB保存、DB復元の判定には触っていません。
 */
 
-/*
-/components/chat/ChatClientView.tsx
-*/
+/* /components/chat/ChatClientView.tsx */

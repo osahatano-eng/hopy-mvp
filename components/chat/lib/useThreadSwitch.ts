@@ -1,7 +1,7 @@
 // /components/chat/lib/useThreadSwitch.ts
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Dispatch, SetStateAction, RefObject } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -188,7 +188,7 @@ export function useThreadSwitch(params: {
 
   const switchSeqRef = useRef(0);
   const lastGoodThreadIdRef = useRef<string | null>(null);
-  const inflightThreadIdRef = useRef<string>("");
+  const [retrySeq, setRetrySeq] = useState(0);
 
   const activeThreadIdRef = useRef<string | null>(null);
   useEffect(() => {
@@ -230,7 +230,26 @@ export function useThreadSwitch(params: {
       const prev = String(activeThreadIdRef.current ?? "").trim();
 
       if (nextId === prev) {
-        logInfo("[useThreadSwitch] already active thread", { nextId, source });
+        const lastGood = String(lastGoodThreadIdRef.current ?? "").trim();
+        const needsRetry = lastGood !== nextId;
+
+        if (!needsRetry) {
+          logInfo("[useThreadSwitch] already active thread", { nextId, source });
+          return;
+        }
+
+        logInfo("[useThreadSwitch] retry active thread load", {
+          nextId,
+          source,
+          lastGood: lastGood || null,
+        });
+
+        lastSwitchSourceRef.current = source;
+
+        try {
+          setRetrySeq((v) => v + 1);
+        } catch {}
+
         return;
       }
 
@@ -455,20 +474,16 @@ export function useThreadSwitch(params: {
 
     activeThreadIdRef.current = nextId;
 
-    if (inflightThreadIdRef.current === nextId) return;
-
     let disposed = false;
     const seq = ++switchSeqRef.current;
     const source = lastSwitchSourceRef.current;
-
-    inflightThreadIdRef.current = nextId;
 
     const isAlive = () => !disposed && seq === switchSeqRef.current;
     const isCurrentSelection = () => String(activeThreadIdRef.current ?? "").trim() === nextId;
     const canCommitCurrentThread = () => isAlive() && isCurrentSelection();
 
     const run = async () => {
-      const prevGood = lastGoodThreadIdRef.current;
+      const prevGood = String(lastGoodThreadIdRef.current ?? "").trim();
 
       try {
         p.setThreadBusy(true);
@@ -496,34 +511,26 @@ export function useThreadSwitch(params: {
           loadedMessages = await loadMessages(p.supabase, nextId);
         } catch (e) {
           const reason = `messages load failed: ${errText(e)}`;
-          logWarn("[useThreadSwitch] loadMessages failed -> recover", {
+          logWarn("[useThreadSwitch] loadMessages failed", {
             nextId,
-            prevGood,
+            prevGood: prevGood || null,
             reason,
             seq,
           });
 
-          if (isAlive()) {
-            const rollback = String(prevGood ?? "").trim();
+          if (canCommitCurrentThread()) {
             const canRollback =
-              rollback &&
-              rollback !== nextId &&
-              !isTemporaryGuestThreadId(rollback) &&
-              hasThreadId(threadsRef.current, rollback);
+              prevGood &&
+              prevGood !== nextId &&
+              !isTemporaryGuestThreadId(prevGood) &&
+              hasThreadId(threadsRef.current, prevGood);
 
             if (canRollback) {
               lastSwitchSourceRef.current = "event";
-              activeThreadIdRef.current = rollback;
+              activeThreadIdRef.current = prevGood;
 
               try {
-                p.setActiveThreadId(rollback);
-              } catch {}
-            } else {
-              lastSwitchSourceRef.current = "event";
-              activeThreadIdRef.current = nextId;
-
-              try {
-                p.setActiveThreadId(nextId);
+                p.setActiveThreadId(prevGood);
               } catch {}
             }
 
@@ -576,12 +583,6 @@ export function useThreadSwitch(params: {
           p.inputRef?.current?.focus?.();
         });
       } finally {
-        try {
-          if (inflightThreadIdRef.current === nextId) {
-            inflightThreadIdRef.current = "";
-          }
-        } catch {}
-
         if (canCommitCurrentThread()) {
           try {
             p.setThreadBusy(false);
@@ -597,7 +598,7 @@ export function useThreadSwitch(params: {
     return () => {
       disposed = true;
     };
-  }, [activeThreadId]);
+  }, [activeThreadId, retrySeq]);
 
   return { selectThread };
 }
@@ -610,9 +611,10 @@ export function useThreadSwitch(params: {
 
 /*
 【今回このファイルで修正したこと】
-1. loadMessages() へ setMessages / setVisibleCount / scrollToBottom を渡すのをやめ、取得は loadMessages(supabase, threadId) だけに絞りました。
-2. 本文採用、setMessages、setVisibleCount、scrollToBottom を useThreadSwitch.ts の1箇所へ戻し、「現在の activeThreadId に一致する最新要求だけを1回反映する」形に修正しました。
-3. 先行クリア、HOPY回答○、Compass、state_changed、confirmed payload、DB保存、DB復元の唯一の正には触っていません。
+1. 本文同期に不要だった inflightThreadIdRef の重複抑止責務を削除しました。
+2. 本文採用の正を switchSeqRef と activeThreadId 一致へ寄せ、採用フローを軽くしました。
+3. 読込失敗時の復元分岐を最小限に整理し、不要な再セット経路を削除しました。
+4. HOPY回答○、Compass、state_changed、confirmed payload、DB保存、DB復元の唯一の正には触っていません。
 */
 
 /* /components/chat/lib/useThreadSwitch.ts */

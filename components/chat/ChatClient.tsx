@@ -196,8 +196,6 @@ export default function ChatClient() {
   const atBottomRef = useRef(true);
 
   const pendingEmptyThreadIdRef = useRef<string | null>(null);
-  const threadMessagesCacheRef = useRef<Record<string, ChatMsg[]>>({});
-  const messagesOwnerThreadIdRef = useRef<string | null>(null);
   const lastThreadDecisionRef = useRef<ThreadDecision | null>(null);
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior | "auto" | "smooth" = "auto") => {
@@ -246,13 +244,8 @@ export default function ChatClient() {
     enabled: true,
   });
 
-  const clearThreadViewRefs = useCallback((clearCache: boolean) => {
+  const clearThreadViewRefs = useCallback(() => {
     pendingEmptyThreadIdRef.current = null;
-    messagesOwnerThreadIdRef.current = null;
-
-    if (clearCache) {
-      threadMessagesCacheRef.current = {};
-    }
   }, []);
 
   const resetRailState = useCallback(() => {
@@ -334,7 +327,7 @@ export default function ChatClient() {
       }
 
       try {
-        clearThreadViewRefs(true);
+        clearThreadViewRefs();
       } catch {}
     },
     [clearThreadViewRefs, resetRailState]
@@ -362,7 +355,7 @@ export default function ChatClient() {
     } catch {}
 
     try {
-      clearThreadViewRefs(false);
+      clearThreadViewRefs();
     } catch {}
   }, [clearThreadViewRefs]);
 
@@ -444,21 +437,6 @@ export default function ChatClient() {
   const currentMessagesOwnerThreadId = useMemo(() => {
     return resolveMessagesOwnerThreadId(messages);
   }, [messages]);
-
-  useEffect(() => {
-    if (!displayLoggedIn) return;
-    if (!Array.isArray(messages) || messages.length <= 0) return;
-
-    const resolvedTid = String(currentMessagesOwnerThreadId ?? "").trim();
-    const fallbackTid = String(activeThreadIdRef.current ?? "").trim();
-    const tid = resolvedTid || fallbackTid;
-
-    if (!tid) return;
-    if (isTemporaryGuestThreadId(tid)) return;
-
-    messagesOwnerThreadIdRef.current = tid;
-    threadMessagesCacheRef.current[tid] = messages;
-  }, [displayLoggedIn, messages, currentMessagesOwnerThreadId]);
 
   useEffect(() => {
     if (!loading) return;
@@ -794,41 +772,12 @@ export default function ChatClient() {
     if (!displayLoggedIn) return messages;
 
     const activeTid = String(activeThreadId ?? "").trim();
-    if (!activeTid) return messages;
+    if (!activeTid) return [];
     if (isTemporaryGuestThreadId(activeTid)) return messages;
 
-    const currentOwnerTid = String(currentMessagesOwnerThreadId ?? "").trim();
-    if (currentOwnerTid) {
-      if (currentOwnerTid === activeTid) {
-        return messages;
-      }
-
-      const cached = threadMessagesCacheRef.current[activeTid];
-      if (Array.isArray(cached)) {
-        const cachedOwnerTid = resolveMessagesOwnerThreadId(cached);
-        if (!cachedOwnerTid || cachedOwnerTid === activeTid) {
-          return cached;
-        }
-
-        delete threadMessagesCacheRef.current[activeTid];
-      }
-
-      return [];
-    }
-
-    const ownerTid = String(messagesOwnerThreadIdRef.current ?? "").trim();
+    const ownerTid = String(currentMessagesOwnerThreadId ?? "").trim();
     if (!ownerTid || ownerTid === activeTid) {
       return messages;
-    }
-
-    const cached = threadMessagesCacheRef.current[activeTid];
-    if (Array.isArray(cached)) {
-      const cachedOwnerTid = resolveMessagesOwnerThreadId(cached);
-      if (!cachedOwnerTid || cachedOwnerTid === activeTid) {
-        return cached;
-      }
-
-      delete threadMessagesCacheRef.current[activeTid];
     }
 
     return [];
@@ -838,7 +787,6 @@ export default function ChatClient() {
     viewMessages,
     viewRendered,
     viewVisibleTexts,
-    viewActiveThreadId,
     viewActiveThread,
     activeThreadStateLevel,
     viewUserState,
@@ -986,12 +934,8 @@ export default function ChatClient() {
     if (!displayLoggedIn) return null;
 
     const rawActive = String(activeThreadId ?? "").trim();
-    if (rawActive && isTemporaryGuestThreadId(rawActive)) {
-      return rawActive;
-    }
-
-    return viewActiveThreadId || null;
-  }, [displayLoggedIn, activeThreadId, viewActiveThreadId]);
+    return rawActive || null;
+  }, [displayLoggedIn, activeThreadId]);
 
   const shouldHoldBlankThreadStage = useMemo(() => {
     if (!displayLoggedIn) return false;
@@ -1119,10 +1063,10 @@ messages / threads / activeThreadId / rendered / visibleTexts など、
 
 /*
 【今回このファイルで修正したこと】
-1. 現在の messages 自体から owner thread_id を推定する helper を追加しました。
-2. cache 保存時に、activeThreadIdRef.current へ寄せず、messages 自体が属する thread_id を優先して保存するようにしました。
-3. messagesForView で cache を返す前に、その cache が本当に activeThreadId の本文かを検証し、別 thread_id の cache は採用しないようにしました。
-4. HOPY回答○ / Compass / state_changed / confirmed payload / DB保存 / DB復元の唯一の正には触っていません。
+1. threadMessagesCacheRef / messagesOwnerThreadIdRef を削除し、ChatClient.tsx 内での本文キャッシュ採用をやめました。
+2. messagesForView は「現在の activeThreadId に一致する messages だけを渡す」形へ絞りました。
+3. activeThreadIdForView の viewActiveThreadId fallback を削除し、選択の正を activeThreadId だけに戻しました。
+4. messages 読込責務、HOPY回答○、Compass、state_changed、confirmed payload、DB保存、DB復元の唯一の正には触っていません。
 */
 
 /* /components/chat/ChatClient.tsx */
