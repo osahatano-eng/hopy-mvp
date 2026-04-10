@@ -14,7 +14,9 @@ type Params = {
 export function useChatAuth({ supabase, setEmail }: Params) {
   const router = useRouter();
 
-  const LOGOUT_REDIRECT_PATH = "/chat";
+  const LOGOUT_REDIRECT_PATH = "/";
+  const LOGOUT_REDIRECT_MARKER_KEY = "hopy_logout_redirect_pending_at";
+  const LOGOUT_REDIRECT_MARKER_TTL_MS = 10_000;
 
   const didSignOutRedirectRef = useRef(false);
   const lastAuthEventRef = useRef<string>("");
@@ -40,6 +42,72 @@ export function useChatAuth({ supabase, setEmail }: Params) {
   }, [sessionOk]);
 
   const [logoutRedirecting, setLogoutRedirecting] = useState(false);
+
+  const markLogoutRedirectPending = () => {
+    if (typeof window === "undefined") return;
+    try {
+      window.sessionStorage.setItem(
+        LOGOUT_REDIRECT_MARKER_KEY,
+        String(Date.now()),
+      );
+    } catch {}
+  };
+
+  const clearLogoutRedirectPending = () => {
+    if (typeof window === "undefined") return;
+    try {
+      window.sessionStorage.removeItem(LOGOUT_REDIRECT_MARKER_KEY);
+    } catch {}
+  };
+
+  const hasFreshLogoutRedirectPending = () => {
+    if (typeof window === "undefined") return false;
+
+    try {
+      const raw = window.sessionStorage.getItem(LOGOUT_REDIRECT_MARKER_KEY);
+      const at = Number(raw ?? "");
+      if (!Number.isFinite(at) || at <= 0) {
+        window.sessionStorage.removeItem(LOGOUT_REDIRECT_MARKER_KEY);
+        return false;
+      }
+
+      const age = Date.now() - at;
+      if (age < 0 || age > LOGOUT_REDIRECT_MARKER_TTL_MS) {
+        window.sessionStorage.removeItem(LOGOUT_REDIRECT_MARKER_KEY);
+        return false;
+      }
+
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const redirectToLogoutPath = () => {
+    if (didSignOutRedirectRef.current) return;
+    didSignOutRedirectRef.current = true;
+
+    microtask(() => {
+      try {
+        if (typeof window !== "undefined") {
+          if (window.location.pathname !== LOGOUT_REDIRECT_PATH) {
+            window.location.replace(LOGOUT_REDIRECT_PATH);
+            return;
+          }
+        }
+      } catch {}
+
+      try {
+        router.replace(LOGOUT_REDIRECT_PATH);
+      } catch {
+        try {
+          if (typeof window !== "undefined") {
+            window.location.href = LOGOUT_REDIRECT_PATH;
+          }
+        } catch {}
+      }
+    });
+  };
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -67,7 +135,9 @@ export function useChatAuth({ supabase, setEmail }: Params) {
       try {
         const { data } = await supabase.auth.getSession();
         const s = data?.session ?? null;
-        const ok = Boolean(s?.user?.id) && Boolean(String(s?.access_token ?? "").trim());
+        const ok =
+          Boolean(s?.user?.id) &&
+          Boolean(String(s?.access_token ?? "").trim());
         if (ok) return true;
       } catch {}
     }
@@ -88,6 +158,7 @@ export function useChatAuth({ supabase, setEmail }: Params) {
         if (!alive) return;
 
         if (ok) {
+          clearLogoutRedirectPending();
           setSessionOk(true);
           setLogoutRedirecting(false);
         }
@@ -130,6 +201,9 @@ export function useChatAuth({ supabase, setEmail }: Params) {
             const s = data?.session ?? null;
 
             if (!s?.user) {
+              const shouldContinueLogoutRedirect =
+                hasFreshLogoutRedirectPending();
+
               if (signedOutCauseRef.current) {
                 setAuthUserId(null);
                 setEmail("");
@@ -143,11 +217,17 @@ export function useChatAuth({ supabase, setEmail }: Params) {
                   emailRef.current = "";
                   setSessionOk(false);
                 } else {
-                  // 以前ログイン済みなら表示は維持
+                  // 以前ログイン済みなら authUserId は一時維持
                 }
               }
 
               setAuthReady(true);
+
+              if (shouldContinueLogoutRedirect) {
+                setLogoutRedirecting(true);
+                redirectToLogoutPath();
+              }
+
               return;
             }
 
@@ -155,13 +235,16 @@ export function useChatAuth({ supabase, setEmail }: Params) {
             const em2 = String((s.user as any)?.email ?? "");
 
             signedOutCauseRef.current = false;
+            clearLogoutRedirectPending();
 
             setAuthUserId(uid2);
             setEmail(em2);
             emailRef.current = em2;
             setAuthReady(true);
 
-            const ok = Boolean(uid2) && Boolean(String(s?.access_token ?? "").trim());
+            const ok =
+              Boolean(uid2) &&
+              Boolean(String(s?.access_token ?? "").trim());
             setSessionOk(ok);
             if (ok) setLogoutRedirecting(false);
           } catch {
@@ -187,9 +270,17 @@ export function useChatAuth({ supabase, setEmail }: Params) {
         setEmail(em);
         emailRef.current = em;
 
-        const ok = Boolean(uid) && Boolean(String(session?.access_token ?? "").trim());
+        const ok =
+          Boolean(uid) && Boolean(String(session?.access_token ?? "").trim());
         setSessionOk(ok);
-        if (ok) setLogoutRedirecting(false);
+
+        if (ok) {
+          clearLogoutRedirectPending();
+          setLogoutRedirecting(false);
+        } else if (hasFreshLogoutRedirectPending()) {
+          setLogoutRedirecting(true);
+          redirectToLogoutPath();
+        }
       } catch {
       } finally {
         if (alive) setAuthReady(true);
@@ -207,40 +298,17 @@ export function useChatAuth({ supabase, setEmail }: Params) {
 
       if (event === "SIGNED_OUT") {
         signedOutCauseRef.current = true;
+        markLogoutRedirectPending();
         clearTransientTimer();
 
-        const uid = String(session?.user?.id ?? "") || null;
-        const em = String(session?.user?.email ?? "");
-
-        setAuthUserId(uid);
-        setEmail(em);
-        emailRef.current = em;
+        setAuthUserId(null);
+        setEmail("");
+        emailRef.current = "";
         setAuthReady(true);
         setSessionOk(false);
         setLogoutRedirecting(true);
 
-        if (!session) {
-          if (didSignOutRedirectRef.current) return;
-          didSignOutRedirectRef.current = true;
-
-          microtask(() => {
-            try {
-              if (typeof window !== "undefined") {
-                window.location.replace(LOGOUT_REDIRECT_PATH);
-                return;
-              }
-            } catch {}
-
-            try {
-              router.replace(LOGOUT_REDIRECT_PATH);
-            } catch {
-              try {
-                window.location.href = LOGOUT_REDIRECT_PATH;
-              } catch {}
-            }
-          });
-        }
-
+        redirectToLogoutPath();
         return;
       }
 
@@ -249,6 +317,9 @@ export function useChatAuth({ supabase, setEmail }: Params) {
 
         const uid = String(session.user.id ?? "") || null;
         const em = String((session.user as any)?.email ?? "");
+
+        signedOutCauseRef.current = false;
+        clearLogoutRedirectPending();
 
         setAuthUserId(uid);
         setEmail(em);
@@ -259,7 +330,9 @@ export function useChatAuth({ supabase, setEmail }: Params) {
           didSignOutRedirectRef.current = false;
         }
 
-        const tokenOk = Boolean(String((session as any)?.access_token ?? "").trim());
+        const tokenOk = Boolean(
+          String((session as any)?.access_token ?? "").trim(),
+        );
         if (uid && tokenOk) {
           setSessionOk(true);
           setLogoutRedirecting(false);
@@ -271,6 +344,7 @@ export function useChatAuth({ supabase, setEmail }: Params) {
             if (!alive) return;
 
             if (ok) {
+              clearLogoutRedirectPending();
               setSessionOk(true);
               setLogoutRedirecting(false);
             }
@@ -303,16 +377,10 @@ export function useChatAuth({ supabase, setEmail }: Params) {
 
   const loggedIn = authReady && Boolean(authUserId) && Boolean(sessionOk);
 
-  const hasChatIdentity = useMemo(() => {
-    return Boolean(String(authUserId ?? "").trim()) || Boolean(String(emailRef.current ?? "").trim());
-  }, [authUserId]);
-
   const displayLoggedIn = useMemo(() => {
     if (!authReady) return false;
-    if (loggedIn) return true;
-    if (logoutRedirecting && signedOutCauseRef.current) return false;
-    return !signedOutCauseRef.current && hasChatIdentity;
-  }, [authReady, loggedIn, logoutRedirecting, hasChatIdentity]);
+    return loggedIn;
+  }, [authReady, loggedIn]);
 
   const loggedInRef = useRef(false);
   useEffect(() => {
@@ -339,6 +407,10 @@ export function useChatAuth({ supabase, setEmail }: Params) {
 
 /*
 【今回このファイルで修正したこと】
-Supabase の auth event 型に含まれていない "USER_DELETED" 比較を削除し、
-"SIGNED_OUT" のみで判定するようにして build の型エラーを止めました。
+1. SIGNED_OUT 時だけに依存せず、「直前に logout 済み」であることを sessionStorage に短時間だけ保持するようにしました。
+2. getSession() / 再評価で session なしが確定した場合でも、logout 直後の印が残っていれば / へ再収束するように固定しました。
+3. session 復帰成功時は logout 用の印を必ず消し、通常のログイン導線を壊さないようにしました。
+4. HOPY回答○ / Compass / state_changed / DB / 左カラム / MEMORIES には触っていません。
 */
+
+/* /components/chat/lib/useChatAuth.ts */

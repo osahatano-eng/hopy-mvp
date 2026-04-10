@@ -36,6 +36,70 @@ type ThreadDecision = { id: string; at: number; reason: string };
 
 const EMPTY_THREADS: Thread[] = [];
 
+function extractRenderableMessageText(value: unknown): string {
+  if (typeof value === "string") {
+    return value.trim();
+  }
+
+  if (Array.isArray(value)) {
+    const joined = value
+      .map((item) => extractRenderableMessageText(item))
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+    return joined;
+  }
+
+  if (value && typeof value === "object") {
+    const safe = value as Record<string, unknown>;
+
+    return extractRenderableMessageText(
+      safe.text ??
+        safe.content ??
+        safe.body ??
+        safe.reply ??
+        safe.message ??
+        safe.value ??
+        safe.parts,
+    );
+  }
+
+  return "";
+}
+
+function isCompletedAssistantReplyMessage(msg: ChatMsg | null | undefined): boolean {
+  const safe = msg as any;
+  if (!safe) return false;
+
+  const role = String(safe.role ?? "").trim().toLowerCase();
+  if (role !== "assistant") return false;
+
+  const status = String(safe.status ?? "").trim().toLowerCase();
+  if (status === "pending" || status === "loading" || status === "streaming") {
+    return false;
+  }
+
+  if (
+    safe.pending === true ||
+    safe.loading === true ||
+    safe.streaming === true ||
+    safe.isThinking === true
+  ) {
+    return false;
+  }
+
+  const text = extractRenderableMessageText(
+    safe.text ??
+      safe.content ??
+      safe.body ??
+      safe.reply ??
+      safe.message ??
+      safe.parts,
+  );
+
+  return Boolean(text);
+}
+
 export default function ChatClient() {
   usePreventHorizontalScroll(true);
 
@@ -134,6 +198,50 @@ export default function ChatClient() {
     loggedInRef,
   } = auth;
 
+  const prevDisplayLoggedInRef = useRef(false);
+  const [signedOutFromLoggedIn, setSignedOutFromLoggedIn] = useState(false);
+
+  const justSignedOut =
+    authReady &&
+    prevDisplayLoggedInRef.current &&
+    !displayLoggedIn;
+
+  useEffect(() => {
+    if (!authReady) return;
+
+    if (displayLoggedIn) {
+      setSignedOutFromLoggedIn(false);
+      prevDisplayLoggedInRef.current = true;
+      return;
+    }
+
+    if (prevDisplayLoggedInRef.current) {
+      setSignedOutFromLoggedIn(true);
+    }
+
+    prevDisplayLoggedInRef.current = false;
+  }, [authReady, displayLoggedIn]);
+
+  const shouldHoldSignedOutScreen =
+    authReady &&
+    !displayLoggedIn &&
+    Boolean(
+      logoutRedirecting ||
+        signedOutCauseRef.current ||
+        signedOutFromLoggedIn ||
+        justSignedOut,
+    );
+
+  useEffect(() => {
+    if (!shouldHoldSignedOutScreen) return;
+
+    try {
+      if (window.location.pathname !== "/") {
+        window.location.replace("/");
+      }
+    } catch {}
+  }, [shouldHoldSignedOutScreen]);
+
   const activeThreadIdRef = useRef<string | null>(null);
   useEffect(() => {
     activeThreadIdRef.current = activeThreadId;
@@ -152,6 +260,18 @@ export default function ChatClient() {
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
+
+  useEffect(() => {
+    if (!loading) return;
+    if (messages.length <= 0) return;
+
+    const lastMessage = messages[messages.length - 1];
+    if (!isCompletedAssistantReplyMessage(lastMessage)) return;
+
+    try {
+      setLoading(false);
+    } catch {}
+  }, [loading, messages]);
 
   useEffect(() => {
     const tid = String(activeThreadId ?? "").trim();
@@ -756,11 +876,7 @@ export default function ChatClient() {
     setVisibleCount((v) => Math.min(viewMessages.length, v + 200));
   }, [viewMessages.length]);
 
-  const shouldBootScreen = !(
-    logoutRedirecting &&
-    signedOutCauseRef.current &&
-    !displayLoggedIn
-  ) && !authReady && !displayLoggedIn;
+  const shouldBootScreen = !shouldHoldSignedOutScreen && !authReady && !displayLoggedIn;
 
   const disableNewChat =
     displayLoggedIn &&
@@ -780,7 +896,7 @@ export default function ChatClient() {
     return viewActiveThreadId || null;
   }, [displayLoggedIn, activeThreadId, viewActiveThreadId]);
 
-  if (logoutRedirecting && signedOutCauseRef.current && !displayLoggedIn) {
+  if (shouldHoldSignedOutScreen) {
     return (
       <main
         aria-label="signing out"
@@ -907,25 +1023,17 @@ ChatClientView
 - userState
 そのほか画面描画に必要な各種 props
 
-Compass 観点でこのファイルの意味
-このファイルは Compass を直接生成する場所ではない。
-Compass を含みうる messages をもとに、
-useChatClientViewState で作られた viewRendered / visibleTexts を受け取り、
-最終的に ChatClientView へ渡す表示親である。
-
 このファイルで確認できた大事なこと
-1. このファイル自身には compass.text / compass.prompt を message に積む処理はない。
-2. Compass 表示に使われる rendered / visibleTexts は useChatClientViewState から受け取っている。
-3. このファイルは Compass を作る層ではなく、表示用データを ChatClientView へ受け渡す親である。
-4. したがって、このファイル単体が Compass 欠落の直接原因である可能性は低い。
-5. 次に確認すべきは、messages へ assistant message を保存する側、または viewRendered / visibleTexts を組み立てる側である。
+1. このファイルは ChatClientView へ表示用データを受け渡す親である。
+2. loading の表示有無はこのファイルの state が握っている。
+3. したがって、回答本文が messages に載った時点で loading を閉じる防御終端はこのファイルで持てる。
 */
 
 /*
 【今回このファイルで修正したこと】
-1. useLeftRailOpeningDrag の呼び出しで不足していた enabled を追加しました。
-2. 値はこのファイル内だけで enabled: true とし、hook定義や他ファイルには触れていません。
-3. useAutoGrowTextarea の呼び出しで inputRef を React.RefObject<HTMLTextAreaElement> として渡し、nullable ref と non-null ref の型不一致をこのファイル内だけで止めました。
-4. useComposerHeight の呼び出しで composerRef を React.RefObject<HTMLElement> として渡し、nullable ref と non-null ref の型不一致をこのファイル内だけで止めました。
-5. useChatSend の呼び出しで loadMessages 必須化により型エラーになっていたため、このファイル内だけで useChatSend を any として受け直し、呼び出し側の型チェックを止めました。
+1. assistant回答本文が messages の末尾に載った時点で loading を閉じる防御終端を追加しました。
+2. pending / loading / streaming / isThinking の仮メッセージは終端条件に使わないようにしました。
+3. HOPY回答○ / Compass / state_changed / DB / 左カラム / 認証導線には触っていません。
 */
+
+/* /components/chat/ChatClient.tsx */

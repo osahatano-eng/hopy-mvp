@@ -141,8 +141,14 @@ function isMobileNow() {
 function safeGoHome() {
   try {
     if (typeof window === "undefined") return;
-    window.location.replace("/");
-  } catch {}
+    const homeUrl = new URL("/", window.location.origin).toString();
+    window.location.replace(homeUrl);
+  } catch {
+    try {
+      if (typeof window === "undefined") return;
+      window.location.replace("/");
+    } catch {}
+  }
 }
 
 function canUseStorage(kind: "localStorage" | "sessionStorage") {
@@ -951,7 +957,11 @@ export default function ChatHeader(props: {
 
 /*
 【今回このファイルで修正したこと】
-1. onLogout 内で supabase.auth.signOut() を無制限待機させず、4秒で抜けるようにしました。
-2. signOut が止まっても、ローカル認証掃除と UI の未認証化と "/" への遷移まで進めるようにしました。
-3. 既存のメニュー表示、言語切替、左カラム開閉、状態の唯一の正には触っていません。
+1. safeGoHome() の "/" 遷移を相対指定から origin基準の絶対URL遷移へ変更しました。
+2. dev tool起動時でもログアウト後の着地点が / に固定されやすいよう、遷移先の解釈ぶれを減らしました。
+3. signOut timeout、認証掃除、メニュー表示、言語切替、HOPY唯一の正には触っていません。
+*/
+
+/*
+/components/chat/ui/ChatHeader.tsx
 */
