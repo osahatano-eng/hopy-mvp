@@ -441,6 +441,7 @@ export function useThreadSwitch(params: {
         if (!id) return;
 
         const current = String(activeThreadIdRef.current ?? "").trim();
+        const currentIsTemporary = isTemporaryGuestThreadId(current);
         const existsInCurrentList = hasThreadId(threadsRef.current, id);
         const isExplicit = isExplicitThreadSelectionDetail(d);
 
@@ -455,12 +456,13 @@ export function useThreadSwitch(params: {
 
         if (
           current &&
+          !currentIsTemporary &&
           id !== current &&
           via !== "direct" &&
           existsInCurrentList &&
           !isExplicit
         ) {
-          logInfo("[useThreadSwitch] ignore passive existing-thread event while another thread is active", {
+          logInfo("[useThreadSwitch] ignore passive existing-thread event while another real thread is active", {
             current,
             id,
             via,
@@ -667,9 +669,9 @@ export function useThreadSwitch(params: {
 
 /*
 【今回このファイルで修正したこと】
-1. hopy:thread 受信時に、明示選択ではない既存スレッドイベントまで selectThread へ流れていた経路を止めました。
-2. すでに選択中スレッドがある状態では、既存スレッド一覧に存在する別スレッドの受動イベントでは activeThreadId を奪わないようにしました。
-3. 新規スレッド生成や明示選択で使えるように、select/selected/activate/active/forceSelect/open と reason 系の明示選択フラグだけは通すようにしました。
+1. 新規チャット未送信中の一時 thread_id を current に持っている場合は、既存スレッドへの受動イベントを無視しないように修正しました。
+2. 受動イベントを無視する条件を「別の real thread が active のとき」だけに限定しました。
+3. これにより、新規チャット待機状態から既存スレッドへ戻れず固まる経路だけをこのファイル内で止めました。
 4. 本文採用条件、HOPY回答○、Compass、state_changed、confirmed payload、DB保存、DB復元の唯一の正には触っていません。
 */
 
