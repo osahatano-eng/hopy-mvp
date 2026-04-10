@@ -17,26 +17,8 @@ export function resolveMergedUserStateForView({
   }, [viewUserState]);
 
   const mergedUserStateForView = useMemo(() => {
-    const rawState =
-      viewUserState && typeof viewUserState === "object"
-        ? (viewUserState as Record<string, unknown>)
-        : null;
-
-    const normalizedState =
-      normalizedResolvedViewUserState && typeof normalizedResolvedViewUserState === "object"
-        ? (normalizedResolvedViewUserState as Record<string, unknown>)
-        : null;
-
-    if (rawState && normalizedState) {
-      return {
-        ...rawState,
-        ...normalizedState,
-      } as HopyState;
-    }
-
-    if (normalizedState) return normalizedResolvedViewUserState;
-    if (rawState) return rawState as HopyState;
-
+    if (normalizedResolvedViewUserState) return normalizedResolvedViewUserState;
+    if (viewUserState) return viewUserState;
     return null;
   }, [viewUserState, normalizedResolvedViewUserState]);
 
@@ -48,15 +30,17 @@ export function resolveMergedUserStateForView({
 
 /*
 このファイルの正式役割
-表示用 userState の正規化とマージ責務だけを持つファイル。
+表示用 userState の正規化と受け渡し責務だけを持つファイル。
 ChatClient 親本体から、viewUserState を表示用に整える責務を切り出し、
 親は受け渡しだけに寄せるための責務分離先である。
 */
 
 /*
 【今回このファイルで修正したこと】
-1. ChatClient.tsx 内にあった normalizedResolvedViewUserState の解決責務を新規ファイルへ分離しました。
-2. ChatClient.tsx 内にあった mergedUserStateForView の解決責務を新規ファイルへ分離しました。
-3. 状態の唯一の正は再生成せず、既存の normalizeHopyState と既存マージ順だけをそのまま移しています。
+1. rawState と normalizedState のマージ処理を削除しました。
+2. mergedUserStateForView は、normalizeHopyState(viewUserState) の結果を優先し、なければ viewUserState をそのまま返す形に戻しました。
+3. 表示用 userState をこの層で再構成しないようにし、不要な fallback 補完を減らしました。
 4. activeThread 解決、左カラム状態送出、送信処理、Compass本体、MEMORIES、他責務には触っていません。
 */
+
+/* /components/chat/view/resolveMergedUserStateForView.ts */

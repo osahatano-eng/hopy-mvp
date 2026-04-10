@@ -21,8 +21,10 @@ export function resolveActiveThreadStateForView({
   displayLoggedIn,
   isViewingPendingEmptyThread,
   viewActiveThread,
-  normalizedResolvedViewUserState,
+  normalizedResolvedViewUserState: _normalizedResolvedViewUserState,
 }: Params): Result {
+  void _normalizedResolvedViewUserState;
+
   const resolvedActiveThreadForView = useMemo(() => {
     if (!displayLoggedIn) return null;
     if (isViewingPendingEmptyThread) return null;
@@ -33,48 +35,35 @@ export function resolveActiveThreadStateForView({
   const resolvedActiveThreadState = useMemo<ConfirmedThreadState | null>(() => {
     if (!displayLoggedIn) return null;
     if (isViewingPendingEmptyThread) return null;
+    if (!resolvedActiveThreadForView) return null;
 
-    const source = resolvedActiveThreadForView as any;
-    const fallback = normalizedResolvedViewUserState;
+    const source = resolvedActiveThreadForView as Partial<ConfirmedThreadState> | null;
+    if (!source) return null;
 
-    const currentPhase =
-      clampStatePhase(source?.current_phase) ??
-      clampStatePhase(source?.state_level) ??
-      clampStatePhase(fallback?.current_phase) ??
-      clampStatePhase(fallback?.state_level);
+    const currentPhase = clampStatePhase(source.current_phase);
+    const stateLevel = clampStatePhase(source.state_level);
+    const prevPhase = clampStatePhase(source.prev_phase);
+    const prevStateLevel = clampStatePhase(source.prev_state_level);
+    const stateChanged = source.state_changed;
 
-    if (!currentPhase) return null;
-
-    const prevPhase =
-      clampStatePhase(source?.prev_phase) ??
-      clampStatePhase(source?.prev_state_level) ??
-      clampStatePhase(fallback?.prev_phase) ??
-      clampStatePhase(fallback?.prev_state_level) ??
-      currentPhase;
-
-    const sourceChanged = source?.state_changed;
-    const fallbackChanged = fallback?.state_changed;
-
-    const stateChanged =
-      typeof sourceChanged === "boolean"
-        ? sourceChanged
-        : typeof fallbackChanged === "boolean"
-          ? fallbackChanged
-          : false;
+    if (
+      !currentPhase ||
+      !stateLevel ||
+      !prevPhase ||
+      !prevStateLevel ||
+      typeof stateChanged !== "boolean"
+    ) {
+      return null;
+    }
 
     return {
       current_phase: currentPhase,
-      state_level: currentPhase,
+      state_level: stateLevel,
       prev_phase: prevPhase,
-      prev_state_level: prevPhase,
+      prev_state_level: prevStateLevel,
       state_changed: stateChanged,
     };
-  }, [
-    displayLoggedIn,
-    isViewingPendingEmptyThread,
-    resolvedActiveThreadForView,
-    normalizedResolvedViewUserState,
-  ]);
+  }, [displayLoggedIn, isViewingPendingEmptyThread, resolvedActiveThreadForView]);
 
   return {
     resolvedActiveThreadForView,
@@ -91,8 +80,10 @@ ChatClient 親本体から、表示用の activeThread 解決と activeThreadSta
 
 /*
 【今回このファイルで修正したこと】
-1. ConfirmedThreadState の prev_phase / prev_state_level が null を許容しないため、
-   prevPhase の最終 fallback を null ではなく currentPhase に変更しました。
-2. active thread の解決順、current_phase の解決順、state_changed の扱いには触れていません。
-3. 送信処理、Compass本体、MEMORIES、UI文言、他責務には触っていません。
+1. normalizedResolvedViewUserState を使った fallback 補完を削除しました。
+2. resolvedActiveThreadState は、active thread 自身が持つ確定値だけを採用する形に戻しました。
+3. current_phase / state_level / prev_phase / prev_state_level / state_changed のどれかが欠けている場合は、補わず null を返す形にしました。
+4. HOPY回答○、Compass、送信処理、DB保存、DB復元、他ファイルには触っていません。
 */
+
+/* /components/chat/view/resolveActiveThreadStateForView.ts */

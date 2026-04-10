@@ -36,6 +36,7 @@ export function useChatClientViewSurface(args: {
   } = args;
 
   void activeThreadId;
+  void userState;
   void userStateErr;
   void lastFailed;
   void normalizedInput;
@@ -125,10 +126,7 @@ export function useChatClientViewSurface(args: {
     return () => window.clearTimeout(t);
   }, [shouldShowStuck]);
 
-  const overlayUserState = React.useMemo<HopyState | null>(() => {
-    if (!workspaceMode) return null;
-    return userState;
-  }, [workspaceMode, userState]);
+  const overlayUserState = null;
 
   return {
     workspaceMode,
@@ -159,10 +157,10 @@ HOPY の状態や Compass や hold 条件を再判定する場所ではない。
 
 /*
 【今回このファイルで修正したこと】
-1. 未使用だった workspaceHeroDismissed の state / effect / 実処理 callback を削除しました。
-2. 互換性維持のため、setWorkspaceHeroDismissed / dismissWorkspaceHero は no-op のまま返す形にしました。
-3. この hook を「表示補助値だけを返す」責務へ戻しました。
-4. HOPY唯一の正である state_changed、HOPY回答○、Compass、DB保存、DB復元の判定には触れていません。
+1. userState を使った overlayUserState の表示経路を削除しました。
+2. overlayUserState は常に null を返す形にして、この hook から余計な状態経路を外しました。
+3. userState / userStateErr / lastFailed / normalizedInput / activeThreadId は互換性維持のため引数には残しつつ、この hook 内では使わない形にそろえました。
+4. HOPY唯一の正である state_changed、HOPY回答○、Compass、DB保存、DB復元の判定には触っていません。
 */
 
 /* /components/chat/view/hooks/useChatClientViewSurface.ts */
