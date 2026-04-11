@@ -117,12 +117,25 @@ export default function ChatClientView(props: ChatClientViewExtendedProps) {
 
   const disableNewChat = Boolean(disableNewChatProp);
 
+  const renderedMessageCount = React.useMemo(() => {
+    if (!Array.isArray(rendered) || rendered.length === 0) return 0;
+
+    return rendered.reduce((count, item) => {
+      const kind = String((item as any)?.kind ?? "").trim();
+      if (kind === "msg") return count + 1;
+      if ((item as any)?.msg) return count + 1;
+      return count;
+    }, 0);
+  }, [rendered]);
+
+  const hasRenderedMessageItems = renderedMessageCount > 0;
+
   const surface = useChatClientViewSurface({
     uiLang,
     ui,
     loggedIn,
     messagesLength: messages.length,
-    renderedLength: rendered.length,
+    renderedLength: renderedMessageCount,
     activeThreadId,
     userState,
     userStateErr,
@@ -141,8 +154,6 @@ export default function ChatClientView(props: ChatClientViewExtendedProps) {
     uiForComposer,
     labels,
     guestCopy,
-    hasAnyChatContent,
-    shouldShowWorkspaceHero,
     shouldShowGuestHero,
     shouldShowPreparing,
     showRecoverUi,
@@ -156,10 +167,48 @@ export default function ChatClientView(props: ChatClientViewExtendedProps) {
     return activeThread ?? null;
   }, [activeThread]);
 
-  const resolvedShouldHoldBlankThreadStage = React.useMemo(() => {
+  const effectiveRendered = React.useMemo(() => {
+    if (!workspaceMode) return rendered;
+    if (hasRenderedMessageItems) return rendered;
+    if (messages.length === 0) return rendered;
+
+    return messages.map((msg, index) => {
+      const rawMsgKey =
+        String(
+          (msg as any)?.id ??
+            (msg as any)?.message_id ??
+            (msg as any)?.clientMessageId ??
+            (msg as any)?.client_message_id ??
+            (msg as any)?.clientId ??
+            (msg as any)?.created_at ??
+            "",
+        ).trim() || `pending_${index}`;
+
+      return {
+        kind: "msg" as const,
+        key: `msg:${rawMsgKey}:${index}`,
+        msg,
+        msgKey: rawMsgKey,
+      };
+    });
+  }, [workspaceMode, rendered, hasRenderedMessageItems, messages]);
+
+  const shouldHoldBlankThreadStage = React.useMemo(() => {
     if (!shouldHoldBlankThreadStageFromClient) return false;
-    return !hasAnyChatContent;
-  }, [shouldHoldBlankThreadStageFromClient, hasAnyChatContent]);
+    if (loading) return false;
+    if (hasRenderedMessageItems) return false;
+    if (messages.length > 0) return false;
+    return true;
+  }, [
+    shouldHoldBlankThreadStageFromClient,
+    loading,
+    hasRenderedMessageItems,
+    messages.length,
+  ]);
+
+  const paneLoading = React.useMemo(() => {
+    return Boolean(loading && (hasRenderedMessageItems || messages.length > 0));
+  }, [loading, hasRenderedMessageItems, messages.length]);
 
   const loggedInRef = React.useRef(false);
   const busyRef = React.useRef(false);
@@ -179,9 +228,10 @@ export default function ChatClientView(props: ChatClientViewExtendedProps) {
   useComposerOffset({ rootRef, composerRef, extraPx: 18 });
 
   const viewportRenderedLength = React.useMemo(() => {
-    if (loading) return messages.length;
-    return rendered.length;
-  }, [loading, messages.length, rendered.length]);
+    if (hasRenderedMessageItems) return renderedMessageCount;
+    if (messages.length > 0) return messages.length;
+    return 0;
+  }, [hasRenderedMessageItems, renderedMessageCount, messages.length]);
 
   const viewport = useChatViewportController({
     workspaceMode,
@@ -347,9 +397,11 @@ export default function ChatClientView(props: ChatClientViewExtendedProps) {
 
       const currentActiveId = String(activeThreadIdRef.current ?? "").trim();
       const shouldReturnToPendingThread =
-        Boolean(currentActiveId) && Boolean(resolvedShouldHoldBlankThreadStage);
+        Boolean(currentActiveId) && shouldHoldBlankThreadStage;
 
       if (shouldReturnToPendingThread) {
+        setWorkspaceHeroDismissed(true);
+
         try {
           window.dispatchEvent(
             new CustomEvent("hopy:workspace-clear", {
@@ -403,7 +455,7 @@ export default function ChatClientView(props: ChatClientViewExtendedProps) {
       const clientRequestId = incoming || (reusePrev ? prev.id : safeUUID());
       createOpRef.current = { id: clientRequestId, at: now };
 
-      setWorkspaceHeroDismissed(false);
+      setWorkspaceHeroDismissed(true);
 
       try {
         window.dispatchEvent(
@@ -427,7 +479,7 @@ export default function ChatClientView(props: ChatClientViewExtendedProps) {
 
       closeRailForViewport();
     },
-    [closeRailForViewport, setWorkspaceHeroDismissed, resolvedShouldHoldBlankThreadStage],
+    [closeRailForViewport, setWorkspaceHeroDismissed, shouldHoldBlankThreadStage],
   );
 
   const onRenameThread = React.useCallback(
@@ -572,17 +624,17 @@ export default function ChatClientView(props: ChatClientViewExtendedProps) {
       labels,
       guestCopy,
       topInset,
-      rendered,
+      rendered: effectiveRendered,
       visibleTexts,
       canShowMore,
       onShowMore,
       scrollerRef,
       bottomRef,
-      loading,
+      loading: paneLoading,
       userStateErr,
       shouldShowGuestHero,
-      shouldShowWorkspaceHero,
-      shouldHoldBlankThreadStage: resolvedShouldHoldBlankThreadStage,
+      shouldShowWorkspaceHero: false,
+      shouldHoldBlankThreadStage,
       shouldShowPreparing,
       showRecoverUi,
       showStuckUi,
@@ -601,17 +653,16 @@ export default function ChatClientView(props: ChatClientViewExtendedProps) {
       labels,
       guestCopy,
       topInset,
-      rendered,
+      effectiveRendered,
       visibleTexts,
       canShowMore,
       onShowMore,
       scrollerRef,
       bottomRef,
-      loading,
+      paneLoading,
       userStateErr,
       shouldShowGuestHero,
-      shouldShowWorkspaceHero,
-      resolvedShouldHoldBlankThreadStage,
+      shouldHoldBlankThreadStage,
       shouldShowPreparing,
       showRecoverUi,
       showStuckUi,
@@ -753,9 +804,9 @@ Chat画面の表示統合ファイル。
 
 /*
 【今回このファイルで修正したこと】
-1. shouldHoldBlankThreadStageFromClient をそのまま本文表示へ流すのをやめ、本文が1件もない時だけ true になる resolvedShouldHoldBlankThreadStage に絞りました。
-2. これにより、新規チャット送信後に messages/rendered が入った時点で、待機画面より本文表示を優先するように戻しました。
-3. onCreateThread の pending thread 復帰条件も、本文なしの待機段階の時だけにそろえました。
+1. rendered.length ではなく、実際に msg を持つ描画項目数だけを renderedMessageCount として判定するように修正しました。
+2. 待機系の描画データしかない間は、workspace 側で rendered を優先せず、messages から暫定本文を作って ChatMessagePane へ渡すように修正しました。
+3. shouldHoldBlankThreadStage / paneLoading / viewportRenderedLength も同じ基準へそろえ、待機画面優先と本文優先の判定ズレを止めました。
 4. HOPY回答○、Compass、confirmed payload、DB保存・復元の唯一の正には触っていません。
 */
 
