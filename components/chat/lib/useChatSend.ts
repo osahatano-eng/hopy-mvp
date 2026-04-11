@@ -337,7 +337,6 @@ export function useChatSend<TState>(params: {
 
       let cid = String(conversationIdSeed ?? "").trim();
 
-      setLoading(true);
       setUserStateErr(null);
 
       const msgLang = detectUserLang(text);
@@ -348,7 +347,7 @@ export function useChatSend<TState>(params: {
       let userMsgId = "";
       let pendingMessageTimer: number | null = null;
 
-      const provisionalThreadId = String(
+      const initialDisplayThreadId = String(
         conversationIdSeed ?? activeThreadId ?? ""
       ).trim();
 
@@ -374,15 +373,67 @@ export function useChatSend<TState>(params: {
             lang: msgLang,
             created_at: new Date().toISOString(),
           },
-          provisionalThreadId || null
+          initialDisplayThreadId || null
         );
 
         setMessages((prev) => [...prev, userMsg]);
         setVisibleCount((v) => Math.max(v, 200));
+        setLoading(true);
 
-        const auth = await resolveAuthContextForSendWithTimeout(supabase);
-        const isLoggedIn = auth.isLoggedIn;
-        const accessToken = auth.accessToken;
+        let authContext:
+          | Awaited<ReturnType<typeof resolveAuthContextForSendWithTimeout>>
+          | null = null;
+        let isLoggedIn = false;
+        let accessToken: string | null = null;
+        let displayThreadId = initialDisplayThreadId;
+
+        const needsResolvedDisplayThreadId =
+          !displayThreadId || isTemporaryGuestThreadId(displayThreadId);
+
+        if (needsResolvedDisplayThreadId) {
+          authContext = await resolveAuthContextForSendWithTimeout(supabase);
+          isLoggedIn = authContext.isLoggedIn;
+          accessToken = authContext.accessToken;
+
+          if (isLoggedIn) {
+            if (!cid || isTemporaryGuestThreadId(cid)) {
+              if (typeof ensureThreadId === "function") {
+                const ensured = String((await ensureThreadId()) ?? "").trim();
+                if (ensured && !isTemporaryGuestThreadId(ensured)) {
+                  cid = ensured;
+                } else {
+                  cid = "";
+                }
+              } else {
+                cid = "";
+              }
+            }
+
+            if (cid && !isTemporaryGuestThreadId(cid)) {
+              displayThreadId = cid;
+              safePersistActiveThreadId(cid);
+
+              if (typeof onThreadIdResolved === "function") {
+                microtask(() => {
+                  try {
+                    onThreadIdResolved(cid);
+                  } catch {}
+                });
+              }
+            } else {
+              displayThreadId = "";
+            }
+          } else {
+            cid = "";
+            displayThreadId = "";
+          }
+        }
+
+        if (!authContext) {
+          authContext = await resolveAuthContextForSendWithTimeout(supabase);
+          isLoggedIn = authContext.isLoggedIn;
+          accessToken = authContext.accessToken;
+        }
 
         if (isLoggedIn) {
           if (!cid || isTemporaryGuestThreadId(cid)) {
@@ -405,14 +456,14 @@ export function useChatSend<TState>(params: {
           cid = "";
         }
 
-        const displayThreadId = String(
-          (isLoggedIn ? cid : "") || provisionalThreadId || ""
+        const resolvedDisplayThreadId = String(
+          (isLoggedIn ? cid : "") || displayThreadId || initialDisplayThreadId || ""
         ).trim();
 
-        if (displayThreadId) {
+        if (resolvedDisplayThreadId) {
           setMessages((prev) =>
             prev.map((m) =>
-              m.id === userMsgId ? attachThreadIdToMessage(m, displayThreadId) : m
+              m.id === userMsgId ? attachThreadIdToMessage(m, resolvedDisplayThreadId) : m
             )
           );
         }
@@ -426,7 +477,7 @@ export function useChatSend<TState>(params: {
             lang: requestLang,
             created_at: new Date().toISOString(),
           },
-          displayThreadId || null
+          resolvedDisplayThreadId || null
         );
 
         setMessages((prev) => [...prev, pendingMsg]);
@@ -897,14 +948,10 @@ export function useChatSend<TState>(params: {
 
 /*
 【今回このファイルで修正したこと】
-1. user message を、認証確認・thread解決の前に先に表示へ積む順番へ修正しました。
-2. pending assistant message は、認証確認・thread解決の後に追加する形へ修正しました。
-3. 送信直後の仮表示には activeThreadId をそのまま使い、最終確定した thread_id は後から user/pending の両方へ反映する形にしました。
-4. sendMessage 側で事前に ensureThreadId を待たないようにし、送信直後の本文表示を遅らせない形へ修正しました。
-5. これにより、新規チャット送信直後に待機画面のまま固まる症状と、ユーザー発話とHOPY回答の同時出し症状の直接原因だけをこのファイルで狙って修正しました。
-6. HOPY回答○、Compass、confirmed payload、DB保存/復元の意味判定には触っていません。
+1. 新規チャット1通目で real thread_id の確定を待たず、user message を先に messages へ積むように修正しました。
+2. loading=true を user message 追加後へ移動し、本文0件の待機状態へ先に落ちる流れを止めました。
+3. thread_id が後から確定した場合だけ、送信済み user message へ thread_id を付け直す流れは維持しました。
+4. HOPY回答○、Compass、confirmed payload、DB保存/復元の意味判定には触っていません。
 */
 
-/*
-/components/chat/lib/useChatSend.ts
-*/
+/* /components/chat/lib/useChatSend.ts */
