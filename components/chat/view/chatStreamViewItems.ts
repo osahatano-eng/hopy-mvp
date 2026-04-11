@@ -58,6 +58,26 @@ function normalizeBooleanOrNull(value: unknown): boolean | null {
   return null;
 }
 
+function readMessageRole(msg: ChatMsg): "user" | "assistant" | null {
+  const source = msg as {
+    role?: unknown;
+    sender?: unknown;
+    author?: unknown;
+  };
+
+  const raw = String(
+    source.role ??
+      source.sender ??
+      source.author ??
+      "",
+  )
+    .trim()
+    .toLowerCase();
+
+  if (raw === "user" || raw === "assistant") return raw;
+  return null;
+}
+
 function readConfirmedStateChangedFromMessage(msg: ChatMsg): boolean | null {
   const source = msg as {
     hopy_confirmed_payload?: {
@@ -115,6 +135,34 @@ function readCompassFromMessage(
   };
 }
 
+function readMessageDisplayText(msg: ChatMsg): string {
+  const source = msg as {
+    content?: unknown;
+    text?: unknown;
+    body?: unknown;
+    message?: unknown;
+    prompt?: unknown;
+    reply?: unknown;
+  };
+
+  const candidates = [
+    source.content,
+    source.text,
+    source.body,
+    source.message,
+    source.prompt,
+    source.reply,
+  ];
+
+  for (const value of candidates) {
+    if (typeof value !== "string") continue;
+    if (value.trim().length === 0) continue;
+    return value;
+  }
+
+  return "";
+}
+
 export function getChatStreamViewItems(args: {
   rendered: RenderItem[];
   visibleTexts: Map<string, string>;
@@ -134,10 +182,17 @@ export function getChatStreamViewItems(args: {
       continue;
     }
 
-    const role = it.msg.role as "user" | "assistant" | (string & {});
+    const role = readMessageRole(it.msg);
     const msgKey = it.msgKey;
-    const fallbackText = String(it.msg.content ?? "");
-    const text = visibleTexts.get(msgKey) ?? fallbackText;
+    const fallbackText = readMessageDisplayText(it.msg);
+    const visibleText = visibleTexts.get(msgKey);
+    const text =
+      typeof visibleText === "string" && visibleText.trim().length > 0
+        ? visibleText
+        : fallbackText;
+
+    if (!role) continue;
+    if (text.trim().length === 0) continue;
 
     let assistantDot: AssistantDotMeta | null = null;
 
@@ -233,11 +288,12 @@ msg / divider / compass の表示用データを組み立てる。
 
 /*
 【今回このファイルで修正したこと】
-- Compass の読み取り元に hopy_confirmed_payload.ui_effects.compass を追加しました。
-- 互換のため hopy_confirmed_payload.uiEffects.compass と hopy_confirmed_payload.compass も順番に読めるようにしました。
-- state_changed の唯一の正は hopy_confirmed_payload.state.state_changed のまま維持しました。
+- role を content 依存の前提で扱わず、role / sender / author から正規化して読むようにしました。
+- visibleTexts に空文字が入っている場合はそれを優先せず、rendered 側の本文へフォールバックするようにしました。
+- role 不正または本文空の msg は ViewItem に載せないようにし、送信直後の空行化を止めました。
+- Compass の読み取り元と state_changed の唯一の正には触っていません。
 - Compass 文言の生成や再判定は追加していません。
-- normalizeBooleanOrNull で 1 / 0 / "1" / "0" も true / false として通すようにしました。
+- HOPY回答○、Compass、DB保存、DB復元の意味判定には触っていません。
 */
 
 /* /components/chat/view/chatStreamViewItems.ts */
