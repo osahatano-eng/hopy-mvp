@@ -445,7 +445,7 @@ export function useThreadSwitch(params: {
         const existsInCurrentList = hasThreadId(threadsRef.current, id);
         const isExplicit = isExplicitThreadSelectionDetail(d);
 
-        if (!current && via !== "direct" && existsInCurrentList) {
+        if (!current && via !== "direct" && existsInCurrentList && !isExplicit) {
           logInfo("[useThreadSwitch] ignore passive thread event while hero/no-selection", {
             id,
             via,
@@ -669,9 +669,9 @@ export function useThreadSwitch(params: {
 
 /*
 【今回このファイルで修正したこと】
-1. 新規チャット未送信中の一時 thread_id を current に持っている場合は、既存スレッドへの受動イベントを無視しないように修正しました。
-2. 受動イベントを無視する条件を「別の real thread が active のとき」だけに限定しました。
-3. これにより、新規チャット待機状態から既存スレッドへ戻れず固まる経路だけをこのファイル内で止めました。
+1. activeThreadId が空の hero/no-selection 状態では、既存スレッド一覧にある thread への受動イベントでも、明示選択イベントなら無視しないように修正しました。
+2. 受動イベントを無視する条件を「no-selection 中の非明示イベント」だけに限定しました。
+3. これにより、新規チャット未送信状態から既存スレッドを明示選択しても、待機画面のまま固まる経路だけをこのファイル内で止めました。
 4. 本文採用条件、HOPY回答○、Compass、state_changed、confirmed payload、DB保存、DB復元の唯一の正には触っていません。
 */
 

@@ -37,46 +37,33 @@ export function useChatClientViewSurface(args: {
 
   void userState;
   void userStateErr;
+  void normalizedInput;
 
   const workspaceMode = Boolean(loggedIn);
   const guestMode = !workspaceMode;
   const busy = Boolean(loading || threadBusy);
 
-  const activeThreadIdSafe = String(activeThreadId ?? "").trim();
-  const hasActiveThreadSelection = activeThreadIdSafe.length > 0;
-
-  const hasDraftInput = normalizedInput.trim().length > 0;
   const hasRenderableChatContent = renderedLength > 0 || messagesLength > 0;
-  const hasAnyChatContent = hasRenderableChatContent;
 
-  const autoWorkspaceHeroDismissed = Boolean(
-    busy || hasAnyChatContent || hasDraftInput || lastFailed || hasActiveThreadSelection,
+  const hasPendingWorkspaceSend =
+    workspaceMode &&
+    busy &&
+    !lastFailed &&
+    !hasRenderableChatContent &&
+    Boolean(activeThreadId);
+
+  const hasAnyChatContent = Boolean(
+    hasRenderableChatContent || lastFailed || hasPendingWorkspaceSend,
   );
 
-  const [manualWorkspaceHeroDismissed, setManualWorkspaceHeroDismissed] =
-    React.useState(false);
-
-  React.useEffect(() => {
-    if (autoWorkspaceHeroDismissed) {
-      setManualWorkspaceHeroDismissed(false);
-    }
-  }, [autoWorkspaceHeroDismissed]);
-
-  const workspaceHeroDismissed =
-    autoWorkspaceHeroDismissed || manualWorkspaceHeroDismissed;
+  const workspaceHeroDismissed = false;
 
   const setWorkspaceHeroDismissed = React.useCallback(
-    (next: boolean | ((prev: boolean) => boolean)) => {
-      setManualWorkspaceHeroDismissed((prev) =>
-        typeof next === "function" ? next(prev) : next,
-      );
-    },
+    (_next: boolean | ((prev: boolean) => boolean)) => {},
     [],
   );
 
-  const dismissWorkspaceHero = React.useCallback(() => {
-    setManualWorkspaceHeroDismissed(true);
-  }, []);
+  const dismissWorkspaceHero = React.useCallback(() => {}, []);
 
   const uiForComposer = React.useMemo<UiDict>(() => {
     return {
@@ -128,76 +115,17 @@ export function useChatClientViewSurface(args: {
     };
   }, [uiLang]);
 
-  const shouldShowWorkspaceHero = React.useMemo(() => {
-    if (!workspaceMode) return false;
-    if (workspaceHeroDismissed) return false;
-    if (hasActiveThreadSelection) return false;
-    return !busy && !hasAnyChatContent;
-  }, [
-    workspaceMode,
-    workspaceHeroDismissed,
-    hasActiveThreadSelection,
-    busy,
-    hasAnyChatContent,
-  ]);
+  const shouldShowWorkspaceHero = false;
+  const shouldShowPreparing = false;
+  const showRecoverUi = false;
+  const showStuckUi = false;
 
   const shouldShowGuestHero = React.useMemo(() => {
     if (!guestMode) return false;
-    return !busy && !hasAnyChatContent;
-  }, [guestMode, busy, hasAnyChatContent]);
-
-  const shouldShowPreparing = React.useMemo(() => {
-    if (!workspaceMode) return false;
-    if (shouldShowWorkspaceHero) return false;
-    if (hasActiveThreadSelection) return false;
-    return busy && !hasAnyChatContent;
-  }, [
-    workspaceMode,
-    shouldShowWorkspaceHero,
-    hasActiveThreadSelection,
-    busy,
-    hasAnyChatContent,
-  ]);
-
-  const shouldShowStuck = React.useMemo(() => {
-    if (!workspaceMode) return false;
-    if (!busy) return false;
-    return !hasAnyChatContent && !hasActiveThreadSelection;
-  }, [workspaceMode, busy, hasAnyChatContent, hasActiveThreadSelection]);
-
-  const shouldShowRecover = React.useMemo(() => {
-    if (!workspaceMode) return false;
     if (busy) return false;
-    if (hasActiveThreadSelection) return false;
-    return !hasAnyChatContent && Boolean(lastFailed);
-  }, [
-    workspaceMode,
-    busy,
-    hasActiveThreadSelection,
-    hasAnyChatContent,
-    lastFailed,
-  ]);
-
-  const [showRecoverUi, setShowRecoverUi] = React.useState(false);
-  const [showStuckUi, setShowStuckUi] = React.useState(false);
-
-  React.useEffect(() => {
-    if (!shouldShowRecover) {
-      setShowRecoverUi(false);
-      return;
-    }
-    const t = window.setTimeout(() => setShowRecoverUi(true), 900);
-    return () => window.clearTimeout(t);
-  }, [shouldShowRecover]);
-
-  React.useEffect(() => {
-    if (!shouldShowStuck) {
-      setShowStuckUi(false);
-      return;
-    }
-    const t = window.setTimeout(() => setShowStuckUi(true), 1800);
-    return () => window.clearTimeout(t);
-  }, [shouldShowStuck]);
+    if (lastFailed) return false;
+    return !hasRenderableChatContent;
+  }, [guestMode, busy, lastFailed, hasRenderableChatContent]);
 
   const overlayUserState = null;
 
@@ -230,10 +158,11 @@ HOPY の状態や Compass や hold 条件を再判定する場所ではない。
 
 /*
 【今回このファイルで修正したこと】
-1. activeThreadId の有無を hasActiveThreadSelection として明示し、選択中スレッドがある間は待機画面系を出さないように修正しました。
-2. shouldShowWorkspaceHero / shouldShowPreparing / shouldShowStuck / shouldShowRecover の表示条件に activeThreadId 条件を統一して入れました。
-3. autoWorkspaceHeroDismissed にも activeThreadId 条件を追加し、スレッド選択中に待機画面へ戻らないようにしました。
-4. HOPY唯一の正である state_changed、HOPY回答○、Compass、DB保存、DB復元の判定には触っていません。
+1. 新規チャット1発目の送信中を hasPendingWorkspaceSend として明示しました。
+2. hasAnyChatContent に hasPendingWorkspaceSend を含め、待機画面や旧ローディングが居座り続けないようにしました。
+3. workspace 側の shouldShowWorkspaceHero は常に false のまま維持しました。
+4. guest 側の hero は本文なし・非busy・非失敗のときだけ出す形を維持しました。
+5. HOPY唯一の正である state_changed、HOPY回答○、Compass、DB保存、DB復元の判定には触っていません。
 */
 
 /* /components/chat/view/hooks/useChatClientViewSurface.ts */
