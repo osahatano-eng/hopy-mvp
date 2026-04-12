@@ -35,6 +35,7 @@ export function useChatClientViewSurface(args: {
     threadBusy,
   } = args;
 
+  void activeThreadId;
   void userState;
   void userStateErr;
   void normalizedInput;
@@ -43,14 +44,15 @@ export function useChatClientViewSurface(args: {
   const guestMode = !workspaceMode;
   const busy = Boolean(loading || threadBusy);
 
-  const hasRenderableChatContent = renderedLength > 0 || messagesLength > 0;
+  const hasRenderedRows = renderedLength > 0;
+  const hasMessageRows = messagesLength > 0;
+  const hasRenderableChatContent = hasRenderedRows || hasMessageRows;
 
   const hasPendingWorkspaceSend =
     workspaceMode &&
-    busy &&
+    loading &&
     !lastFailed &&
-    !hasRenderableChatContent &&
-    Boolean(activeThreadId);
+    !hasRenderableChatContent;
 
   const hasAnyChatContent = Boolean(
     hasRenderableChatContent || lastFailed || hasPendingWorkspaceSend,
@@ -158,11 +160,10 @@ HOPY の状態や Compass や hold 条件を再判定する場所ではない。
 
 /*
 【今回このファイルで修正したこと】
-1. 新規チャット1発目の送信中を hasPendingWorkspaceSend として明示しました。
-2. hasAnyChatContent に hasPendingWorkspaceSend を含め、待機画面や旧ローディングが居座り続けないようにしました。
-3. workspace 側の shouldShowWorkspaceHero は常に false のまま維持しました。
-4. guest 側の hero は本文なし・非busy・非失敗のときだけ出す形を維持しました。
-5. HOPY唯一の正である state_changed、HOPY回答○、Compass、DB保存、DB復元の判定には触っていません。
+1. 新規チャット1通目送信直後の pending 判定から activeThreadId 依存を外しました。
+2. hasPendingWorkspaceSend を loading 基準へ寄せ、送信中の本文未反映瞬間でも hasAnyChatContent を true にできるようにしました。
+3. renderedLength と messagesLength を hasRenderedRows / hasMessageRows に分け、surface 判定の意味を明確にしました。
+4. HOPY唯一の正である confirmed payload / state_changed / HOPY回答○ / Compass / DB保存 / DB復元の判定には触っていません。
 */
 
 /* /components/chat/view/hooks/useChatClientViewSurface.ts */
