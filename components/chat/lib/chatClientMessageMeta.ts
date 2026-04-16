@@ -58,37 +58,14 @@ export function extractMessageThreadId(msg: ChatMsg | null | undefined): string 
 export function resolveMessagesOwnerThreadId(messages: ChatMsg[] | null | undefined): string {
   if (!Array.isArray(messages) || messages.length <= 0) return "";
 
-  const counts = new Map<string, number>();
-  let firstDetected = "";
-
-  for (const msg of messages) {
-    const tid = extractMessageThreadId(msg);
-    if (!tid) continue;
-
-    if (!firstDetected) {
-      firstDetected = tid;
-    }
-
-    counts.set(tid, (counts.get(tid) ?? 0) + 1);
-  }
-
-  if (!firstDetected) return "";
-
-  if (counts.size === 1) {
-    return firstDetected;
-  }
-
-  let winner = "";
-  let winnerCount = 0;
-
-  for (const [tid, count] of counts.entries()) {
-    if (count > winnerCount) {
-      winner = tid;
-      winnerCount = count;
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const tid = extractMessageThreadId(messages[i]);
+    if (tid) {
+      return tid;
     }
   }
 
-  return winner;
+  return "";
 }
 
 export function isCompletedAssistantReplyMessage(msg: ChatMsg | null | undefined): boolean {
@@ -133,7 +110,12 @@ messages の文字抽出・thread 所属判定・assistant 回答完了判定の
 
 /*
 【今回このファイルで修正したこと】
-1. ChatClient.tsx 内にあった messages 補助判定本体を、新規 util ファイルとして切り出しました。
-2. extractRenderableMessageText、extractMessageThreadId、resolveMessagesOwnerThreadId、isCompletedAssistantReplyMessage をこのファイルへ集約しました。
-3. HOPY回答○、Compass、confirmed payload、DB保存・復元の唯一の正には触れていません。
+1. resolveMessagesOwnerThreadId(messages) の owner thread 判定を、多数決ではなく配列末尾の最新 message 優先に変更しました。
+2. 新規チャット1通目の仮thread→実thread切替直後でも、最新 message 側の thread を本文採用の正として返すようにしました。
+3. extractRenderableMessageText、extractMessageThreadId、isCompletedAssistantReplyMessage の責務には触れていません。
+4. HOPY回答○、Compass、confirmed payload、DB保存・復元の唯一の正には触れていません。
+*/
+
+/*
+/components/chat/lib/chatClientMessageMeta.ts
 */

@@ -65,12 +65,7 @@ function readMessageRole(msg: ChatMsg): "user" | "assistant" | null {
     author?: unknown;
   };
 
-  const raw = String(
-    source.role ??
-      source.sender ??
-      source.author ??
-      "",
-  )
+  const raw = String(source.role ?? source.sender ?? source.author ?? "")
     .trim()
     .toLowerCase();
 
@@ -163,9 +158,25 @@ function readMessageDisplayText(msg: ChatMsg): string {
   return "";
 }
 
+function readVisibleTextFromArray(
+  visibleTexts: string[],
+  messageIndex: number,
+): string | undefined {
+  const value = visibleTexts[messageIndex];
+  return typeof value === "string" ? value : undefined;
+}
+
+function readVisibleTextFromMap(
+  visibleTexts: Map<string, string>,
+  msgKey: string,
+): string | undefined {
+  const value = visibleTexts.get(msgKey);
+  return typeof value === "string" ? value : undefined;
+}
+
 export function getChatStreamViewItems(args: {
   rendered: RenderItem[];
-  visibleTexts: Map<string, string>;
+  visibleTexts: Map<string, string> | string[];
   uiLang: Lang;
 }): ViewItem[] {
   const { rendered, visibleTexts, uiLang } = args;
@@ -173,6 +184,7 @@ export function getChatStreamViewItems(args: {
   if (rendered.length === 0) return [];
 
   const tempItems: ViewItem[] = [];
+  let messageIndex = 0;
 
   for (let i = 0; i < rendered.length; i++) {
     const it = rendered[i];
@@ -185,7 +197,16 @@ export function getChatStreamViewItems(args: {
     const role = readMessageRole(it.msg);
     const msgKey = it.msgKey;
     const fallbackText = readMessageDisplayText(it.msg);
-    const visibleText = visibleTexts.get(msgKey);
+
+    const visibleText =
+      visibleTexts instanceof Map
+        ? readVisibleTextFromMap(visibleTexts, msgKey)
+        : Array.isArray(visibleTexts)
+          ? readVisibleTextFromArray(visibleTexts, messageIndex)
+          : undefined;
+
+    messageIndex += 1;
+
     const text =
       typeof visibleText === "string" && visibleText.trim().length > 0
         ? visibleText
@@ -288,11 +309,9 @@ msg / divider / compass の表示用データを組み立てる。
 
 /*
 【今回このファイルで修正したこと】
-- role を content 依存の前提で扱わず、role / sender / author から正規化して読むようにしました。
-- visibleTexts に空文字が入っている場合はそれを優先せず、rendered 側の本文へフォールバックするようにしました。
-- role 不正または本文空の msg は ViewItem に載せないようにし、送信直後の空行化を止めました。
-- Compass の読み取り元と state_changed の唯一の正には触っていません。
-- Compass 文言の生成や再判定は追加していません。
+- visibleTexts が配列のとき、rendered 全体の index ではなく msg だけの順番で読むように修正しました。
+- divider をまたいだ直後に user 行へ assistant 本文がずれる症状を止める修正です。
+- role 正規化、本文フォールバック、Compass の唯一の正には触っていません。
 - HOPY回答○、Compass、DB保存、DB復元の意味判定には触っていません。
 */
 

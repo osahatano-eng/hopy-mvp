@@ -21,7 +21,7 @@ type UseChatClientSignedOutFlowArgs = {
 
   activeThreadIdRef: React.MutableRefObject<string | null>;
 
-  clearThreadViewRefs: () => void;
+  clearThreadViewRefs?: () => void;
   resetRailState: () => void;
 
   setEmail: React.Dispatch<React.SetStateAction<string>>;
@@ -101,26 +101,16 @@ export function useChatClientSignedOutFlow({
     } catch {}
   }, [shouldHoldSignedOutScreen]);
 
-  const resetLoggedOutState = useCallback(
+  const clearSelectedThreadState = useCallback(
     ({
       clearMessages,
-      clearLoading,
       clearActiveThreadRef,
-      clearLastThreadDecision,
     }: {
       clearMessages: boolean;
-      clearLoading: boolean;
       clearActiveThreadRef: boolean;
-      clearLastThreadDecision: boolean;
     }) => {
-      void clearLastThreadDecision;
-
       try {
         clearActiveThreadId();
-      } catch {}
-
-      try {
-        setThreads([]);
       } catch {}
 
       try {
@@ -136,6 +126,44 @@ export function useChatClientSignedOutFlow({
           setVisibleCount(200);
         } catch {}
       }
+
+      if (clearActiveThreadRef) {
+        try {
+          activeThreadIdRef.current = null;
+        } catch {}
+      }
+
+      try {
+        clearThreadViewRefs?.();
+      } catch {}
+    },
+    [
+      activeThreadIdRef,
+      clearThreadViewRefs,
+      setActiveThreadId,
+      setMessages,
+      setVisibleCount,
+    ],
+  );
+
+  const resetLoggedOutState = useCallback(
+    ({
+      clearMessages,
+      clearLoading,
+      clearActiveThreadRef,
+    }: {
+      clearMessages: boolean;
+      clearLoading: boolean;
+      clearActiveThreadRef: boolean;
+    }) => {
+      clearSelectedThreadState({
+        clearMessages,
+        clearActiveThreadRef,
+      });
+
+      try {
+        setThreads([]);
+      } catch {}
 
       try {
         setUserState(null);
@@ -162,64 +190,25 @@ export function useChatClientSignedOutFlow({
       try {
         resetRailState();
       } catch {}
-
-      if (clearActiveThreadRef) {
-        try {
-          activeThreadIdRef.current = null;
-        } catch {}
-      }
-
-      try {
-        clearThreadViewRefs();
-      } catch {}
     },
     [
-      activeThreadIdRef,
-      clearThreadViewRefs,
+      clearSelectedThreadState,
       resetRailState,
-      setActiveThreadId,
       setLastFailed,
       setLoading,
-      setMessages,
       setThreads,
       setThreadBusy,
       setUserState,
       setUserStateErr,
-      setVisibleCount,
     ],
   );
 
   const clearTemporaryGuestSelection = useCallback(() => {
-    try {
-      clearActiveThreadId();
-    } catch {}
-
-    try {
-      setActiveThreadId(null);
-    } catch {}
-
-    try {
-      setMessages([]);
-    } catch {}
-
-    try {
-      setVisibleCount(200);
-    } catch {}
-
-    try {
-      activeThreadIdRef.current = null;
-    } catch {}
-
-    try {
-      clearThreadViewRefs();
-    } catch {}
-  }, [
-    activeThreadIdRef,
-    clearThreadViewRefs,
-    setActiveThreadId,
-    setMessages,
-    setVisibleCount,
-  ]);
+    clearSelectedThreadState({
+      clearMessages: true,
+      clearActiveThreadRef: true,
+    });
+  }, [clearSelectedThreadState]);
 
   useEffect(() => {
     if (!authReady) return;
@@ -236,7 +225,6 @@ export function useChatClientSignedOutFlow({
           clearMessages: false,
           clearLoading: false,
           clearActiveThreadRef: false,
-          clearLastThreadDecision: false,
         });
         return;
       }
@@ -245,7 +233,6 @@ export function useChatClientSignedOutFlow({
         clearMessages: true,
         clearLoading: true,
         clearActiveThreadRef: true,
-        clearLastThreadDecision: true,
       });
       return;
     }
@@ -288,7 +275,10 @@ ChatClient の中に混在していた、
 
 /*
 【今回このファイルで修正したこと】
-1. lib 配下の新規ファイルなのに ../ になっていた相対 import を ./ に修正しました。
-2. これにより、chatTypes / useChatSend / stateBadge / threadStore / chatThreadIdentity の参照先を同階層へ戻しました。
-3. hook 内ロジックそのもの、HOPY回答○、Compass、confirmed payload、DB保存・復元の唯一の正には触っていません。
+1. clearThreadViewRefs を必須引数から任意引数へ変更しました。
+2. clearSelectedThreadState 内の clearThreadViewRefs 呼び出しを optional call に変更しました。
+3. これにより、親側の一時 ref クリア契約をこの hook から必須にしない形へ寄せました。
+4. hook 内ロジックの意味、HOPY回答○、Compass、confirmed payload、DB保存・復元の唯一の正には触っていません。
 */
+
+/* /components/chat/lib/useChatClientSignedOutFlow.ts */

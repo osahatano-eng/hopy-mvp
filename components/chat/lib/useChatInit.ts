@@ -2,9 +2,9 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import type { Session } from "@supabase/supabase-js";
 
 import { clearActiveThreadId } from "./threadStore";
+import { waitForStableSession } from "./useChatInitSession";
 
 import {
   logInfo,
@@ -14,10 +14,29 @@ import {
   type UseChatInitParams,
   createThreadsRefreshHandler,
   createSelectThreadHandler,
-  createThreadObservedHandler,
   createInitController,
   shouldHandleAuthEventWithRefs,
 } from "./useChatInitParts";
+
+function readThreadEventId(detail: unknown): string {
+  const safe = (detail ?? {}) as Record<string, unknown>;
+
+  const candidates = [
+    safe.threadId,
+    safe.thread_id,
+    safe.selectedThreadId,
+    safe.selected_thread_id,
+    safe.id,
+  ];
+
+  for (const value of candidates) {
+    const tid = String(value ?? "").trim();
+    if (!tid) continue;
+    return tid;
+  }
+
+  return "";
+}
 
 export function useChatInit<TState>(params: UseChatInitParams<TState>) {
   const { supabase, uiLang } = params;
@@ -31,11 +50,16 @@ export function useChatInit<TState>(params: UseChatInitParams<TState>) {
   const lastUserIdRef = useRef<string | null>(null);
 
   const activeThreadIdShadowRef = useRef<string | null>(null);
+  const syncActiveThreadShadow = (v: string | null) => {
+    const tid = String(v ?? "").trim();
+    activeThreadIdShadowRef.current = tid ? tid : null;
+  };
+
   const setActiveThreadIdSafe = (v: string | null) => {
     const p = paramsRef.current;
     const tid = String(v ?? "").trim();
     const out = tid ? tid : null;
-    activeThreadIdShadowRef.current = out;
+    syncActiveThreadShadow(out);
     try {
       p.setActiveThreadId(out);
     } catch {}
@@ -61,16 +85,24 @@ export function useChatInit<TState>(params: UseChatInitParams<TState>) {
   const bumpThreadMutation = (reason: string) => {
     threadMutationSeqRef.current += 1;
     lastThreadMutationAtRef.current = Date.now();
-    if (reason) logInfo("[useChatInit] thread mutation", { reason, seq: threadMutationSeqRef.current });
+    if (reason) {
+      logInfo("[useChatInit] thread mutation", {
+        reason,
+        seq: threadMutationSeqRef.current,
+      });
+    }
   };
 
-  const lastDispatchedThreadRef = useRef<{ id: string; at: number }>({ id: "", at: 0 });
+  const lastDispatchedThreadRef = useRef<{ id: string; at: number }>({
+    id: "",
+    at: 0,
+  });
   const THREAD_EVENT_DEDUPE_MS = 650;
 
   const dispatchThreadEvent = (
     threadId: string,
     reason: string,
-    source?: "event" | "storage" | "direct" | "unknown"
+    source?: "event" | "storage" | "direct" | "unknown",
   ) => {
     const tid = String(threadId ?? "").trim();
     if (!tid) return;
@@ -85,7 +117,7 @@ export function useChatInit<TState>(params: UseChatInitParams<TState>) {
       if (typeof window !== "undefined") {
         const detail: Record<string, unknown> = { threadId: tid, id: tid, reason };
         const out = source ? { ...detail, source } : detail;
-        window.dispatchEvent(new CustomEvent("hopy:thread", { detail: out }));
+        window.dispatchEvent(new CustomEvent("hopy:select-thread", { detail: out }));
       }
     } catch {}
   };
@@ -98,44 +130,15 @@ export function useChatInit<TState>(params: UseChatInitParams<TState>) {
   const resumeInFlightRef = useRef(false);
   const RESUME_DEDUPE_MS = 900;
 
-  const waitForStableSession = async (alive: () => boolean): Promise<Session | null> => {
-    const waits = [0, 80, 160, 260, 420, 650, 900];
-    for (const ms of waits) {
-      if (!alive()) return null;
-      if (ms > 0) {
-        await new Promise((r) => setTimeout(r, ms));
-      }
-      if (!alive()) return null;
-
-      try {
-        const { data } = await supabase.auth.getSession();
-        const s = (data?.session ?? null) as Session | null;
-        const ok = Boolean(s?.user?.id) && Boolean(String(s?.access_token ?? "").trim());
-        if (ok) return s;
-      } catch {}
-    }
-    return null;
-  };
-
   useEffect(() => {
     let alive = true;
     const isAlive = () => alive;
-
-    const shouldResumeWorkspace = () => {
-      const hasActive = Boolean(String(activeThreadIdShadowRef.current ?? "").trim());
-      const hasPending = Boolean(pendingInitRef.current);
-      const creating = Boolean(createInFlightRef.current);
-      const forced = Boolean(forceCreateNextThreadRef.current);
-      return hasActive || hasPending || creating || forced;
-    };
 
     const clearInitialActiveSelection = () => {
       try {
         clearActiveThreadId();
       } catch {}
-      try {
-        setActiveThreadIdSafe(null);
-      } catch {}
+      setActiveThreadIdSafe(null);
     };
 
     const reset = () => {
@@ -168,8 +171,6 @@ export function useChatInit<TState>(params: UseChatInitParams<TState>) {
       lastThreadMutationAtRef.current = 0;
 
       handledInitialSessionRef.current = false;
-
-      activeThreadIdShadowRef.current = null;
 
       lastResumeAtRef.current = 0;
       resumeInFlightRef.current = false;
@@ -212,6 +213,9 @@ export function useChatInit<TState>(params: UseChatInitParams<TState>) {
 
       handledInitialSessionRef.current = false;
 
+      lastResumeAtRef.current = 0;
+      resumeInFlightRef.current = false;
+
       try {
         p.setEmail("");
       } catch {}
@@ -232,8 +236,22 @@ export function useChatInit<TState>(params: UseChatInitParams<TState>) {
       paramsRef,
       bumpThreadMutation,
     });
-    const onSelectThread = createSelectThreadHandler({ isAlive, bumpThreadMutation });
-    const onThreadObserved = createThreadObservedHandler({ isAlive, bumpThreadMutation });
+
+    const onSelectThreadBase = createSelectThreadHandler({
+      isAlive,
+      bumpThreadMutation,
+    });
+
+    const onSelectThread = (event: Event) => {
+      try {
+        const detail = (event as CustomEvent)?.detail;
+        const selectedThreadId = readThreadEventId(detail);
+        if (selectedThreadId) {
+          syncActiveThreadShadow(selectedThreadId);
+        }
+      } catch {}
+      onSelectThreadBase(event);
+    };
 
     const controller = createInitController<TState>({
       isAlive,
@@ -279,7 +297,7 @@ export function useChatInit<TState>(params: UseChatInitParams<TState>) {
 
     (async () => {
       try {
-        const session = await waitForStableSession(isAlive);
+        const session = await waitForStableSession({ isAlive, supabase });
         if (!isAlive()) return;
 
         if (session) {
@@ -293,44 +311,90 @@ export function useChatInit<TState>(params: UseChatInitParams<TState>) {
         logInfo("[useChatInit] mount no stable session -> guest idle");
       } catch (e) {
         logWarn("[useChatInit] mount bootstrap failed", errText(e));
-        try {
-          clearInitialActiveSelection();
-        } catch {}
+        clearInitialActiveSelection();
       }
     })();
 
-    const onVis = () => {
+    const resumeInit = (reason: "visibilitychange" | "pageshow") => {
+      const now = Date.now();
+      if (resumeInFlightRef.current) return;
+      if (now - lastResumeAtRef.current <= RESUME_DEDUPE_MS) return;
+
+      lastResumeAtRef.current = now;
+      resumeInFlightRef.current = true;
+
+      (async () => {
+        try {
+          if (!isAlive()) return;
+
+          const session = await waitForStableSession({ isAlive, supabase });
+          if (!isAlive()) return;
+          if (!session) {
+            logInfo("[useChatInit] resume skipped (no stable session)", { reason });
+            return;
+          }
+
+          logInfo("[useChatInit] resume -> init", { reason });
+          controller.init(false, session);
+        } catch (e) {
+          logWarn("[useChatInit] resume failed", {
+            reason,
+            err: errText(e),
+          });
+        } finally {
+          resumeInFlightRef.current = false;
+        }
+      })().catch((e) => {
+        resumeInFlightRef.current = false;
+        logWarn("[useChatInit] resume failed", {
+          reason,
+          err: errText(e),
+        });
+      });
+    };
+
+    const onVisibilityChange = () => {
       try {
         if (typeof document === "undefined") return;
         if (document.visibilityState !== "visible") return;
-        if (!shouldResumeWorkspace()) return;
-        controller.resumeRefresh("visibility").catch(() => {});
-      } catch {}
+      } catch {
+        return;
+      }
+
+      resumeInit("visibilitychange");
     };
-    const onPageShow = () => {
-      if (!shouldResumeWorkspace()) return;
-      controller.resumeRefresh("pageshow").catch(() => {});
+
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (!event.persisted) return;
+      resumeInit("pageshow");
     };
-    const onFocus = () => {
-      if (!shouldResumeWorkspace()) return;
-      controller.resumeRefresh("focus").catch(() => {});
-    };
+
     const onOnline = () => {
-      if (!shouldResumeWorkspace()) return;
-      controller.resumeRefresh("online").catch(() => {});
+      (async () => {
+        if (!isAlive()) return;
+
+        const session = await waitForStableSession({ isAlive, supabase });
+        if (!isAlive()) return;
+        if (!session) {
+          logInfo("[useChatInit] online resume skipped (no stable session)");
+          return;
+        }
+
+        logInfo("[useChatInit] online -> init");
+        controller.init(false, session);
+      })().catch((e) => {
+        logWarn("[useChatInit] online resume failed", errText(e));
+      });
     };
 
     try {
-      if (typeof document !== "undefined") document.addEventListener("visibilitychange", onVis as any);
+      window.addEventListener("online", onOnline as any);
+    } catch {}
+    try {
+      document.addEventListener("visibilitychange", onVisibilityChange as any);
     } catch {}
     try {
       window.addEventListener("pageshow", onPageShow as any);
-    } catch {}
-    try {
-      window.addEventListener("focus", onFocus as any);
-    } catch {}
-    try {
-      window.addEventListener("online", onOnline as any);
     } catch {}
 
     try {
@@ -341,9 +405,6 @@ export function useChatInit<TState>(params: UseChatInitParams<TState>) {
     } catch {}
     try {
       window.addEventListener("hopy:select-thread", onSelectThread);
-    } catch {}
-    try {
-      window.addEventListener("hopy:thread", onThreadObserved);
     } catch {}
 
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
@@ -362,28 +423,24 @@ export function useChatInit<TState>(params: UseChatInitParams<TState>) {
       }
 
       if (evName === "TOKEN_REFRESHED") {
-        const userId = session.user?.id;
+        logInfo("[useChatInit] auth change (token refreshed) -> keep current state");
+        return;
+      }
 
-        if (userId && shouldResumeWorkspace()) {
-          logInfo("[useChatInit] auth change (token refreshed) -> resume workspace");
-          controller.init(false, session);
-        }
+      if (evName === "SIGNED_IN") {
+        logInfo("[useChatInit] auth change (signed in) -> keep current state");
         return;
       }
 
       const ok = shouldHandleAuthEventWithRefs(
         { handledInitialSessionRef, lastAuthEventRef, AUTH_EVENT_DEDUPE_MS },
         evName,
-        session as Session | null
+        session,
       );
       if (!ok) return;
 
-      if (evName === "SIGNED_IN") {
-        logInfo("[useChatInit] auth change (signed in) -> keep active thread selection");
-      }
-
       logInfo("[useChatInit] auth change", { event: evName });
-      controller.init(false, session as Session);
+      controller.init(false, session);
     });
 
     return () => {
@@ -392,16 +449,13 @@ export function useChatInit<TState>(params: UseChatInitParams<TState>) {
       controller.clearInitDebounceTimer();
 
       try {
-        if (typeof document !== "undefined") document.removeEventListener("visibilitychange", onVis as any);
+        window.removeEventListener("online", onOnline as any);
+      } catch {}
+      try {
+        document.removeEventListener("visibilitychange", onVisibilityChange as any);
       } catch {}
       try {
         window.removeEventListener("pageshow", onPageShow as any);
-      } catch {}
-      try {
-        window.removeEventListener("focus", onFocus as any);
-      } catch {}
-      try {
-        window.removeEventListener("online", onOnline as any);
       } catch {}
 
       try {
@@ -414,11 +468,27 @@ export function useChatInit<TState>(params: UseChatInitParams<TState>) {
         window.removeEventListener("hopy:select-thread", onSelectThread);
       } catch {}
       try {
-        window.removeEventListener("hopy:thread", onThreadObserved);
-      } catch {}
-      try {
         sub.subscription.unsubscribe();
       } catch {}
     };
   }, [supabase, uiLang]);
 }
+
+/*
+このファイルの正式役割
+Chat 初期化・認証変化・再開時再同期の親フック。
+初期化開始、auth 変化、必要最小限の workspace 再開を管理する。
+このファイルは本文表示の所有者ではない。
+thread 切替本文の採用判定や HOPY唯一の正の再判定は持たない。
+workspace 再開入口と、正式な select-thread 観測だけを扱う。
+*/
+
+/*
+【今回このファイルで修正したこと】
+1. tab復帰専用の再開入口として visibilitychange / pageshow を追加しました。
+2. これにより、reload後には存在していた初期化入口を、tab復帰後にも同じように通せるようにしました。
+3. 再開入口は lastResumeAtRef / resumeInFlightRef / RESUME_DEDUPE_MS で重複起動しないようにしています。
+4. online 復帰、SIGNED_OUT、INITIAL_SESSION 系、DB仕様、confirmed payload、state_changed、HOPY回答○、Compass、状態値 1..5 / 5段階の唯一の正には触っていません。
+*/
+
+/* /components/chat/lib/useChatInit.ts */

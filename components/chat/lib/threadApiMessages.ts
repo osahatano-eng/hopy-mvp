@@ -22,7 +22,6 @@ export type LoadMessagesStateArgs = {
   scrollToBottom: (behavior?: ScrollBehavior | "auto" | "smooth") => void;
 };
 
-// ✅ 一時的な揺れだけ拾う（過剰リトライで固まらないよう最小限）
 function shouldRetryLoadMessages(err: any) {
   const s = String(err?.message ?? err ?? "").toLowerCase();
   if (!s) return false;
@@ -196,7 +195,7 @@ function dedupeLoadedMessages(messages: ChatMsg[]): ChatMsg[] {
   return out;
 }
 
-function mapRowsToMessages(rows: any[]): ChatMsg[] {
+function mapRowsToMessages(rows: any[], threadId: string): ChatMsg[] {
   const raw = Array.isArray(rows) ? rows : [];
 
   const mapped = raw.map((r: any) => {
@@ -206,10 +205,16 @@ function mapRowsToMessages(rows: any[]): ChatMsg[] {
     const content = String(r?.content ?? "");
     const lang = r?.lang === "en" ? "en" : "ja";
     const created_at = String(r?.created_at ?? "").trim() || undefined;
+    const conversation_id =
+      String(r?.conversation_id ?? threadId ?? "").trim() || undefined;
 
     const out: any = { role, content, lang };
     if (id) out.id = id;
     if (created_at) out.created_at = created_at;
+    if (conversation_id) {
+      out.conversation_id = conversation_id;
+      out.thread_id = conversation_id;
+    }
 
     const currentPhase = safePhase1to5(r?.current_phase);
     const stateLevel = safePhase1to5(r?.state_level);
@@ -303,21 +308,23 @@ function mapRowsToMessages(rows: any[]): ChatMsg[] {
   return dedupeLoadedMessages(mapped);
 }
 
-/**
- * ✅ loadMessages:
- * 1) loadMessages(supabase, threadId) -> Promise<ChatMsg[]>
- * 2) loadMessages({ supabase, threadId, ... }) -> Promise<ChatMsg[]>
- *
- * このファイルは messages を取得して返すだけに固定する。
- * UI更新(setMessages / setVisibleCount / scrollToBottom)はここで行わない。
- */
-export async function loadMessages(supabase: SupabaseClient, threadId: string): Promise<ChatMsg[]>;
-export async function loadMessages(args: LoadMessagesStateArgs): Promise<ChatMsg[]>;
+export async function loadMessages(
+  supabase: SupabaseClient,
+  threadId: string,
+): Promise<ChatMsg[]>;
+export async function loadMessages(
+  args: LoadMessagesStateArgs,
+): Promise<ChatMsg[]>;
 export async function loadMessages(a1: any, a2?: any): Promise<ChatMsg[]> {
-  const isStateMode = typeof a1 === "object" && a1 && "supabase" in a1 && "threadId" in a1;
+  const isStateMode =
+    typeof a1 === "object" && a1 && "supabase" in a1 && "threadId" in a1;
 
-  const supabase: SupabaseClient = isStateMode ? (a1.supabase as SupabaseClient) : (a1 as SupabaseClient);
-  const threadId: string = isStateMode ? String(a1.threadId ?? "") : String(a2 ?? "");
+  const supabase: SupabaseClient = isStateMode
+    ? (a1.supabase as SupabaseClient)
+    : (a1 as SupabaseClient);
+  const threadId: string = isStateMode
+    ? String(a1.threadId ?? "")
+    : String(a2 ?? "");
 
   const tid = String(threadId ?? "").trim();
 
@@ -325,10 +332,14 @@ export async function loadMessages(a1: any, a2?: any): Promise<ChatMsg[]> {
     return [];
   }
 
-  logInfo("[threadApi] loadMessages:start", { threadId: tid, mode: isStateMode ? "state" : "pure" });
+  logInfo("[threadApi] loadMessages:start", {
+    threadId: tid,
+    mode: isStateMode ? "state" : "pure",
+  });
 
   const SELECT_COLUMNS = [
     "id",
+    "conversation_id",
     "role",
     "content",
     "lang",
@@ -354,7 +365,7 @@ export async function loadMessages(a1: any, a2?: any): Promise<ChatMsg[]> {
   const runQueryBasic = async () => {
     return await supabase
       .from("messages")
-      .select("id, role, content, lang, created_at")
+      .select("id, conversation_id, role, content, lang, created_at")
       .eq("conversation_id", tid)
       .order("created_at", { ascending: true })
       .limit(200);
@@ -389,20 +400,29 @@ export async function loadMessages(a1: any, a2?: any): Promise<ChatMsg[]> {
 
     if (error && isConversationIdMissingError(error)) {
       const reason = normMsg(error);
-      logWarn("[threadApi] loadMessages:conversation_id missing", { threadId: tid, reason });
+      logWarn("[threadApi] loadMessages:conversation_id missing", {
+        threadId: tid,
+        reason,
+      });
       throw new Error(reason || "messages_conversation_id_missing");
     }
 
     if (error) {
       const reason = normMsg(error);
-      logWarn("[threadApi] loadMessages:failed", { threadId: tid, reason, fk: "conversation_id" });
+      logWarn("[threadApi] loadMessages:failed", {
+        threadId: tid,
+        reason,
+        fk: "conversation_id",
+      });
+
       if (isAuthNotReadyError(error)) {
         throw new Error("auth_not_ready");
       }
+
       throw new Error(reason || "messages_load_failed");
     }
 
-    const fixed = mapRowsToMessages(Array.isArray(rows) ? rows : []);
+    const fixed = mapRowsToMessages(Array.isArray(rows) ? rows : [], tid);
 
     logInfo("[threadApi] loadMessages:ok", {
       threadId: tid,
@@ -414,7 +434,7 @@ export async function loadMessages(a1: any, a2?: any): Promise<ChatMsg[]> {
     return fixed;
   };
 
-  const delays = [0, 200, 600];
+  const delays = [0, 250, 800, 1600, 3200];
 
   let lastErr: any = null;
   for (let i = 0; i < delays.length; i++) {
@@ -457,17 +477,15 @@ threadId
 - compass_text
 - compass_prompt
 - hopy_confirmed_payload
-
-Compass 観点でこのファイルの意味
-このファイルは、送信直後に client message へ積まれた Compass 情報を、
-スレッド再読込時にも DB から復元して assistant message へ戻す場所である。
+- conversation_id
+- thread_id
 */
 
 /*
 【今回このファイルで修正したこと】
-1. loadMessages() の state mode に残っていた setMessages / setVisibleCount / scrollToBottom の実行責務を削除しました。
-2. tid 空時の setMessages([]) / setVisibleCount(200) / scrollToBottom("auto") も削除し、このファイルを取得専用に戻しました。
-3. current_phase / state_level / prev_phase / prev_state_level / state_changed / compass / hopy_confirmed_payload の復元ロジックには触っていません。
+1. conversation_id で取得済み rows に対する二重の thread 絞り込み関数を削除しました。
+2. loadMessages は「取得して ChatMsg[] に戻すだけ」の役割へ寄せました。
+3. retry、state 1..5、Compass、hopy_confirmed_payload、UI更新しない方針は触っていません。
 */
 
 /* /components/chat/lib/threadApiMessages.ts */

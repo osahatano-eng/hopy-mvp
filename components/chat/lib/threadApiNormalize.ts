@@ -2,15 +2,17 @@
 import type { Thread } from "./chatTypes";
 import { safeIso, nowIso, safeStateLevel } from "./threadApiSupport";
 
-// ✅ 現DB（conversations）実在列に合わせる
-// columns: id, user_id, title, created_at, updated_at, state_level, client_request_id, current_phase
-export const THREAD_SELECT_FULL = "id, title, updated_at, created_at, state_level, current_phase";
+const THREAD_SELECT_COLUMNS_WITH_UPDATED =
+  "id, title, updated_at, created_at, state_level, current_phase";
 
-export const THREAD_SELECT_NO_UPDATED = "id, title, created_at, state_level, current_phase";
+const THREAD_SELECT_COLUMNS_NO_UPDATED =
+  "id, title, created_at, state_level, current_phase";
 
-export const THREAD_SELECT_MIN = "id, title, updated_at, created_at, state_level, current_phase";
+export const THREAD_SELECT_FULL = THREAD_SELECT_COLUMNS_WITH_UPDATED;
+export const THREAD_SELECT_MIN = THREAD_SELECT_COLUMNS_WITH_UPDATED;
 
-export const THREAD_SELECT_MIN_NO_UPDATED = "id, title, created_at, state_level, current_phase";
+export const THREAD_SELECT_NO_UPDATED = THREAD_SELECT_COLUMNS_NO_UPDATED;
+export const THREAD_SELECT_MIN_NO_UPDATED = THREAD_SELECT_COLUMNS_NO_UPDATED;
 
 function safePhase(v: any): number | null {
   const n = Number(v);
@@ -32,20 +34,13 @@ function safeBool(v: any): boolean | null {
   return null;
 }
 
-// ✅ Thread を「必ずUIが食える形」に正規化（チャット個別状態も載せる）
-// ✅ conversations 実在列を正として扱う
 export function normalizeThreadRow(
   row: any,
   titleFallback: string,
   opts?: {
     preferNowIfMissingUpdated?: boolean;
-    /**
-     * ✅ “確定イベント”の安定化
-     * - DBがupdated_atを返せる環境では「上書きしない」（並びの不自然なジャンプを防ぐ）
-     * - ただし updated_at が空/無い環境では now を入れて UI の並びが死なないようにする
-     */
     bumpNowForEventIfMissingUpdated?: boolean;
-  }
+  },
 ): Thread {
   const id = String(row?.id ?? "").trim();
   const titleRaw = String(row?.title ?? "").trim();
@@ -56,13 +51,10 @@ export function normalizeThreadRow(
 
   let updated_at = updated_at_raw || created_at_raw;
 
-  // ✅ updated_at が取れない/空でも「確定イベント」で並びが死なないように保険を入れる
   if (!updated_at && opts?.preferNowIfMissingUpdated) {
     updated_at = nowIso();
   }
 
-  // ✅ 確定イベント：updated_at が無い場合のみ now 補完
-  // - DB trigger/返却が正しい環境では “上書きしない”
   if (!updated_at && opts?.bumpNowForEventIfMissingUpdated) {
     const n = nowIso();
     if (n) updated_at = n;
@@ -71,7 +63,6 @@ export function normalizeThreadRow(
   const out: any = { id, title };
   if (updated_at) out.updated_at = updated_at;
 
-  // ✅ conversations 実在列: state_level / current_phase を正として扱う
   const sl = safeStateLevel(row?.state_level);
   if (sl != null) {
     out.state_level = sl;
@@ -80,8 +71,6 @@ export function normalizeThreadRow(
   }
 
   const currentPhase = safePhase(row?.current_phase);
-
-  // ✅ conversations に prev/state_changed 系は無いので、存在する場合だけ通す
   const prevPhase = safePhase(row?.prev_phase);
   const prevStateLevel = safeStateLevel(row?.prev_state_level);
   const stateChanged = safeBool(row?.state_changed);
@@ -154,3 +143,17 @@ export function normalizeThreadRow(
 
   return out as Thread;
 }
+
+/*
+このファイルの正式役割
+conversations 行を Thread に正規化する共通ファイル。
+select 文字列の共通定義と、UI が受け取れる Thread 形への変換だけを担当する。
+取得・作成・更新・本文表示の責務は持たない。
+
+【今回このファイルで修正したこと】
+1. THREAD_SELECT_FULL と THREAD_SELECT_MIN の重複定義を共通化しました。
+2. THREAD_SELECT_NO_UPDATED と THREAD_SELECT_MIN_NO_UPDATED の重複定義を共通化しました。
+3. normalizeThreadRow の出力内容、state 1..5、updated_at 補完、alias フィールド構成には触っていません。
+*/
+
+/* /components/chat/lib/threadApiNormalize.ts */

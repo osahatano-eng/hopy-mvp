@@ -21,20 +21,20 @@ export function isDebugLogEnabled(): boolean {
   }
 }
 
-export function logWarn(...args: any[]) {
+function runLog(method: "warn" | "info", args: any[]) {
   if (!isDebugLogEnabled()) return;
   try {
     // eslint-disable-next-line no-console
-    console.warn(...args);
+    console[method](...args);
   } catch {}
 }
 
+export function logWarn(...args: any[]) {
+  runLog("warn", args);
+}
+
 export function logInfo(...args: any[]) {
-  if (!isDebugLogEnabled()) return;
-  try {
-    // eslint-disable-next-line no-console
-    console.info(...args);
-  } catch {}
+  runLog("info", args);
 }
 
 export function normMsg(x: any) {
@@ -95,18 +95,19 @@ export function safeUUID(): string {
   }
 }
 
-export function safeStateLevel(v: any): number | undefined {
+function safePhaseValue(v: any): number | undefined {
   const n = Number(v);
   if (!Number.isFinite(n)) return undefined;
   if (n < 1 || n > 5) return undefined;
   return Math.trunc(n);
 }
 
+export function safeStateLevel(v: any): number | undefined {
+  return safePhaseValue(v);
+}
+
 export function safeCurrentPhase(v: any): number | undefined {
-  const n = Number(v);
-  if (!Number.isFinite(n)) return undefined;
-  if (n < 1 || n > 5) return undefined;
-  return Math.trunc(n);
+  return safePhaseValue(v);
 }
 
 export function safeStabilityScore(v: any): number | undefined {
@@ -130,6 +131,11 @@ threadApi 系で使う共通補助関数ファイル。
 ログ、時刻、ID、数値正規化などの土台だけを担う。
 
 【今回このファイルで修正したこと】
-safeCurrentPhase の 0..4 前提をやめ、1..5 に統一した。
-safeStateLevel も 1..5 の範囲にそろえた。
+logWarn / logInfo の重複していたログ実行処理を runLog に一本化した。
+safeStateLevel / safeCurrentPhase の重複していた 1..5 正規化処理を safePhaseValue に一本化した。
+外部 export 名と意味は変えず、このファイル内の重複だけを減らした。
+*/
+
+/*
+/components/chat/lib/threadApiSupport.ts
 */

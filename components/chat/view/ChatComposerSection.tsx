@@ -88,6 +88,8 @@ export const ChatComposerSection = React.memo(function ChatComposerSection(props
     onTryGuestAction,
   } = props;
 
+  void workspaceMode;
+
   const commonProps = useMemo(
     () => ({
       uiLang,
@@ -120,7 +122,7 @@ export const ChatComposerSection = React.memo(function ChatComposerSection(props
       onArmFocusGuard,
       onRunFocusGuard,
       onFocusScrollBottom,
-    ]
+    ],
   );
 
   if (guestMode) {
@@ -142,7 +144,7 @@ export const ChatComposerSection = React.memo(function ChatComposerSection(props
   return (
     <ChatComposer
       {...commonProps}
-      loggedIn={workspaceMode}
+      loggedIn={true}
       threads={threads}
       activeThreadId={activeThreadId}
       canSendNow={canSendNow}
@@ -155,3 +157,19 @@ export const ChatComposerSection = React.memo(function ChatComposerSection(props
 });
 
 export default ChatComposerSection;
+
+/*
+このファイルの正式役割:
+ChatComposerSection は、親から受け取った値を ChatComposer 向け props に整えて渡すことだけを担当する。
+このファイルは、本文採用の正を作る場所でも、状態や Compass を再判定する場所でもない。
+guest / logged-in の入口を分けつつ、送信欄に必要な props をそのまま中継するだけを役割とする。
+*/
+
+/*
+【今回このファイルで修正したこと】
+1. 非 guest 分岐で ChatComposer に渡す loggedIn を workspaceMode ではなく true に固定しました。
+2. 通常のログイン利用で loggedIn=false になりうる混線を、このファイル内だけで止めました。
+3. guest 分岐、送信関数、loading、threadBusy、threads、activeThreadId、本文採用、HOPY唯一の正には触っていません。
+*/
+
+/* /components/chat/view/ChatComposerSection.tsx */

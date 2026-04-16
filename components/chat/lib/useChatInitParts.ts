@@ -7,6 +7,25 @@ import type { SupabaseClient, Session } from "@supabase/supabase-js";
 import type { Lang, Thread, ChatMsg } from "./chatTypes";
 import { fetchThreads, ensureActiveThread } from "./threadApi";
 import { saveActiveThreadId, clearActiveThreadId } from "./threadStore";
+import {
+  sortThreadsByUpdatedDesc,
+  mergeThreadsPreferNewer,
+  pickExistingThreadId,
+} from "./useChatInitThreadList";
+import { isSessionUsable, getSessionWithRetry } from "./useChatInitSession";
+
+export {
+  createThreadsRefreshHandler,
+  createSelectThreadHandler,
+} from "./useChatInitEventHandlers";
+export type { ThreadsRefreshHandlerArgs } from "./useChatInitEventHandlers";
+
+export {
+  isSessionUsable,
+  shouldHandleAuthEventWithRefs,
+  getSessionWithRetry,
+} from "./useChatInitSession";
+export type { ShouldHandleAuthRefs } from "./useChatInitSession";
 
 export const IS_DEV =
   (() => {
@@ -37,6 +56,7 @@ export function logInfo(...args: unknown[]) {
     console.info(...args);
   } catch {}
 }
+
 export function logWarn(...args: unknown[]) {
   if (!isDebugLogEnabled()) return;
   try {
@@ -60,129 +80,6 @@ export function microtask(fn: () => void) {
 export function errText(x: unknown) {
   const s = String((x as any)?.message ?? x ?? "").trim();
   return s || "unknown error";
-}
-
-export function safeIso(v: unknown): string {
-  const s = String(v ?? "").trim();
-  return s;
-}
-
-export function toMs(isoLike: string): number {
-  const s = String(isoLike ?? "").trim();
-  if (!s) return 0;
-  const t = Date.parse(s);
-  if (!Number.isFinite(t)) return 0;
-  return t;
-}
-
-export function pickTitle(prevTitle: string, nextTitle: string, fallback: string) {
-  const p = String(prevTitle ?? "").trim();
-  const n = String(nextTitle ?? "").trim();
-  if (n) return n;
-  if (p) return p;
-  return fallback;
-}
-
-export function isSessionUsable(session: Session | null | undefined): session is Session {
-  return Boolean(session?.user?.id) && Boolean(String(session?.access_token ?? "").trim());
-}
-
-export function sortThreadsByUpdatedDesc(list: Thread[]): Thread[] {
-  const arr = Array.isArray(list) ? list.slice() : [];
-  if (arr.length <= 1) return arr;
-
-  const idx = new Map<string, number>();
-  for (let i = 0; i < arr.length; i++) {
-    const id = String(arr[i]?.id ?? "").trim();
-    if (!id) continue;
-    if (!idx.has(id)) idx.set(id, i);
-  }
-
-  arr.sort((a, b) => {
-    const am = toMs(safeIso(a?.updated_at));
-    const bm = toMs(safeIso(b?.updated_at));
-
-    if (bm !== am) return bm - am;
-
-    const aid = String(a?.id ?? "").trim();
-    const bid = String(b?.id ?? "").trim();
-    const ai = idx.get(aid) ?? 0;
-    const bi = idx.get(bid) ?? 0;
-    return ai - bi;
-  });
-
-  return arr;
-}
-
-export function mergeThreadsPreferNewer(prev: Thread[], incoming: Thread[], titleFallback: string): Thread[] {
-  const prevList = Array.isArray(prev) ? prev : [];
-  const nextList = Array.isArray(incoming) ? incoming : [];
-
-  const prevMap = new Map<string, Thread>();
-  for (const t of prevList) {
-    const id = String(t?.id ?? "").trim();
-    if (!id) continue;
-    if (!prevMap.has(id)) prevMap.set(id, t);
-  }
-
-  const seen = new Set<string>();
-  const out: Thread[] = [];
-
-  for (const t of nextList) {
-    const id = String(t?.id ?? "").trim();
-    if (!id) continue;
-    if (seen.has(id)) continue;
-    seen.add(id);
-
-    const prevT = prevMap.get(id);
-
-    const incTitle = String(t?.title ?? "").trim();
-    const incUpdated = safeIso(t?.updated_at);
-
-    if (!prevT) {
-      const title = incTitle || titleFallback;
-      const outT: Thread = { ...t, id, title };
-      out.push(outT);
-      continue;
-    }
-
-    const prevTitle = String(prevT?.title ?? "").trim();
-    const prevUpdated = safeIso(prevT?.updated_at);
-
-    const prevMs = toMs(prevUpdated);
-    const incMs = toMs(incUpdated);
-
-    const incomingIsNewer = incMs > prevMs;
-
-    const title = incomingIsNewer
-      ? pickTitle(prevTitle, incTitle, titleFallback)
-      : pickTitle(incTitle, prevTitle, titleFallback);
-
-    let updated_at = prevUpdated;
-    if (incUpdated) {
-      if (!prevUpdated) updated_at = incUpdated;
-      else if (incMs >= prevMs) updated_at = incUpdated;
-    }
-
-    const merged: Thread = { ...prevT, ...t, id, title };
-    if (updated_at) merged.updated_at = updated_at;
-    else delete (merged as any).updated_at;
-
-    out.push(merged);
-  }
-
-  for (const t of prevList) {
-    const id = String(t?.id ?? "").trim();
-    if (!id) continue;
-    if (seen.has(id)) continue;
-    seen.add(id);
-
-    const title = String(t?.title ?? "").trim() || titleFallback;
-    const merged: Thread = { ...t, id, title };
-    out.push(merged);
-  }
-
-  return out;
 }
 
 export type UseChatInitParams<TState> = {
@@ -229,44 +126,12 @@ export type FetchThreadsWithRetryResult = {
   error?: string;
 };
 
-export type ShouldHandleAuthRefs = {
-  handledInitialSessionRef: MutableRefObject<boolean>;
-  lastAuthEventRef: MutableRefObject<{ key: string; at: number }>;
-  AUTH_EVENT_DEDUPE_MS: number;
-};
-
-export function shouldHandleAuthEventWithRefs(
-  refs: ShouldHandleAuthRefs,
-  event: string,
-  session: Session | null
-) {
-  const ev = String(event ?? "").trim();
-
-  if (ev === "INITIAL_SESSION") {
-    if (!session?.user) return false;
-    if (refs.handledInitialSessionRef.current) return false;
-    refs.handledInitialSessionRef.current = true;
-    return true;
-  }
-
-  const uid = String(session?.user?.id ?? "");
-  const key = `${ev}:${uid}`;
-  const now = Date.now();
-  const last = refs.lastAuthEventRef.current;
-
-  if (last.key === key && now - last.at <= refs.AUTH_EVENT_DEDUPE_MS) return false;
-
-  refs.lastAuthEventRef.current = { key, at: now };
-  return true;
-}
-
 export async function fetchUserStateOnly<TState>(args: {
   isAlive: () => boolean;
   initSeqRef: MutableRefObject<number>;
   seq: number;
   paramsRef: MutableRefObject<UseChatInitParams<TState>>;
   userId: string;
-  accessToken: string | undefined;
 }) {
   const { isAlive, initSeqRef, seq, paramsRef, userId } = args;
   const p = paramsRef.current;
@@ -296,7 +161,7 @@ export async function fetchUserStateOnly<TState>(args: {
           metadata?.full_name ??
           metadata?.display_name ??
           sessionUser?.email ??
-          ""
+          "",
       ).trim() || null;
 
     const resolvedUserImageUrl =
@@ -344,7 +209,10 @@ export async function fetchUserStateOnly<TState>(args: {
     const normalizedState = p.normalizeState(rawState);
 
     const mergedState =
-      rawState && normalizedState && typeof rawState === "object" && typeof normalizedState === "object"
+      rawState &&
+      normalizedState &&
+      typeof rawState === "object" &&
+      typeof normalizedState === "object"
         ? ({
             ...rawState,
             ...normalizedState,
@@ -385,7 +253,9 @@ export async function fetchThreadsOnly<TState>(args: {
     const incoming = Array.isArray(r.list) ? r.list : [];
 
     p.setThreads((prev) =>
-      sortThreadsByUpdatedDesc(mergeThreadsPreferNewer(Array.isArray(prev) ? prev : [], incoming, titleFallback))
+      sortThreadsByUpdatedDesc(
+        mergeThreadsPreferNewer(Array.isArray(prev) ? prev : [], incoming, titleFallback),
+      ),
     );
 
     return incoming;
@@ -439,12 +309,12 @@ export async function fetchThreadsWithRetry<TState>(args: {
         if (i < delays.length - 1) continue;
 
         return { ok: true, list: [], allowCreateNew: true };
-      } else {
-        lastErr = String(r.error ?? "fetchThreads error");
-        if (i < delays.length - 1) continue;
-
-        return { ok: false, list: [], allowCreateNew: false, error: lastErr };
       }
+
+      lastErr = String(r.error ?? "fetchThreads error");
+      if (i < delays.length - 1) continue;
+
+      return { ok: false, list: [], allowCreateNew: false, error: lastErr };
     } catch (e) {
       lastErr = errText(e);
       logWarn("[useChatInit] fetchThreads threw", lastErr);
@@ -460,225 +330,6 @@ export async function fetchThreadsWithRetry<TState>(args: {
     list: Array.isArray(list) ? list : [],
     allowCreateNew: false,
     error: lastErr,
-  };
-}
-
-export async function getSessionWithRetry(args: {
-  isAlive: () => boolean;
-  initSeqRef: MutableRefObject<number>;
-  seq: number;
-  supabase: SupabaseClient<any>;
-  hint?: Session | null;
-}) {
-  const { isAlive, initSeqRef, seq, supabase, hint } = args;
-  if (isSessionUsable(hint ?? null)) return hint as Session;
-
-  const delays = [0, 80, 160, 260, 420, 650, 900, 1200, 1600, 2100, 2750];
-
-  for (let i = 0; i < delays.length; i++) {
-    if (!isAlive()) return null;
-    if (seq !== initSeqRef.current) return null;
-
-    if (delays[i] > 0) await sleep(delays[i]);
-
-    if (!isAlive()) return null;
-    if (seq !== initSeqRef.current) return null;
-
-    try {
-      const { data } = await supabase.auth.getSession();
-      const s = data.session ?? null;
-      if (isSessionUsable(s)) return s;
-    } catch {}
-  }
-  return null;
-}
-
-export type ThreadsRefreshHandlerArgs<TState> = {
-  isAlive: () => boolean;
-  supabase: SupabaseClient<any>;
-  paramsRef: MutableRefObject<UseChatInitParams<TState>>;
-  bumpThreadMutation: (reason: string) => void;
-};
-
-export function createThreadsRefreshHandler<TState>(args: ThreadsRefreshHandlerArgs<TState>): EventListener {
-  const { isAlive, supabase, paramsRef, bumpThreadMutation } = args;
-
-  return (ev) => {
-    if (!isAlive()) return;
-    if (typeof window === "undefined") return;
-
-    const p = paramsRef.current;
-
-    try {
-      const d = getCustomDetail(ev);
-
-      const reason = String(d?.reason ?? "").trim();
-      bumpThreadMutation(reason || "threads-refresh");
-
-      if (reason === "rename-failed") {
-        microtask(() => {
-          (async () => {
-            try {
-              const r = await fetchThreads(supabase, p.uiLang);
-              if (!isAlive()) return;
-              if (!r.ok) return;
-
-              const titleFallback = p.uiLang === "en" ? "New chat" : "新規チャット";
-              const incoming = Array.isArray(r.list) ? r.list : [];
-
-              p.setThreads((prev) =>
-                sortThreadsByUpdatedDesc(
-                  mergeThreadsPreferNewer(Array.isArray(prev) ? prev : [], incoming, titleFallback)
-                )
-              );
-            } catch (e) {
-              logWarn("[useChatInit] threads-refresh(rename-failed) refetch error", errText(e));
-            }
-          })();
-        });
-        return;
-      }
-
-      const listRaw = (d as any)?.list ?? (d as any)?.threads ?? (d as any)?.items;
-      const hasList = Array.isArray(listRaw);
-
-      const tid = String((d as any)?.id ?? (d as any)?.threadId ?? (d as any)?.thread_id ?? "").trim();
-
-      let title = String((d as any)?.title ?? (d as any)?.nextTitle ?? (d as any)?.next_title ?? "").trim();
-
-      const rollbackish =
-        reason.includes("rollback") ||
-        reason.includes("rename-rollback") ||
-        reason.includes("failed") ||
-        reason.includes("rename-failed");
-
-      if (!title && rollbackish) {
-        title = String(
-          (d as any)?.prevTitle ??
-            (d as any)?.previousTitle ??
-            (d as any)?.prev_title ??
-            (d as any)?.previous_title ??
-            ""
-        ).trim();
-      }
-
-      const updated_at_in = String((d as any)?.updated_at ?? "").trim();
-
-      if (!hasList && !tid) return;
-
-      const titleFallback = p.uiLang === "en" ? "New chat" : "新規チャット";
-
-      p.setThreads((prev) => {
-        const prevList = Array.isArray(prev) ? prev : [];
-
-        if (hasList) {
-          const nextList = (listRaw as any[]).filter(Boolean) as Thread[];
-          const merged = mergeThreadsPreferNewer(prevList, nextList, titleFallback);
-          return sortThreadsByUpdatedDesc(merged);
-        }
-
-        if (!tid) return prevList;
-        if (!title && !updated_at_in) return prevList;
-
-        let found = false;
-        let changed = false;
-
-        const next = prevList.map((t) => {
-          const id = String(t?.id ?? "").trim();
-          if (id !== tid) return t;
-
-          found = true;
-
-          const prevTitle = String(t?.title ?? "").trim();
-          const prevUpdated = safeIso(t?.updated_at);
-
-          const nt = title ? title : prevTitle;
-
-          const prevMs = toMs(prevUpdated);
-          const incMs = toMs(updated_at_in);
-
-          let nu = prevUpdated;
-          if (updated_at_in) {
-            if (!prevUpdated) nu = updated_at_in;
-            else if (incMs >= prevMs) nu = updated_at_in;
-          }
-
-          if (prevTitle === nt && prevUpdated === nu) return t;
-
-          changed = true;
-          const out: Thread = { ...t };
-          if (nt) out.title = nt;
-          if (nu) out.updated_at = nu;
-          else delete (out as any).updated_at;
-          return out;
-        });
-
-        if (!found) {
-          let ua = updated_at_in;
-          if (!ua && !rollbackish) {
-            try {
-              ua = new Date().toISOString();
-            } catch {}
-          }
-
-          const out: Thread = { id: tid, title: title || titleFallback };
-          if (ua) out.updated_at = ua;
-
-          return sortThreadsByUpdatedDesc([out, ...prevList]);
-        }
-
-        if (!changed) return prevList;
-        return sortThreadsByUpdatedDesc(next);
-      });
-    } catch (e) {
-      logWarn("[useChatInit] threads-refresh handler error", errText(e));
-    }
-  };
-}
-
-export function createSelectThreadHandler(args: {
-  isAlive: () => boolean;
-  bumpThreadMutation: (reason: string) => void;
-}): EventListener {
-  const { isAlive, bumpThreadMutation } = args;
-
-  return (ev) => {
-    if (!isAlive()) return;
-    if (typeof window === "undefined") return;
-
-    try {
-      const d = getCustomDetail(ev);
-      const tid = String((d as any)?.threadId ?? (d as any)?.id ?? (d as any)?.thread_id ?? "").trim();
-      const reason = String((d as any)?.reason ?? "select-thread").trim();
-
-      bumpThreadMutation(reason || "select-thread");
-      if (tid) logInfo("[useChatInit] select-thread observed", { tid, reason });
-    } catch {
-      bumpThreadMutation("select-thread");
-    }
-  };
-}
-
-export function createThreadObservedHandler(args: {
-  isAlive: () => boolean;
-  bumpThreadMutation: (reason: string) => void;
-}): EventListener {
-  const { isAlive, bumpThreadMutation } = args;
-
-  return (ev) => {
-    if (!isAlive()) return;
-    if (typeof window === "undefined") return;
-
-    try {
-      const d = getCustomDetail(ev);
-      const tid = String((d as any)?.threadId ?? (d as any)?.id ?? "").trim();
-      const reason = String((d as any)?.reason ?? "thread").trim();
-
-      bumpThreadMutation(reason || "thread");
-      if (tid) logInfo("[useChatInit] thread observed", { tid, reason });
-    } catch {
-      bumpThreadMutation("thread");
-    }
   };
 }
 
@@ -714,7 +365,11 @@ export type InitControllerArgs<TState> = {
   threadMutationSeqRef: MutableRefObject<number>;
   lastThreadMutationAtRef: MutableRefObject<number>;
 
-  dispatchThreadEvent: (threadId: string, reason: string, source?: "event" | "storage" | "direct" | "unknown") => void;
+  dispatchThreadEvent: (
+    threadId: string,
+    reason: string,
+    source?: "event" | "storage" | "direct" | "unknown",
+  ) => void;
 
   reset: () => void;
   softAuthLost: () => void;
@@ -752,17 +407,7 @@ export function createInitController<TState>(args: InitControllerArgs<TState>) {
     createRequestRef,
     CREATE_REQ_REUSE_MS,
 
-    threadMutationSeqRef,
-    lastThreadMutationAtRef,
-
     dispatchThreadEvent,
-
-    reset,
-    softAuthLost,
-
-    lastResumeAtRef,
-    resumeInFlightRef,
-    RESUME_DEDUPE_MS,
   } = args;
 
   const clearInitDebounceTimer = () => {
@@ -775,7 +420,11 @@ export function createInitController<TState>(args: InitControllerArgs<TState>) {
     }
   };
 
-  const schedulePostInitThreadsRefresh = (seq: number, delayMs: number, reason: string) => {
+  const schedulePostInitThreadsRefresh = (
+    seq: number,
+    delayMs: number,
+    reason: string,
+  ) => {
     try {
       window.setTimeout(() => {
         if (!isAlive()) return;
@@ -802,54 +451,11 @@ export function createInitController<TState>(args: InitControllerArgs<TState>) {
     } catch {}
   };
 
-  const resumeRefresh = async (reason: string) => {
-    if (!isAlive()) return;
-
-    const now = Date.now();
-    if (now - lastResumeAtRef.current <= RESUME_DEDUPE_MS) return;
-    lastResumeAtRef.current = now;
-
-    if (resumeInFlightRef.current) return;
-    resumeInFlightRef.current = true;
-
-    const seq = ++initSeqRef.current;
-
-    try {
-      const s = await getSessionWithRetry({ isAlive, initSeqRef, seq, supabase, hint: null });
-
-      if (!isAlive()) return;
-      if (seq !== initSeqRef.current) return;
-
-      if (!isSessionUsable(s)) {
-        logWarn("[useChatInit] resumeRefresh no session -> keep (no reset)", { reason });
-        return;
-      }
-
-      try {
-        fetchUserStateOnly<TState>({
-          isAlive,
-          initSeqRef,
-          seq,
-          paramsRef,
-          userId: String(s.user.id ?? ""),
-          accessToken: s.access_token,
-        }).catch(() => {});
-      } catch {}
-
-      await fetchThreadsOnly<TState>({ isAlive, initSeqRef, seq, supabase, paramsRef });
-
-      if (!isAlive()) return;
-      if (seq !== initSeqRef.current) return;
-
-      logInfo("[useChatInit] resumeRefresh done", { reason, rescued: false });
-    } catch (e) {
-      logWarn("[useChatInit] resumeRefresh error", { reason, err: errText(e) });
-    } finally {
-      resumeInFlightRef.current = false;
-    }
-  };
-
-  const init = async (force = false, sessionHint?: Session | null, forceClientRequestId?: string) => {
+  const init = async (
+    force = false,
+    sessionHint?: Session | null,
+    forceClientRequestId?: string,
+  ) => {
     const p = paramsRef.current;
 
     const incomingId = String(forceClientRequestId ?? "").trim();
@@ -878,36 +484,16 @@ export function createInitController<TState>(args: InitControllerArgs<TState>) {
       } catch {}
     };
 
-    if (initRunningRef.current) {
-      const prev = pendingInitRef.current;
-      pendingInitRef.current = {
-        force: Boolean(force || prev?.force),
-        sessionHint: sessionHint ?? prev?.sessionHint,
-        clientRequestId: incomingId || prev?.clientRequestId,
-      };
-      logInfo("[useChatInit] init queued (already running)", {
-        force: pendingInitRef.current.force,
-        clientRequestId: pendingInitRef.current.clientRequestId || undefined,
-      });
-      return;
-    }
-
     const now = Date.now();
     if (!force && now - lastInitAtRef.current < 100) {
-      const prev = pendingInitRef.current;
-      pendingInitRef.current = {
-        force: Boolean(prev?.force),
-        sessionHint: sessionHint ?? prev?.sessionHint,
-        clientRequestId: incomingId || prev?.clientRequestId,
-      };
-      logInfo("[useChatInit] init queued (debounced)", {
-        force: pendingInitRef.current.force,
-        clientRequestId: pendingInitRef.current.clientRequestId || undefined,
+      logInfo("[useChatInit] init ignored (debounced)", {
+        clientRequestId: incomingId || undefined,
       });
-
-      schedulePendingInit(120);
       return;
     }
+
+    clearInitDebounceTimer();
+    pendingInitRef.current = null;
 
     initRunningRef.current = true;
     lastInitAtRef.current = now;
@@ -933,20 +519,20 @@ export function createInitController<TState>(args: InitControllerArgs<TState>) {
     } catch {}
 
     try {
-      const session = await getSessionWithRetry({ isAlive, initSeqRef, seq, supabase, hint: sessionHint ?? null });
+      const session = await getSessionWithRetry({
+        isAlive,
+        initSeqRef,
+        seq,
+        supabase,
+        hint: sessionHint ?? null,
+      });
 
       if (!isAlive()) return;
       if (seq !== initSeqRef.current) return;
 
       const user = isSessionUsable(session) ? session.user : null;
-      const accessToken = isSessionUsable(session) ? session.access_token : undefined;
 
       if (!user) {
-        if (lastUserIdRef.current) {
-          logWarn("[useChatInit] init no session -> keep (no softAuthLost)");
-          return;
-        }
-
         const prev = pendingInitRef.current;
         pendingInitRef.current = {
           force: Boolean(prev?.force || force),
@@ -955,35 +541,13 @@ export function createInitController<TState>(args: InitControllerArgs<TState>) {
         };
         logWarn("[useChatInit] init no session -> schedule retry (no reset)", {
           delayMs: 420,
+          hadUser: Boolean(lastUserIdRef.current),
           clientRequestId: pendingInitRef.current.clientRequestId || undefined,
         });
         schedulePendingInit(420);
         return;
       }
 
-      if (!force && !forceCreateNextThreadRef.current && lastUserIdRef.current === user.id) {
-        await fetchUserStateOnly<TState>({
-          isAlive,
-          initSeqRef,
-          seq,
-          paramsRef,
-          userId: user.id,
-          accessToken,
-        });
-
-        await fetchThreadsOnly<TState>({ isAlive, initSeqRef, seq, supabase, paramsRef });
-
-        if (!isAlive()) return;
-        if (seq !== initSeqRef.current) return;
-
-        logInfo("[useChatInit] same-user reinit -> keep current active thread");
-
-        schedulePostInitThreadsRefresh(seq, 480, "same-user-reinit:keep-active");
-
-        await Promise.resolve();
-        microtask(() => p.inputRef?.current?.focus?.());
-        return;
-      }
       lastUserIdRef.current = user.id;
 
       p.setEmail(user.email ?? "");
@@ -994,11 +558,16 @@ export function createInitController<TState>(args: InitControllerArgs<TState>) {
         seq,
         paramsRef,
         userId: user.id,
-        accessToken,
       });
 
       try {
-        fetchThreadsOnly<TState>({ isAlive, initSeqRef, seq, supabase, paramsRef }).catch(() => {});
+        fetchThreadsOnly<TState>({
+          isAlive,
+          initSeqRef,
+          seq,
+          supabase,
+          paramsRef,
+        }).catch(() => {});
       } catch {}
 
       const titleFallback = p.uiLang === "en" ? "New chat" : "新規チャット";
@@ -1016,8 +585,12 @@ export function createInitController<TState>(args: InitControllerArgs<TState>) {
           const safeIncoming = Array.isArray(incoming) ? incoming : [];
           p.setThreads((prev) =>
             sortThreadsByUpdatedDesc(
-              mergeThreadsPreferNewer(Array.isArray(prev) ? prev : [], safeIncoming, titleFallback)
-            )
+              mergeThreadsPreferNewer(
+                Array.isArray(prev) ? prev : [],
+                safeIncoming,
+                titleFallback,
+              ),
+            ),
           );
         },
       });
@@ -1029,7 +602,13 @@ export function createInitController<TState>(args: InitControllerArgs<TState>) {
       if (tr.ok) {
         const incoming = Array.isArray(tr.list) ? tr.list : [];
         p.setThreads((prev) =>
-          sortThreadsByUpdatedDesc(mergeThreadsPreferNewer(Array.isArray(prev) ? prev : [], incoming, titleFallback))
+          sortThreadsByUpdatedDesc(
+            mergeThreadsPreferNewer(
+              Array.isArray(prev) ? prev : [],
+              incoming,
+              titleFallback,
+            ),
+          ),
         );
       } else if (wantForceCreate) {
         try {
@@ -1039,6 +618,10 @@ export function createInitController<TState>(args: InitControllerArgs<TState>) {
 
       const list = tr.ok ? tr.list : ([] as Thread[]);
       const sortedList = sortThreadsByUpdatedDesc(Array.isArray(list) ? list : []);
+      const currentTargetThreadId = pickExistingThreadId(
+        sortedList,
+        activeThreadIdShadowRef.current,
+      );
 
       if (!tr.ok && !wantForceCreate) {
         logWarn("[useChatInit] threads fetch failed -> keep idle state and retry", {
@@ -1074,7 +657,13 @@ export function createInitController<TState>(args: InitControllerArgs<TState>) {
 
           const nextList = Array.isArray(next) ? (next as Thread[]) : [];
           p.setThreads((prev) =>
-            sortThreadsByUpdatedDesc(mergeThreadsPreferNewer(Array.isArray(prev) ? prev : [], nextList, titleFallback))
+            sortThreadsByUpdatedDesc(
+              mergeThreadsPreferNewer(
+                Array.isArray(prev) ? prev : [],
+                nextList,
+                titleFallback,
+              ),
+            ),
           );
         } catch {
           try {
@@ -1099,9 +688,7 @@ export function createInitController<TState>(args: InitControllerArgs<TState>) {
         } catch {}
       }
 
-      const allowCreate = wantForceCreate;
-
-      if (allowCreate) {
+      if (wantForceCreate) {
         try {
           const r = await ensureActiveThread({
             supabase,
@@ -1110,7 +697,9 @@ export function createInitController<TState>(args: InitControllerArgs<TState>) {
             setActiveThreadId: (v: string | null) => setActiveThreadIdSafe(v),
             setThreads: mergeSetThreads,
             forceCreate: wantForceCreate,
-            clientRequestId: clientRequestIdForCreate ? clientRequestIdForCreate : undefined,
+            clientRequestId: clientRequestIdForCreate
+              ? clientRequestIdForCreate
+              : undefined,
           });
 
           if (r.ok) {
@@ -1125,7 +714,7 @@ export function createInitController<TState>(args: InitControllerArgs<TState>) {
           p.setUserStateErr(`thread create failed: ${errText(e)}`);
         }
       } else if (sortedList.length > 0) {
-        tid = String(sortedList[0]?.id ?? "").trim() || null;
+        tid = currentTargetThreadId || String(sortedList[0]?.id ?? "").trim() || null;
         if (tid) {
           try {
             setActiveThreadIdSafe(tid);
@@ -1141,7 +730,11 @@ export function createInitController<TState>(args: InitControllerArgs<TState>) {
           saveActiveThreadId(tid);
         } catch {}
 
-        dispatchThreadEvent(tid, wantForceCreate ? "init:create-forced" : "init:restore-existing", "event");
+        dispatchThreadEvent(
+          tid,
+          wantForceCreate ? "init:create-forced" : "init:restore-existing",
+          "event",
+        );
 
         p.scrollToBottom("auto");
 
@@ -1151,10 +744,17 @@ export function createInitController<TState>(args: InitControllerArgs<TState>) {
           allowCreateNew: tr.ok ? tr.allowCreateNew : "unknown",
           forced: wantForceCreate,
           threadsOk: tr.ok,
+          restoredCurrentTarget: Boolean(
+            !wantForceCreate && currentTargetThreadId && tid === currentTargetThreadId,
+          ),
           clientRequestId: clientRequestIdForCreate || undefined,
         });
 
-        schedulePostInitThreadsRefresh(seq, 480, wantForceCreate ? "init:create-forced" : "init:restore-existing");
+        schedulePostInitThreadsRefresh(
+          seq,
+          480,
+          wantForceCreate ? "init:create-forced" : "init:restore-existing",
+        );
       } else {
         try {
           setActiveThreadIdSafe(null);
@@ -1292,19 +892,22 @@ export function createInitController<TState>(args: InitControllerArgs<TState>) {
   return {
     clearInitDebounceTimer,
     init,
-    resumeRefresh,
     onCreateThread,
   };
 }
 
 /*
-このファイルの正式役割
+このファイルの正式役割:
 チャット初期化の実体ファイル。
 session 確立後の初期化、threads 再取得、activeThread 復元、新規 thread 作成時の制御を担う。
+分離済み責務は import / re-export のみを行い、本体を持たない。
 */
 
 /*
 【今回このファイルで修正したこと】
-createInitController は関数宣言ですでに export 済みだったため、
-ファイル末尾の export { createInitController }; を削除して二重 export を止めました。
+1. init 内で user が取れなかったとき、lastUserIdRef.current があっても early return せず retry を予約するように修正しました。
+2. これにより、reload では通る session 再取得ルートを、tab復帰後でも同じように再試行させます。
+3. 今回は no session 時の retry 入口 1か所だけを対象にし、DB仕様、confirmed payload、state_changed、HOPY回答○、Compass、状態値 1..5 / 5段階の唯一の正には触っていません。
 */
+
+/* /components/chat/lib/useChatInitParts.ts */

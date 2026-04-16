@@ -2,44 +2,25 @@
 "use client";
 
 import { useCallback, useRef } from "react";
-import type { Dispatch, SetStateAction, MutableRefObject } from "react";
+import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ChatMsg, Lang } from "./chatTypes";
-import { renameThread } from "./threadApi";
+import { attachThreadIdToMessage } from "./chatSendConfirmedAssistantMessage";
+import { shouldBlockDuplicateSend } from "./chatSendDuplicateGuard";
+import { isChatSendComposingNow } from "./chatSendComposingGuard";
+import { applyUserStateFromSendResult } from "./chatSendApplyUserState";
+import { handleChatSendFailure } from "./chatSendHandleFailure";
+import { createPendingUserMessage } from "./chatSendPendingUserMessage";
+import { prepareRetrySend } from "./chatSendRetryPreparation";
+import { runSendThreadPostProcess } from "./chatSendThreadPostProcess";
+import { runChatSendRequestExecution } from "./chatSendRequestExecution";
 import {
-  buildAutoTitle,
-  classifyError,
-  formatErrorText,
   genClientRequestId,
-  getChatEndpoint,
-  isDefaultThreadTitle,
-  isTemporaryGuestThreadId,
-  logWarn,
   microtask,
-  mkTempId,
   normalizeForSend,
-  pickLang,
-  pickReply,
-  safePersistActiveThreadId,
-  safeReadJson,
 } from "./chatSendShared";
-import { resolveAuthContextForSend } from "./chatSendAuth";
-import {
-  mergeAssistantStateFields,
-  normalizeAssistantStatePayload,
-  pickThread,
-  pickThreadId,
-  type ApiThread,
-} from "./chatSendState";
-import {
-  WAITING_MESSAGE_INTERVAL_MS,
-  resolveWaitingMessage,
-} from "./chatSendWaitingMessages";
-import {
-  mergeAssistantCompassFields,
-  resolveConfirmedCompassPrompt,
-  resolveConfirmedCompassText,
-} from "./chatSendCompass";
+import { isTemporaryGuestThreadId } from "./chatThreadIdentity";
+import type { ApiThread } from "./chatSendState";
 
 export type FailedSend = {
   text: string;
@@ -51,192 +32,14 @@ export type FailedSend = {
 };
 
 type UiStrings = {
-  loginAlert: string;
   emptyReply: string;
 };
 
-type ConfirmedStatePayload = {
-  state_level?: number;
-  current_phase?: number;
-  prev_state_level?: number;
-  prev_phase?: number;
-  state_changed?: boolean;
-};
-
-type ConfirmedThreadSummaryPayload = {
-  thread_id?: string;
-  latest_reply_id?: string;
-  latest_reply_at?: string;
-  latest_confirmed_state?: ConfirmedStatePayload | null;
-  title?: string;
-  next_title?: string;
-  title_updated?: boolean;
-};
-
-type ConfirmedCompassPayload = {
-  text?: string | null;
-  prompt?: string | null;
-};
-
-type ConfirmedMeaningPayload = {
-  reply?: string;
-  state?: ConfirmedStatePayload | null;
-  thread_summary?: ConfirmedThreadSummaryPayload | null;
-  memory_candidates?: unknown;
-  dashboard_signals?: unknown;
-  notification_signal?: unknown;
-  ui_effects?: unknown;
-  compass?: ConfirmedCompassPayload | null;
-};
-
-type ApiResponse<TState> = {
-  ok: boolean;
-  reply?: string;
-  text?: string;
-  lang?: Lang;
-  uiLang?: Lang;
-  thread?: ApiThread;
-  thread_id?: string;
-  conversation_id?: string;
-  conversationId?: string;
-  state?: TState | null;
-  state_ok?: boolean;
-  state_available?: boolean;
-  state_updated?: boolean;
-  state_error?: any | null;
-  state_skipped?: boolean;
-  state_skip_reason?: string | null;
-  user_saved?: boolean;
-  assistant_saved?: boolean;
-  error?: string;
-  message?: string;
-  assistant_state?: any;
-  assistantState?: any;
-  hopy_confirmed_payload?: ConfirmedMeaningPayload | null;
-  compass?: {
-    text?: string | null;
-    prompt?: string | null;
-  } | null;
-  compassText?: string | null;
-  compassPrompt?: string | null;
-  compass_text?: string | null;
-  compass_prompt?: string | null;
-};
-
-const AUTH_CONTEXT_TIMEOUT_MS = 12000;
-
-async function resolveAuthContextForSendWithTimeout(
-  supabase: SupabaseClient
-): Promise<Awaited<ReturnType<typeof resolveAuthContextForSend>>> {
-  let timer: ReturnType<typeof setTimeout> | null = null;
-
-  try {
-    return await Promise.race([
-      resolveAuthContextForSend(supabase),
-      new Promise<never>((_, reject) => {
-        timer = setTimeout(() => {
-          reject(new Error("[Auth/Timeout] auth_context_timeout"));
-        }, AUTH_CONTEXT_TIMEOUT_MS);
-      }),
-    ]);
-  } finally {
-    if (timer != null) {
-      try {
-        clearTimeout(timer);
-      } catch {}
-    }
-  }
-}
-
-function mergeConfirmedMeaningFields(
-  message: ChatMsg,
-  confirmedPayload: ConfirmedMeaningPayload | null
-): ChatMsg {
-  const next = { ...(message as any) };
-
-  if (confirmedPayload) {
-    next.hopy_confirmed_payload = confirmedPayload;
-  } else {
-    delete next.hopy_confirmed_payload;
-  }
-
-  return next as ChatMsg;
-}
-
-function attachThreadIdToMessage(message: ChatMsg, threadId: string | null): ChatMsg {
+function normalizeConversationIdSeed(threadId: string | null | undefined) {
   const tid = String(threadId ?? "").trim();
-  if (!tid) return message;
-
-  return {
-    ...(message as any),
-    thread_id: tid,
-  } as ChatMsg;
-}
-
-function buildConfirmedAssistantMessage<TState>(args: {
-  message: ChatMsg;
-  payload: ApiResponse<TState>;
-  reply: string;
-  requestLang: Lang;
-  normalizedAssistantState: ConfirmedStatePayload | TState | null;
-  confirmedPayload: ConfirmedMeaningPayload | null;
-  compassText: string | null;
-  compassPrompt: string | null;
-  resolvedThreadId: string | null;
-}): ChatMsg {
-  const {
-    message,
-    payload,
-    reply,
-    requestLang,
-    normalizedAssistantState,
-    confirmedPayload,
-    compassText,
-    compassPrompt,
-    resolvedThreadId,
-  } = args;
-
-  let next: ChatMsg = attachThreadIdToMessage(message, resolvedThreadId);
-
-  next = {
-    ...next,
-    content: reply,
-    lang: pickLang(payload, requestLang),
-  };
-
-  try {
-    next = mergeAssistantStateFields(
-      next,
-      normalizedAssistantState
-        ? { ...payload, assistant_state: normalizedAssistantState }
-        : payload
-    );
-  } catch (e) {
-    logWarn("[useChatSend] mergeAssistantStateFields failed", {
-      reason: String((e as any)?.message ?? e ?? ""),
-    });
-  }
-
-  try {
-    next = mergeConfirmedMeaningFields(next, confirmedPayload);
-  } catch (e) {
-    logWarn("[useChatSend] mergeConfirmedMeaningFields failed", {
-      reason: String((e as any)?.message ?? e ?? ""),
-    });
-  }
-
-  try {
-    next = mergeAssistantCompassFields(next, compassText, compassPrompt);
-  } catch (e) {
-    logWarn("[useChatSend] mergeAssistantCompassFields failed", {
-      reason: String((e as any)?.message ?? e ?? ""),
-      hasCompassText: Boolean(compassText),
-      hasCompassPrompt: Boolean(compassPrompt),
-      hasConfirmedPayloadCompass: Boolean(confirmedPayload?.compass),
-    });
-  }
-
-  return next;
+  if (!tid) return null;
+  if (isTemporaryGuestThreadId(tid)) return null;
+  return tid;
 }
 
 export function useChatSend<TState>(params: {
@@ -254,7 +57,6 @@ export function useChatSend<TState>(params: {
   setMessages: Dispatch<SetStateAction<ChatMsg[]>>;
   setVisibleCount: Dispatch<SetStateAction<number>>;
   atBottomRef: MutableRefObject<boolean>;
-  setAtBottom: (v: boolean) => void;
   scrollToBottom: (mode?: "auto" | "smooth") => void;
   lastFailed: FailedSend | null;
   setLastFailed: Dispatch<SetStateAction<FailedSend | null>>;
@@ -263,7 +65,10 @@ export function useChatSend<TState>(params: {
   setUserStateErr: (s: string | null) => void;
   clampText: (s: string, max?: number) => string;
   detectUserLang: (text: string) => Lang;
-  loadMessages: (supabase: SupabaseClient, threadId: string) => Promise<ChatMsg[]>;
+  loadMessages: (
+    supabase: SupabaseClient,
+    threadId: string
+  ) => Promise<ChatMsg[]>;
   getMemoryBlock?: () => string;
   getIsComposing?: () => boolean;
 }) {
@@ -272,7 +77,6 @@ export function useChatSend<TState>(params: {
     uiLang,
     ui,
     activeThreadId,
-    ensureThreadId,
     onThreadIdResolved,
     onThreadRenamed,
     input,
@@ -296,27 +100,8 @@ export function useChatSend<TState>(params: {
   } = params;
 
   const inflightRef = useRef(false);
-  const sendGateRef = useRef(false);
   const autoRenameDoneRef = useRef<Set<string>>(new Set());
   const lastSigRef = useRef<{ sig: string; at: number } | null>(null);
-
-  function shouldBlockDuplicate(text: string, conversationId: string | null) {
-    const cid = String(conversationId ?? "").trim() || "no_thread";
-    const sig = `${cid}::${text}`;
-    const now = Date.now();
-    const prev = lastSigRef.current;
-    lastSigRef.current = { sig, at: now };
-    if (!prev) return false;
-    return prev.sig === sig && now - prev.at < 600;
-  }
-
-  const isComposingNow = () => {
-    try {
-      return typeof getIsComposing === "function" ? Boolean(getIsComposing()) : false;
-    } catch {
-      return false;
-    }
-  };
 
   const sendCore = useCallback(
     async (opts: {
@@ -325,482 +110,109 @@ export function useChatSend<TState>(params: {
       uiLangForFailed: Lang;
       clientRequestId?: string;
     }) => {
-      const { text, conversationIdSeed, uiLangForFailed, clientRequestId } = opts;
+      const { text, conversationIdSeed, uiLangForFailed, clientRequestId } =
+        opts;
 
       if (inflightRef.current) return;
       inflightRef.current = true;
 
-      if (shouldBlockDuplicate(text, conversationIdSeed)) {
+      const normalizedSeed = normalizeConversationIdSeed(conversationIdSeed);
+
+      if (
+        shouldBlockDuplicateSend({
+          text,
+          conversationId: normalizedSeed,
+          lastSigRef,
+        })
+      ) {
         inflightRef.current = false;
         return;
       }
 
-      let cid = String(conversationIdSeed ?? "").trim();
-
+      let cid = normalizedSeed;
       setUserStateErr(null);
 
-      const msgLang = detectUserLang(text);
-      const requestLang: Lang = uiLang;
-
-      const pendingStartedAt = Date.now();
-      let pendingId = "";
       let userMsgId = "";
-      let pendingMessageTimer: number | null = null;
-
-      const initialDisplayThreadId = String(
-        conversationIdSeed ?? activeThreadId ?? ""
-      ).trim();
-
-      const FETCH_TIMEOUT_MS = 90000;
-      const controller =
-        typeof AbortController !== "undefined" ? new AbortController() : null;
-      const timer =
-        controller && typeof window !== "undefined"
-          ? window.setTimeout(() => {
-              try {
-                controller.abort();
-              } catch {}
-            }, FETCH_TIMEOUT_MS)
-          : null;
 
       try {
-        userMsgId = mkTempId();
-        const userMsg: ChatMsg = attachThreadIdToMessage(
-          {
-            id: userMsgId,
-            role: "user",
-            content: text,
-            lang: msgLang,
-            created_at: new Date().toISOString(),
-          },
-          initialDisplayThreadId || null
-        );
+        const pendingUser = createPendingUserMessage({
+          text,
+          detectUserLang,
+          displayThreadId: normalizedSeed,
+        });
 
-        setMessages((prev) => [...prev, userMsg]);
+        userMsgId = pendingUser.userMsgId;
+
+        setMessages((prev) => [...prev, pendingUser.message]);
         setVisibleCount((v) => Math.max(v, 200));
         setLoading(true);
 
-        let authContext:
-          | Awaited<ReturnType<typeof resolveAuthContextForSendWithTimeout>>
-          | null = null;
-        let isLoggedIn = false;
-        let accessToken: string | null = null;
-        let displayThreadId = initialDisplayThreadId;
-
-        const needsResolvedDisplayThreadId =
-          !displayThreadId || isTemporaryGuestThreadId(displayThreadId);
-
-        if (needsResolvedDisplayThreadId) {
-          authContext = await resolveAuthContextForSendWithTimeout(supabase);
-          isLoggedIn = authContext.isLoggedIn;
-          accessToken = authContext.accessToken;
-
-          if (isLoggedIn) {
-            if (!cid || isTemporaryGuestThreadId(cid)) {
-              if (typeof ensureThreadId === "function") {
-                const ensured = String((await ensureThreadId()) ?? "").trim();
-                if (ensured && !isTemporaryGuestThreadId(ensured)) {
-                  cid = ensured;
-                } else {
-                  cid = "";
-                }
-              } else {
-                cid = "";
-              }
-            }
-
-            if (cid && !isTemporaryGuestThreadId(cid)) {
-              displayThreadId = cid;
-              safePersistActiveThreadId(cid);
-
-              if (typeof onThreadIdResolved === "function") {
-                microtask(() => {
-                  try {
-                    onThreadIdResolved(cid);
-                  } catch {}
-                });
-              }
-            } else {
-              displayThreadId = "";
-            }
-          } else {
-            cid = "";
-            displayThreadId = "";
-          }
-        }
-
-        if (!authContext) {
-          authContext = await resolveAuthContextForSendWithTimeout(supabase);
-          isLoggedIn = authContext.isLoggedIn;
-          accessToken = authContext.accessToken;
-        }
-
-        if (isLoggedIn) {
-          if (!cid || isTemporaryGuestThreadId(cid)) {
-            if (typeof ensureThreadId === "function") {
-              const ensured = String((await ensureThreadId()) ?? "").trim();
-              if (ensured && !isTemporaryGuestThreadId(ensured)) {
-                cid = ensured;
-              } else {
-                cid = "";
-              }
-            } else {
-              cid = "";
-            }
-          }
-
-          if (cid) {
-            safePersistActiveThreadId(cid);
-          }
-        } else {
-          cid = "";
-        }
-
-        const resolvedDisplayThreadId = String(
-          (isLoggedIn ? cid : "") || displayThreadId || initialDisplayThreadId || ""
-        ).trim();
-
-        if (resolvedDisplayThreadId) {
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === userMsgId ? attachThreadIdToMessage(m, resolvedDisplayThreadId) : m
-            )
-          );
-        }
-
-        pendingId = mkTempId();
-        const pendingMsg: ChatMsg = attachThreadIdToMessage(
-          {
-            id: pendingId,
-            role: "assistant",
-            content: resolveWaitingMessage(requestLang, 0, text),
-            lang: requestLang,
-            created_at: new Date().toISOString(),
-          },
-          resolvedDisplayThreadId || null
-        );
-
-        setMessages((prev) => [...prev, pendingMsg]);
-        setVisibleCount((v) => Math.max(v, 200));
-
-        pendingMessageTimer =
-          typeof window !== "undefined"
-            ? window.setInterval(() => {
-                const nextText = resolveWaitingMessage(
-                  requestLang,
-                  Date.now() - pendingStartedAt,
-                  text
-                );
-
-                setMessages((prev) =>
-                  prev.map((m) =>
-                    m.id === pendingId
-                      ? {
-                          ...m,
-                          content: nextText,
-                        }
-                      : m
-                  )
-                );
-              }, WAITING_MESSAGE_INTERVAL_MS)
-            : null;
-
-        const endpoint = getChatEndpoint();
-        const memory_block =
-          typeof getMemoryBlock === "function"
-            ? String(getMemoryBlock() ?? "").trim()
-            : "";
-
-        const body: any = {
+        const executed = await runChatSendRequestExecution<TState>({
+          supabase,
+          uiLang,
+          ui,
           text,
-          lang: requestLang,
-          memory_block,
-        };
-
-        const normalizedClientRequestId = String(clientRequestId ?? "").trim();
-
-        if (isLoggedIn && normalizedClientRequestId) {
-          body.client_request_id = normalizedClientRequestId;
-        }
-
-        if (isLoggedIn && cid) body.thread_id = cid;
-
-        const headers: Record<string, string> = {
-          "Content-Type": "application/json",
-        };
-
-        if (isLoggedIn && accessToken) {
-          headers.Authorization = `Bearer ${accessToken}`;
-        }
-
-        const res = await fetch(endpoint, {
-          method: "POST",
-          headers,
-          body: JSON.stringify(body),
-          signal: controller ? controller.signal : undefined,
+          conversationIdSeed: cid,
+          clientRequestId,
+          getMemoryBlock,
         });
 
-        const payload = (await safeReadJson(res)) as ApiResponse<TState> | null;
+        cid = String(executed.conversationId ?? "").trim() || null;
 
-        if (!res.ok || !payload || !payload.ok) {
-          const rawMsg = String(payload?.message || payload?.error || "api_error");
-          const { kind, message } = classifyError({
-            err: new Error(rawMsg),
-            status: res.status,
-            payload,
-          });
-          const errText = formatErrorText(kind, message, res.status);
-          throw Object.assign(new Error(errText), {
-            __kind: kind,
-            __status: res.status,
-          });
-        }
-
-        const confirmedPayload = payload.hopy_confirmed_payload ?? null;
-
-        const reply = String(
-          confirmedPayload?.reply ?? pickReply(payload) ?? ""
-        ).trim();
-
-        if (!reply) {
-          const errText = formatErrorText("Validation", ui.emptyReply, 400);
-          throw Object.assign(new Error(errText), {
-            __kind: "Validation",
-            __status: 400,
-          });
-        }
-
-        const normalizedAssistantState =
-          confirmedPayload?.state != null
-            ? confirmedPayload.state
-            : normalizeAssistantStatePayload(payload);
-
-        let compassText: string | null = null;
-        let compassPrompt: string | null = null;
-
-        try {
-          compassText = resolveConfirmedCompassText(payload, confirmedPayload);
-          compassPrompt = resolveConfirmedCompassPrompt(payload, confirmedPayload);
-        } catch (e) {
-          logWarn("[useChatSend] resolve confirmed compass failed", {
-            reason: String((e as any)?.message ?? e ?? ""),
-            hasPayloadCompass: Boolean(payload.compass),
-            hasConfirmedPayloadCompass: Boolean(confirmedPayload?.compass),
-          });
-        }
-
-        const confirmedThreadSummary = confirmedPayload?.thread_summary ?? null;
-        const legacyThread = pickThread(payload);
-
-        const confirmedThreadId = String(
-          confirmedThreadSummary?.thread_id ?? ""
-        ).trim();
-        const legacyThreadId = String(legacyThread?.id ?? "").trim();
-        const payloadConversationId = String(
-          payload.conversation_id ?? payload.conversationId ?? payload.thread_id ?? ""
-        ).trim();
-
-        const threadIdForReload =
-          confirmedThreadId ||
-          legacyThreadId ||
-          payloadConversationId ||
-          cid ||
-          pickThreadId(payload);
-
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === pendingId
-              ? buildConfirmedAssistantMessage({
-                  message: m,
-                  payload,
-                  reply,
-                  requestLang,
-                  normalizedAssistantState,
-                  confirmedPayload,
-                  compassText,
-                  compassPrompt,
-                  resolvedThreadId: threadIdForReload,
-                })
-              : m.id === userMsgId
-                ? attachThreadIdToMessage(m, threadIdForReload)
-                : m
-          )
+        const resolvedThreadId = normalizeConversationIdSeed(
+          executed.threadIdForReload || null,
         );
 
-        if (threadIdForReload && isLoggedIn) {
+        if (resolvedThreadId && executed.isLoggedIn) {
           try {
-            await loadMessages(supabase, threadIdForReload);
-          } catch (e) {
-            logWarn("[useChatSend] loadMessages after confirmed assistant failed", {
-              threadId: threadIdForReload,
-              reason: String((e as any)?.message ?? e ?? ""),
-            });
-          }
+            onThreadIdResolved?.(resolvedThreadId);
+          } catch {}
         }
+
+        setMessages((prev) => {
+          const next = prev.map((m) =>
+            m.id === userMsgId
+              ? attachThreadIdToMessage(m, resolvedThreadId)
+              : m,
+          );
+
+          const confirmedAssistant = attachThreadIdToMessage(
+            executed.confirmedAssistantMessage,
+            resolvedThreadId,
+          );
+
+          return [...next, confirmedAssistant];
+        });
 
         setLastFailed(null);
 
-        const hasConfirmedState = confirmedPayload?.state != null;
-        const hasLegacyState =
-          Object.prototype.hasOwnProperty.call(payload, "state") ||
-          payload.state_available === true ||
-          payload.state_updated === true;
-
-        if (hasConfirmedState || hasLegacyState) {
-          const normalized = normalizeState(
-            hasConfirmedState
-              ? confirmedPayload?.state
-              : normalizedAssistantState ?? payload.state
-          );
-          setUserState(normalized);
-        }
-
-        if (isLoggedIn) {
-          try {
-            const serverTitle = String(
-              confirmedThreadSummary?.next_title ??
-                confirmedThreadSummary?.title ??
-                legacyThread?.title ??
-                ""
-            ).trim();
-
-            const threadIdForUi = threadIdForReload;
-
-            if (threadIdForUi) {
-              safePersistActiveThreadId(threadIdForUi);
-
-              const cidNow = String(cid ?? "").trim();
-              const needResolve =
-                !cidNow || (threadIdForUi && cidNow && threadIdForUi !== cidNow);
-
-              if (needResolve && typeof onThreadIdResolved === "function") {
-                microtask(() => {
-                  try {
-                    onThreadIdResolved(threadIdForUi);
-                  } catch {}
-                });
-              }
-
-              const refreshPayload: any = {
-                reason: "send:resolved",
-                id: threadIdForUi,
-                threadId: threadIdForUi,
-                updated_at: new Date().toISOString(),
-              };
-
-              if (serverTitle) {
-                refreshPayload.title = serverTitle;
-              }
-
-              try {
-                if (typeof window !== "undefined") {
-                  window.dispatchEvent(
-                    new CustomEvent("hopy:threads-refresh", {
-                      detail: refreshPayload,
-                    })
-                  );
-                }
-              } catch {}
-
-              const autoTitle = buildAutoTitle(text);
-
-              if (autoTitle && isDefaultThreadTitle(serverTitle)) {
-                if (!autoRenameDoneRef.current.has(threadIdForUi)) {
-                  autoRenameDoneRef.current.add(threadIdForUi);
-
-                  if (typeof onThreadRenamed === "function") {
-                    microtask(() => {
-                      try {
-                        onThreadRenamed({ id: threadIdForUi, title: autoTitle });
-                      } catch {}
-                    });
-                  }
-
-                  microtask(() => {
-                    (async () => {
-                      const r = await renameThread({
-                        supabase,
-                        threadId: threadIdForUi,
-                        nextTitle: autoTitle,
-                      });
-
-                      if (r.ok) {
-                        const savedTitle =
-                          String((r.thread as any)?.title ?? autoTitle).trim() ||
-                          autoTitle;
-                        if (typeof onThreadRenamed === "function") {
-                          microtask(() => {
-                            try {
-                              onThreadRenamed({
-                                id: threadIdForUi,
-                                title: savedTitle,
-                              });
-                            } catch {}
-                          });
-                        }
-                        return;
-                      }
-
-                      autoRenameDoneRef.current.delete(threadIdForUi);
-                      logWarn("[useChatSend] auto renameThread failed", {
-                        threadId: threadIdForUi,
-                        reason: r.error,
-                      });
-                    })().catch((e) => {
-                      autoRenameDoneRef.current.delete(threadIdForUi);
-                      logWarn("[useChatSend] auto renameThread exception", {
-                        threadId: threadIdForUi,
-                        reason: String(e?.message ?? e ?? ""),
-                      });
-                    });
-                  });
-                }
-              } else if (serverTitle && typeof onThreadRenamed === "function") {
-                microtask(() => {
-                  try {
-                    onThreadRenamed({ id: threadIdForUi, title: serverTitle });
-                  } catch {}
-                });
-              }
-            }
-          } catch {}
-        }
-      } catch (e: any) {
-        const pre = String(e?.message ?? "");
-        let errText = pre.trim();
-
-        if (!/^\[[A-Za-z\/]+/.test(errText)) {
-          const { kind, message } = classifyError({ err: e });
-          errText = formatErrorText(kind, message);
-        }
-
-        if (pendingId) {
-          setMessages((prev) => prev.filter((m) => m.id !== pendingId));
-        }
-
-        setLastFailed({
-          text,
-          uiLang: uiLangForFailed,
-          conversationId: cid,
-          at: Date.now(),
-          errorText: errText,
-          clientRequestId: String(clientRequestId ?? "").trim() || undefined,
+        applyUserStateFromSendResult({
+          executed,
+          normalizeState,
+          setUserState,
         });
 
-        setUserStateErr(errText);
+        await runSendThreadPostProcess({
+          supabase,
+          isLoggedIn: executed.isLoggedIn,
+          threadIdForUi: resolvedThreadId,
+          userText: text,
+          confirmedThreadSummary: executed.confirmedThreadSummary,
+          legacyThread: executed.legacyThread,
+          renameGuardSet: autoRenameDoneRef.current,
+          onThreadRenamed,
+        });
+      } catch (e: any) {
+        handleChatSendFailure({
+          err: e,
+          text,
+          conversationId: String(cid ?? "").trim(),
+          uiLangForFailed,
+          clientRequestId,
+          setLastFailed,
+          setUserStateErr,
+        });
       } finally {
-        if (pendingMessageTimer != null) {
-          try {
-            window.clearInterval(pendingMessageTimer);
-          } catch {}
-        }
-
-        if (timer != null) {
-          try {
-            window.clearTimeout(timer);
-          } catch {}
-        }
-
         inflightRef.current = false;
         setLoading(false);
 
@@ -812,9 +224,7 @@ export function useChatSend<TState>(params: {
     [
       supabase,
       uiLang,
-      ui.emptyReply,
-      activeThreadId,
-      ensureThreadId,
+      ui,
       detectUserLang,
       getMemoryBlock,
       setMessages,
@@ -826,108 +236,62 @@ export function useChatSend<TState>(params: {
       scrollToBottom,
       normalizeState,
       setLastFailed,
-      onThreadRenamed,
       onThreadIdResolved,
-      loadMessages,
-    ]
+      onThreadRenamed,
+    ],
   );
 
   const sendMessage = useCallback(
     async (textOverride?: string) => {
       if (loading) return;
-      if (sendGateRef.current) return;
-      sendGateRef.current = true;
 
       const clientRequestId = genClientRequestId();
 
-      try {
-        const base =
-          typeof textOverride === "string" ? textOverride : String(input ?? "");
-        const raw = clampText(base);
+      const base =
+        typeof textOverride === "string" ? textOverride : String(input ?? "");
+      const raw = clampText(base);
+      const text = normalizeForSend(raw);
+      if (!text) return;
 
-        const text = normalizeForSend(raw);
-        if (!text) return;
+      const conversationIdSeed = normalizeConversationIdSeed(activeThreadId);
 
-        const rawActiveThreadId = String(activeThreadId ?? "").trim();
-        const conversationIdSeed = rawActiveThreadId || null;
+      setInput("");
 
-        setInput("");
-        microtask(() => setInput(""));
-        try {
-          requestAnimationFrame(() => setInput(""));
-        } catch {}
-
-        await sendCore({
-          text,
-          conversationIdSeed,
-          uiLangForFailed: uiLang,
-          clientRequestId,
-        });
-      } finally {
-        sendGateRef.current = false;
-      }
+      await sendCore({
+        text,
+        conversationIdSeed,
+        uiLangForFailed: uiLang,
+        clientRequestId,
+      });
     },
-    [loading, input, clampText, activeThreadId, setInput, sendCore, uiLang]
+    [loading, input, clampText, activeThreadId, setInput, sendCore, uiLang],
   );
 
   const retryLastFailed = useCallback(
     async () => {
-      if (isComposingNow()) return;
+      if (isChatSendComposingNow({ getIsComposing })) return;
       if (loading) return;
       if (!lastFailed) return;
 
-      const text = normalizeForSend(String(lastFailed.text ?? ""));
-      if (!text) return;
+      const prepared = await prepareRetrySend({
+        supabase,
+        lastFailed,
+        loadMessages,
+        setUserStateErr,
+        setLastFailed,
+      });
 
-      const clientRequestId =
-        String(lastFailed.clientRequestId ?? "").trim() || genClientRequestId();
-
-      const auth = await resolveAuthContextForSendWithTimeout(supabase);
-
-      let conversationId = auth.isLoggedIn
-        ? String(lastFailed.conversationId ?? "").trim() || null
-        : null;
-
-      if (
-        auth.isLoggedIn &&
-        conversationId &&
-        isTemporaryGuestThreadId(conversationId)
-      ) {
-        conversationId = null;
-      }
-
-      if (auth.isLoggedIn && conversationId) {
-        safePersistActiveThreadId(conversationId);
-
-        try {
-          await loadMessages(supabase, conversationId);
-        } catch (e: any) {
-          const { kind, message } = classifyError({ err: e });
-          const errText = formatErrorText(kind, message);
-
-          setUserStateErr(errText);
-          setLastFailed((prev) =>
-            prev
-              ? {
-                  ...prev,
-                  at: Date.now(),
-                  errorText: errText,
-                  clientRequestId,
-                }
-              : prev
-          );
-          return;
-        }
-      }
+      if (!prepared.ok) return;
 
       await sendCore({
-        text,
-        conversationIdSeed: conversationId,
-        uiLangForFailed: lastFailed.uiLang,
-        clientRequestId,
+        text: prepared.text,
+        conversationIdSeed: prepared.conversationId,
+        uiLangForFailed: prepared.uiLangForFailed,
+        clientRequestId: prepared.clientRequestId,
       });
     },
     [
+      getIsComposing,
       loading,
       lastFailed,
       loadMessages,
@@ -935,7 +299,7 @@ export function useChatSend<TState>(params: {
       sendCore,
       setUserStateErr,
       setLastFailed,
-    ]
+    ],
   );
 
   return { sendMessage, retryLastFailed };
@@ -943,15 +307,31 @@ export function useChatSend<TState>(params: {
 
 /*
 このファイルの正式役割
-送信フロー全体を管理し、pending追加、API送信、assistant message確定反映、state反映、thread反映、retry をつなぐ親ファイル。
+送信フロー全体を管理し、user message追加、assistant message確定反映、thread反映、retry をつなぐ親ファイル。
+API送信実行本体は持たず、子へ渡して結果を受け取る。
+pending user message生成本体は持たず、子へ渡して結果を受け取る。
+送信後 userState反映本体は持たず、子へ渡して結果を受け取る。
+送信後スレッド反映本体は持たず、子へ渡して結果を受け取る。
+retry 前準備本体も持たず、子へ渡して結果を受け取る。
+送信失敗処理本体は持たず、子へ渡して結果を受け取る。
+重複送信判定本体は持たず、子へ渡して結果を受け取る。
+IME composing 判定本体は持たず、子へ渡して結果を受け取る。
+親は入口・中継・UI反映に寄せる。
 */
 
 /*
 【今回このファイルで修正したこと】
-1. 新規チャット1通目で real thread_id の確定を待たず、user message を先に messages へ積むように修正しました。
-2. loading=true を user message 追加後へ移動し、本文0件の待機状態へ先に落ちる流れを止めました。
-3. thread_id が後から確定した場合だけ、送信済み user message へ thread_id を付け直す流れは維持しました。
-4. HOPY回答○、Compass、confirmed payload、DB保存/復元の意味判定には触っていません。
+1. reload でだけ消える余計な送信停止 guard 候補として sendGateRef を削除しました。
+2. sendMessage の入口は loading と sendCore 内の inflightRef に一本化しました。
+3. これにより、tab復帰後に sendGateRef が残って送信だけ止まる重複ガードを減らしました。
+4. pending user message、confirmed payload、state_changed、HOPY回答○、Compass、DB保存、DB復元、1..5 の意味判定には触っていません。
+*/
+
+/*
+このファイルの正式役割:
+送信フローの親として、入口・中継・UI反映だけを持つ。
+pending user message 生成、送信実行、userState反映、post process、retry準備、送信失敗処理、重複送信判定、IME composing 判定は子へ委譲し、
+親自身は読むだけ・つなぐだけに寄せる。
 */
 
 /* /components/chat/lib/useChatSend.ts */

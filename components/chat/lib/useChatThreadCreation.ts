@@ -1,113 +1,197 @@
 // /components/chat/lib/useChatThreadCreation.ts
 "use client";
 
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import type { Dispatch, MutableRefObject, SetStateAction } from "react";
-import type { SupabaseClient } from "@supabase/supabase-js";
-import type { ChatMsg } from "./chatTypes";
-import { loadMessages } from "./threadApi";
-import { mergeLoadedMessagesPreservingAssistantState } from "./chatMessageState";
-import { isTemporaryGuestThreadId, microtask } from "./chatThreadIdentity";
-import { resolveMessagesOwnerThreadId } from "./chatClientMessageMeta";
+import { isTemporaryGuestThreadId } from "./chatThreadIdentity";
 
 type Params = {
   displayLoggedIn: boolean;
   activeThreadIdRef: MutableRefObject<string | null>;
-  messagesRef: MutableRefObject<ChatMsg[]>;
   setThreadBusy: Dispatch<SetStateAction<boolean>>;
   setUserStateErr: Dispatch<SetStateAction<string | null>>;
-  ensureThreadExists: (threadId: string) => void;
-  noteThreadDecision: (tid: string, reason: string) => void;
-  guardedSetMessages: Dispatch<SetStateAction<ChatMsg[]>>;
-  supabase: SupabaseClient;
-  scrollToBottom: (behavior?: ScrollBehavior | "auto" | "smooth") => void;
   setActiveThreadId: (v: string | null) => void;
   setVisibleCount: Dispatch<SetStateAction<number>>;
 };
 
-export function useChatThreadCreation({
-  displayLoggedIn,
-  activeThreadIdRef,
-  messagesRef,
-  setThreadBusy,
-  setUserStateErr,
-  ensureThreadExists,
-  noteThreadDecision,
-  guardedSetMessages,
-  supabase,
-  scrollToBottom,
-  setActiveThreadId,
-  setVisibleCount,
-}: Params) {
-  const ensureThreadInflightRef = useRef(false);
-  const lastResolvedThreadIdRef = useRef<string>("");
-  const resolvingThreadMessagesRef = useRef<Set<string>>(new Set());
+function errText(x: any) {
+  const msg = String(x?.message ?? x ?? "thread_create_failed").trim();
+  return msg || "thread_create_failed";
+}
 
-  const waitForActiveThreadId = useCallback(
+function canUseResolvedThreadId(threadId: string) {
+  const tid = String(threadId ?? "").trim();
+  if (!tid) return false;
+  if (isTemporaryGuestThreadId(tid)) return false;
+  return true;
+}
+
+function isPendingCreationTarget(threadId: string) {
+  const tid = String(threadId ?? "").trim();
+  if (!tid) return false;
+  return isTemporaryGuestThreadId(tid);
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function resolvePendingThreadIdFromDetail(detail: unknown) {
+  const safe = (detail ?? {}) as Record<string, unknown>;
+
+  const candidates = [
+    safe.clientRequestId,
+    safe.client_request_id,
+    safe.threadId,
+    safe.thread_id,
+    safe.selectedThreadId,
+    safe.selected_thread_id,
+    safe.id,
+  ];
+
+  for (const value of candidates) {
+    const tid = String(value ?? "").trim();
+    if (!tid) continue;
+    return tid;
+  }
+
+  return "";
+}
+
+function shouldAdoptResolvedThreadId(args: {
+  currentThreadId: string;
+  pendingThreadId: string;
+  resolvedThreadId: string;
+}) {
+  const current = String(args.currentThreadId ?? "").trim();
+  const pending = String(args.pendingThreadId ?? "").trim();
+  const resolved = String(args.resolvedThreadId ?? "").trim();
+
+  if (!resolved) return false;
+  if (current === resolved) return true;
+  if (!pending) return false;
+  return current === pending;
+}
+
+export function useChatThreadCreation(params: Params) {
+  const {
+    displayLoggedIn,
+    activeThreadIdRef,
+    setThreadBusy,
+    setUserStateErr,
+    setActiveThreadId,
+    setVisibleCount,
+  } = params;
+
+  const ensureThreadInflightRef = useRef(false);
+  const lastResolvedThreadIdRef = useRef("");
+  const pendingThreadTargetRef = useRef("");
+
+  const applyPendingThreadTarget = useCallback(
+    (threadId: string) => {
+      if (!displayLoggedIn) return;
+
+      const tid = String(threadId ?? "").trim();
+      if (!isPendingCreationTarget(tid)) return;
+
+      pendingThreadTargetRef.current = tid;
+      lastResolvedThreadIdRef.current = "";
+
+      const current = String(activeThreadIdRef.current ?? "").trim();
+      if (current === tid) return;
+
+      activeThreadIdRef.current = tid;
+      setActiveThreadId(tid);
+      setVisibleCount(200);
+      setUserStateErr(null);
+    },
+    [
+      displayLoggedIn,
+      activeThreadIdRef,
+      setActiveThreadId,
+      setVisibleCount,
+      setUserStateErr,
+    ],
+  );
+
+  useEffect(() => {
+    if (!displayLoggedIn) return;
+
+    const handleCreateThread = (event: Event) => {
+      const detail = (event as CustomEvent)?.detail;
+      const pendingThreadId = resolvePendingThreadIdFromDetail(detail);
+      if (!pendingThreadId) return;
+      applyPendingThreadTarget(pendingThreadId);
+    };
+
+    const handleWorkspaceClear = (event: Event) => {
+      const detail = (event as CustomEvent)?.detail;
+      const pendingThreadId = resolvePendingThreadIdFromDetail(detail);
+      if (!pendingThreadId) return;
+      applyPendingThreadTarget(pendingThreadId);
+    };
+
+    window.addEventListener(
+      "hopy:create-thread",
+      handleCreateThread as EventListener,
+    );
+    window.addEventListener(
+      "hopy:workspace-clear",
+      handleWorkspaceClear as EventListener,
+    );
+
+    return () => {
+      window.removeEventListener(
+        "hopy:create-thread",
+        handleCreateThread as EventListener,
+      );
+      window.removeEventListener(
+        "hopy:workspace-clear",
+        handleWorkspaceClear as EventListener,
+      );
+    };
+  }, [displayLoggedIn, applyPendingThreadTarget]);
+
+  const waitForUsableThreadId = useCallback(
     async (tries: number, delayMs: number): Promise<string | null> => {
-      for (let i = 0; i < tries; i++) {
-        await new Promise((r) => setTimeout(r, delayMs));
-        const now = String(activeThreadIdRef.current ?? "").trim();
-        if (now) return now;
+      for (let i = 0; i < tries; i += 1) {
+        await sleep(delayMs);
+
+        const tid = String(activeThreadIdRef.current ?? "").trim();
+        if (canUseResolvedThreadId(tid)) {
+          return tid;
+        }
       }
+
       return null;
     },
-    [activeThreadIdRef]
+    [activeThreadIdRef],
   );
 
   const ensureThreadId = useCallback(async (): Promise<string | null> => {
     if (!displayLoggedIn) return null;
 
     const current = String(activeThreadIdRef.current ?? "").trim();
-    const currentMessages = Array.isArray(messagesRef.current) ? messagesRef.current : [];
-    const lastResolved = String(lastResolvedThreadIdRef.current ?? "").trim();
-    const currentCanBeUsed =
-      Boolean(current) &&
-      !isTemporaryGuestThreadId(current) &&
-      (currentMessages.length > 0 || current === lastResolved);
 
-    if (currentCanBeUsed) {
+    if (canUseResolvedThreadId(current)) {
       return current;
     }
 
-    if (current && isTemporaryGuestThreadId(current)) {
+    if (isTemporaryGuestThreadId(current)) {
       return null;
     }
 
     if (ensureThreadInflightRef.current) {
-      const got = await waitForActiveThreadId(30, 20);
-      const latestMessages = Array.isArray(messagesRef.current) ? messagesRef.current : [];
-      const latestResolved = String(lastResolvedThreadIdRef.current ?? "").trim();
-      const gotCanBeUsed =
-        typeof got === "string" &&
-        got.length > 0 &&
-        !isTemporaryGuestThreadId(got) &&
-        (latestMessages.length > 0 || got === latestResolved);
-
-      if (gotCanBeUsed) return got;
-      return null;
+      return waitForUsableThreadId(30, 20);
     }
 
     ensureThreadInflightRef.current = true;
 
     try {
       setThreadBusy(true);
-
-      const pre = await waitForActiveThreadId(8, 18);
-      const latestMessages = Array.isArray(messagesRef.current) ? messagesRef.current : [];
-      const latestResolved = String(lastResolvedThreadIdRef.current ?? "").trim();
-      const preCanBeUsed =
-        typeof pre === "string" &&
-        pre.length > 0 &&
-        !isTemporaryGuestThreadId(pre) &&
-        (latestMessages.length > 0 || pre === latestResolved);
-
-      if (preCanBeUsed) return pre;
-
-      return null;
+      return await waitForUsableThreadId(8, 18);
     } catch (e: any) {
-      const msg = String(e?.message ?? e ?? "thread_create_failed").trim();
-      setUserStateErr(msg || "thread_create_failed");
+      setUserStateErr(errText(e));
       return null;
     } finally {
       ensureThreadInflightRef.current = false;
@@ -118,10 +202,9 @@ export function useChatThreadCreation({
   }, [
     displayLoggedIn,
     activeThreadIdRef,
-    messagesRef,
+    waitForUsableThreadId,
     setThreadBusy,
     setUserStateErr,
-    waitForActiveThreadId,
   ]);
 
   const onThreadIdResolved = useCallback(
@@ -132,96 +215,38 @@ export function useChatThreadCreation({
       if (!tid) return;
 
       const current = String(activeThreadIdRef.current ?? "").trim();
+      const pendingThreadId = pendingThreadTargetRef.current.trim();
+      const lastResolved = lastResolvedThreadIdRef.current.trim();
 
-      if (lastResolvedThreadIdRef.current === tid && current === tid) return;
+      if (lastResolved === tid && current === tid) return;
+
+      if (
+        !shouldAdoptResolvedThreadId({
+          currentThreadId: current,
+          pendingThreadId,
+          resolvedThreadId: tid,
+        })
+      ) {
+        if (pendingThreadId && current !== pendingThreadId) {
+          pendingThreadTargetRef.current = "";
+        }
+        return;
+      }
+
+      pendingThreadTargetRef.current = "";
       lastResolvedThreadIdRef.current = tid;
-
-      try {
-        ensureThreadExists(tid);
-      } catch {}
-
-      try {
-        noteThreadDecision(tid, "onThreadIdResolved:setActiveThreadId");
-      } catch {}
-
-      const currentMessagesSnapshot = Array.isArray(messagesRef.current) ? messagesRef.current : [];
-      const snapshotOwnerThreadId = String(
-        resolveMessagesOwnerThreadId(currentMessagesSnapshot) ?? ""
-      ).trim();
-
-      const preserveCurrentMessages =
-        current === tid ||
-        (isTemporaryGuestThreadId(current) &&
-          Boolean(snapshotOwnerThreadId) &&
-          snapshotOwnerThreadId === current);
-
-      try {
-        activeThreadIdRef.current = tid;
-      } catch {}
-
-      try {
-        setActiveThreadId(tid);
-      } catch {}
-
-      try {
-        window.dispatchEvent(
-          new CustomEvent("hopy:thread", {
-            detail: { threadId: tid, id: tid, reason: "send:resolved", source: "event" },
-          })
-        );
-      } catch {}
-
-      if (resolvingThreadMessagesRef.current.has(tid)) return;
-      resolvingThreadMessagesRef.current.add(tid);
-
-      microtask(() => {
-        (async () => {
-          try {
-            const nextMessages = await loadMessages(supabase, tid);
-
-            if (String(activeThreadIdRef.current ?? "").trim() !== tid) return;
-            if (!Array.isArray(nextMessages)) return;
-
-            const committedMessages =
-              nextMessages.length > 0
-                ? preserveCurrentMessages
-                  ? mergeLoadedMessagesPreservingAssistantState(currentMessagesSnapshot, nextMessages)
-                  : nextMessages
-                : preserveCurrentMessages
-                  ? currentMessagesSnapshot
-                  : [];
-
-            guardedSetMessages(committedMessages);
-            setVisibleCount(200);
-            setUserStateErr(null);
-
-            microtask(() => {
-              try {
-                scrollToBottom("auto");
-              } catch {}
-            });
-          } catch {
-          } finally {
-            resolvingThreadMessagesRef.current.delete(tid);
-          }
-        })().catch(() => {
-          resolvingThreadMessagesRef.current.delete(tid);
-        });
-      });
+      activeThreadIdRef.current = tid;
+      setActiveThreadId(tid);
+      setVisibleCount(200);
+      setUserStateErr(null);
     },
     [
       displayLoggedIn,
       activeThreadIdRef,
-      ensureThreadExists,
-      noteThreadDecision,
       setActiveThreadId,
-      messagesRef,
-      supabase,
-      guardedSetMessages,
       setVisibleCount,
       setUserStateErr,
-      scrollToBottom,
-    ]
+    ],
   );
 
   return {
@@ -233,17 +258,19 @@ export function useChatThreadCreation({
 /*
 このファイルの正式役割：
 新規スレッド作成後に確定した thread_id を active として採用し、
-その thread に属する messages だけを現在表示へ反映するためのフック。
+その thread を現在の表示対象へ切り替えるためのフック。
+また、新規チャット押下直後の pending target を active として受け取り、
+blank stage へ入るための表示対象切替も担当する。
+本文の直接読込・merge・反映は持たない。
 */
 
 /*
 【今回このファイルで修正したこと】
-1. onThreadIdResolved 直後に activeThreadIdRef.current へ tid を同期反映するように修正しました。
-2. これにより、同じ処理内の loadMessages 採用判定が旧 activeThreadId のままで落ちる経路を止めました。
-3. build を止めていた null narrowing 修正はそのまま維持しました。
-4. HOPY回答○、Compass、confirmed payload、DB保存/復元、useThreadSwitch.ts には触っていません。
+1. pending target は temporary id だけを採用するように絞りました。
+2. pendingThreadTargetRef を追加し、新規チャット起点の一時 target をこのファイル内で1つだけ保持するようにしました。
+3. onThreadIdResolved は、現在の表示 target がその pending target と一致している場合だけ resolved thread_id を採用するようにしました。
+4. これにより、遅れて返ってきた旧作成結果が通常のスレッド選択を上書きしにくい形へ戻しました。
+5. HOPY回答○、Compass、confirmed payload、DB保存/復元、state 1..5 の唯一の正には触っていません。
 */
 
-/*
-/components/chat/lib/useChatThreadCreation.ts
-*/
+/* /components/chat/lib/useChatThreadCreation.ts */

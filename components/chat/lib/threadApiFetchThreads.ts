@@ -9,19 +9,17 @@ import {
   isTransientAuthOrNetworkError,
   isUpdatedAtUnsupportedError,
 } from "./threadApiErrors";
-import { getUpdatedAtUnsupportedCached, setUpdatedAtUnsupportedCached } from "./threadApiSchemaCache";
+import {
+  getUpdatedAtUnsupportedCached,
+  setUpdatedAtUnsupportedCached,
+} from "./threadApiSchemaCache";
 import { normalizeThreadRow } from "./threadApiNormalize";
 import { waitForAuthReady } from "./threadApiAuth";
 
-export type ThreadsResult = { ok: true; list: Thread[] } | { ok: false; list: Thread[]; error: string };
+export type ThreadsResult =
+  | { ok: true; list: Thread[] }
+  | { ok: false; list: Thread[]; error: string };
 
-/**
- * ✅ conversations テーブル（現DB）に実在する列だけで固定する
- * DB列: id, user_id, title, created_at, updated_at, state_level, client_request_id, current_phase
- *
- * - これにより "column ... does not exist"（42703）を根絶する
- * - normalizeThreadRow は未取得の列があっても落ちない前提で利用する
- */
 const CONV_SELECT_WITH_UPDATED =
   "id,user_id,title,created_at,updated_at,state_level,client_request_id,current_phase";
 const CONV_SELECT_NO_UPDATED =
@@ -66,39 +64,47 @@ async function fetchAllOrdered(
   }
 }
 
-/**
- * 🔒 安定版
- * - まずスレッド表示を完全復旧させる
- *
- * ✅ ここでチャット個別状態も取得して Thread に載せる
- * ✅ 失敗時に saved active thread を救済表示しない
- *    - 未送信の新規チャットより前回スレッドが優先復元される混線を防ぐ
- */
-export async function fetchThreads(supabase: SupabaseClient, uiLang?: Lang): Promise<ThreadsResult> {
+function mapRowsToThreads(rows: any[], titleFallback: string): Thread[] {
+  return (Array.isArray(rows) ? rows : [])
+    .map((r: any) =>
+      normalizeThreadRow(r, titleFallback, {
+        preferNowIfMissingUpdated: false,
+      }),
+    )
+    .filter((t) => String((t as any)?.id ?? "").trim().length > 0) as Thread[];
+}
+
+export async function fetchThreads(
+  supabase: SupabaseClient,
+  uiLang?: Lang,
+): Promise<ThreadsResult> {
   const titleFallback = uiLang === "ja" ? "新規チャット" : "New chat";
 
   const runOnceUpdated = async () => {
-    return await fetchAllOrdered(supabase, CONV_SELECT_WITH_UPDATED, "updated_at");
+    return await fetchAllOrdered(
+      supabase,
+      CONV_SELECT_WITH_UPDATED,
+      "updated_at",
+    );
   };
 
   const runOnceCreated = async () => {
-    return await fetchAllOrdered(supabase, CONV_SELECT_NO_UPDATED, "created_at");
+    return await fetchAllOrdered(
+      supabase,
+      CONV_SELECT_NO_UPDATED,
+      "created_at",
+    );
   };
 
-  // ✅ PWA復帰直後の揺れを吸収（短いリトライ）
   const delays = [0, 120, 260, 520];
-
-  // ✅ 端末/環境で updated_at が使えない場合は、最初から created_at へ直行
   const skipUpdatedAtRoutes = getUpdatedAtUnsupportedCached();
 
-  // 1) updated_at ルート（現DBの実在列のみ）
   if (!skipUpdatedAtRoutes) {
     for (let i = 0; i < delays.length; i++) {
       if (delays[i] > 0) {
         await sleep(delays[i]);
       }
 
-      // ✅ まず auth 復元を少し待つ（未復元なら次のdelayへ）
       const auth = await waitForAuthReady(supabase);
       if (!auth.ok) {
         if (i < delays.length - 1) continue;
@@ -111,44 +117,39 @@ export async function fetchThreads(supabase: SupabaseClient, uiLang?: Lang): Pro
         if (!result.ok) {
           const error = result.error;
 
-          // ✅ updated_at が使えない環境はここで確定→次回以降スキップ
           if (isUpdatedAtUnsupportedError(error)) {
             setUpdatedAtUnsupportedCached(true);
             break;
           }
 
-          // ここは原則起きないが、念のため維持（将来のDB差異）
           if (isMissingColumnError(error)) {
             throw error;
           }
 
-          // 認証復元中っぽいならリトライ
           if (i < delays.length - 1 && isAuthNotReadyError(error)) {
             continue;
           }
 
-          // 一時的揺れはリトライ
-          if (i < delays.length - 1 && isTransientAuthOrNetworkError(error)) {
+          if (
+            i < delays.length - 1 &&
+            isTransientAuthOrNetworkError(error)
+          ) {
             continue;
           }
 
           return { ok: false, list: [], error: normMsg(error) };
         }
 
-        const raw = Array.isArray(result.data) ? result.data : [];
-        const list = raw
-          .map((r: any) => normalizeThreadRow(r, titleFallback, { preferNowIfMissingUpdated: false }))
-          .filter((t) => String((t as any)?.id ?? "").trim().length > 0) as Thread[];
-
-        return { ok: true, list };
+        return {
+          ok: true,
+          list: mapRowsToThreads(result.data, titleFallback),
+        };
       } catch {
-        // updated_at ルートが無理 → created_at へ
         break;
       }
     }
   }
 
-  // 2) created_at フォールバック（updated_at 列が無い/使えない環境）
   for (let i = 0; i < delays.length; i++) {
     if (delays[i] > 0) {
       await sleep(delays[i]);
@@ -166,9 +167,7 @@ export async function fetchThreads(supabase: SupabaseClient, uiLang?: Lang): Pro
       if (!result.ok) {
         const error = result.error;
 
-        // ここも原則起きないが、念のため維持
         if (isMissingColumnError(error)) {
-          // 別環境でのDB差異が出た場合に備える
           throw error;
         }
 
@@ -176,21 +175,25 @@ export async function fetchThreads(supabase: SupabaseClient, uiLang?: Lang): Pro
           continue;
         }
 
-        if (i < delays.length - 1 && isTransientAuthOrNetworkError(error)) {
+        if (
+          i < delays.length - 1 &&
+          isTransientAuthOrNetworkError(error)
+        ) {
           continue;
         }
 
         return { ok: false, list: [], error: normMsg(error) };
       }
 
-      const raw = Array.isArray(result.data) ? result.data : [];
-      const list = raw
-        .map((r: any) => normalizeThreadRow(r, titleFallback, { preferNowIfMissingUpdated: false }))
-        .filter((t) => String((t as any)?.id ?? "").trim().length > 0) as Thread[];
-
-      return { ok: true, list };
+      return {
+        ok: true,
+        list: mapRowsToThreads(result.data, titleFallback),
+      };
     } catch (e2) {
-      if (i < delays.length - 1 && (isAuthNotReadyError(e2) || isTransientAuthOrNetworkError(e2))) {
+      if (
+        i < delays.length - 1 &&
+        (isAuthNotReadyError(e2) || isTransientAuthOrNetworkError(e2))
+      ) {
         continue;
       }
 
@@ -200,3 +203,16 @@ export async function fetchThreads(supabase: SupabaseClient, uiLang?: Lang): Pro
 
   return { ok: false, list: [], error: "fetchThreads error" };
 }
+
+/*
+このファイルの正式役割
+conversations 一覧を取得して、左カラム表示用の Thread[] に正規化して返す取得ファイル。
+このファイルは一覧取得だけを担当し、選択・採用・本文更新は担当しない。
+
+【今回このファイルで修正したこと】
+1. updated_at ルートと created_at ルートで重複していた rows → Thread[] 変換を mapRowsToThreads に一本化しました。
+2. fetchThreads の取得後処理を1箇所へ寄せ、取得層の読み筋を少し単純化しました。
+3. retry、auth 待機、updated_at → created_at フォールバック、schema cache、normalizeThreadRow の意味は触っていません。
+*/
+
+/* /components/chat/lib/threadApiFetchThreads.ts */

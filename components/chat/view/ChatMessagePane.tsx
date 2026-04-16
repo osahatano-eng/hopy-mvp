@@ -6,6 +6,7 @@ import { ChatStream } from "./ChatStream";
 import GuestIntroHost from "./GuestIntroHost";
 import JumpButton from "./JumpButton";
 import PreparingHero from "./PreparingHero";
+import WorkspaceHero from "./WorkspaceHero";
 import type { ChatMsg, Lang } from "../lib/chatTypes";
 
 type RenderItem =
@@ -42,19 +43,12 @@ type Labels = {
   recoverTitle: string;
 };
 
-type GuestCopy = {
-  heroTitle: string;
-  heroSub: string;
-  cta: string;
-};
-
 type Props = {
   guestMode: boolean;
   workspaceMode: boolean;
   uiLang: Lang;
   ui: UiDict;
   labels: Labels;
-  guestCopy: GuestCopy;
   topInset: string;
   rendered: RenderItem[];
   visibleTexts: Map<string, string>;
@@ -72,7 +66,6 @@ type Props = {
   showStuckUi: boolean;
   onReload: () => void;
   onResetAndReload: () => void;
-  login: () => Promise<void> | void;
   shouldShowJump: boolean;
   jumpAria: string;
   onJumpToBottom: () => void;
@@ -107,51 +100,31 @@ export const ChatMessagePane = React.memo(function ChatMessagePane(props: Props)
     topInset,
   } = props;
 
-  void shouldShowWorkspaceHero;
+  const hasRenderedItems = rendered.length > 0;
 
-  const renderedMessageCount = React.useMemo(() => {
-    if (!Array.isArray(rendered) || rendered.length === 0) return 0;
-
-    return rendered.reduce((count, item) => {
-      const kind = String((item as any)?.kind ?? "").trim();
-      if (kind === "msg") return count + 1;
-      if ((item as any)?.msg) return count + 1;
-      return count;
-    }, 0);
-  }, [rendered]);
-
-  const hasRenderedContent = renderedMessageCount > 0;
-  const resolvedShouldShowPreparing =
-    shouldShowPreparing && !showRecoverUi && !showStuckUi;
-
-  const streamLoading = hasRenderedContent ? loading : false;
+  const shouldRenderStream =
+    !shouldHoldBlankThreadStage &&
+    (hasRenderedItems || showRecoverUi || showStuckUi);
 
   const shouldShowGuestPreparingHero =
     guestMode &&
-    resolvedShouldShowPreparing &&
-    !hasRenderedContent &&
-    !streamLoading;
+    shouldShowPreparing &&
+    !hasRenderedItems &&
+    !showRecoverUi &&
+    !showStuckUi;
 
   const shouldShowGuestIntroMotion =
     guestMode &&
     shouldShowGuestHero &&
+    !hasRenderedItems &&
+    !showRecoverUi &&
+    !showStuckUi &&
     !shouldShowGuestPreparingHero;
-
-  const shouldRenderGuestStream =
-    hasRenderedContent ||
-    showRecoverUi ||
-    showStuckUi ||
-    (resolvedShouldShowPreparing && hasRenderedContent) ||
-    (!resolvedShouldShowPreparing && streamLoading);
 
   const shouldRenderWorkspaceBlankStage =
     workspaceMode &&
-    shouldHoldBlankThreadStage &&
-    !showRecoverUi &&
-    !showStuckUi &&
-    !resolvedShouldShowPreparing &&
-    !hasRenderedContent &&
-    !streamLoading;
+    (shouldHoldBlankThreadStage ||
+      (shouldShowWorkspaceHero && !shouldRenderStream));
 
   const streamNode = (
     <ChatStream
@@ -161,7 +134,7 @@ export const ChatMessagePane = React.memo(function ChatMessagePane(props: Props)
       onShowMore={onShowMore}
       rendered={rendered}
       visibleTexts={visibleTexts}
-      shouldShowPreparing={resolvedShouldShowPreparing && hasRenderedContent}
+      shouldShowPreparing={shouldShowPreparing && hasRenderedItems}
       preparingLabel={labels.preparingLabel}
       shouldShowRecover={showRecoverUi}
       recoverTitle={labels.recoverTitle}
@@ -172,33 +145,7 @@ export const ChatMessagePane = React.memo(function ChatMessagePane(props: Props)
       onResetAndReload={onResetAndReload}
       shouldShowStuck={showStuckUi}
       stuckLabel={labels.stuckLabel}
-      loading={streamLoading}
-      bottomRef={bottomRef}
-      scrollerRef={scrollerRef}
-      topInset={topInset}
-    />
-  );
-
-  const blankThreadStageNode = (
-    <ChatStream
-      uiLang={uiLang}
-      ui={ui}
-      canShowMore={false}
-      onShowMore={onShowMore}
-      rendered={[]}
-      visibleTexts={visibleTexts}
-      shouldShowPreparing={false}
-      preparingLabel={labels.preparingLabel}
-      shouldShowRecover={false}
-      recoverTitle={labels.recoverTitle}
-      userStateErr={userStateErr}
-      reloadLabel={labels.reloadLabel}
-      resetLabel={labels.resetLabel}
-      onReload={onReload}
-      onResetAndReload={onResetAndReload}
-      shouldShowStuck={false}
-      stuckLabel={labels.stuckLabel}
-      loading={false}
+      loading={loading}
       bottomRef={bottomRef}
       scrollerRef={scrollerRef}
       topInset={topInset}
@@ -208,15 +155,13 @@ export const ChatMessagePane = React.memo(function ChatMessagePane(props: Props)
   if (guestMode) {
     return (
       <>
-        {shouldRenderGuestStream ? (
-          streamNode
+        {shouldShowGuestIntroMotion ? (
+          <GuestIntroHost uiLang={uiLang === "en" ? "en" : "ja"} />
         ) : shouldShowGuestPreparingHero ? (
           <PreparingHero
             uiLang={uiLang === "en" ? "en" : "ja"}
             fallbackLabel={labels.preparingLabel}
           />
-        ) : shouldShowGuestIntroMotion ? (
-          <GuestIntroHost uiLang={uiLang === "en" ? "en" : "ja"} />
         ) : (
           streamNode
         )}
@@ -232,7 +177,11 @@ export const ChatMessagePane = React.memo(function ChatMessagePane(props: Props)
 
   return (
     <>
-      {shouldRenderWorkspaceBlankStage ? blankThreadStageNode : streamNode}
+      {shouldRenderWorkspaceBlankStage ? (
+        <WorkspaceHero uiLang={uiLang} />
+      ) : (
+        streamNode
+      )}
 
       {shouldShowJump && !shouldRenderWorkspaceBlankStage && (
         <JumpButton ariaLabel={jumpAria} onClick={onJumpToBottom} />
@@ -245,18 +194,25 @@ export default ChatMessagePane;
 
 /*
 【このファイルの正式役割】
-チャット本文エリアの表示切替ファイル。
-guest 側では stream / guest intro / guest preparing / jump button を切り替える。
-workspace 側では blank thread stage と本文 stream のどちらを出すかを切り替える。
+チャット本文エリアの最終表示切替ファイル。
+受け取った props を使って、
+guest 側では stream / guest intro / guest preparing / jump button を切り替え、
+workspace 側では workspace hero と本文 stream のどちらを出すかを1箇所で決める。
+このファイルは thread 作成責務を持たない。
+message 保存責務を持たない。
+title 自動生成責務を持たない。
+HOPY唯一の正を再判定しない。
+本文があるかどうかを最優先に見て、本文があるなら stream を優先する。
+ただし、親から shouldHoldBlankThreadStage が渡された間は、
+古い本文を出し続けず blank stage を優先する。
 */
 
 /*
 【今回このファイルで修正したこと】
-1. rendered.length ではなく、実際に msg を持つ描画項目数だけを renderedMessageCount として判定するように修正しました。
-2. 待機用の描画データだけでは hasRenderedContent=true にならないようにし、workspace 側で blank stage / stream の判定がぶれないように修正しました。
-3. streamLoading と shouldShowPreparing も同じ基準へそろえ、本文がないのに本文あり扱いで待機表示へ落ちる経路を止めました。
-4. guest 側の intro / preparing / stream 切替ロジックの意味は変えていません。
-5. HOPY唯一の正である state_changed / HOPY回答○ / Compass / DB保存 / DB復元の意味判定には触っていません。
+1. shouldHoldBlankThreadStage=true のときは shouldShowWorkspaceHero に関係なく WorkspaceHero を優先するようにしました。
+2. workspace 側の blank stage 判定を、旧本文描画より強い唯一の分岐に戻しました。
+3. hasRenderedItems から不要な Array.isArray 保険判定を削除した状態は維持しました。
+4. 本文表示切替、shouldHoldBlankThreadStage、confirmed payload、state_changed、HOPY回答○、Compass、DB保存/復元、1..5 の唯一の正には触っていません。
 */
 
 /* /components/chat/view/ChatMessagePane.tsx */

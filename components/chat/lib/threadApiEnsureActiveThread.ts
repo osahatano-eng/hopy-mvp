@@ -23,19 +23,23 @@ import {
   normalizeThreadRow,
 } from "./threadApiNormalize";
 
-export type EnsureResult = { ok: true; id: string } | { ok: false; id: null; error: string };
+export type EnsureResult =
+  | { ok: true; id: string }
+  | { ok: false; id: null; error: string };
 
 function applySetThreads(
   setThreads: Dispatch<SetStateAction<Thread[]>>,
-  next: Thread[] | ((prev: Thread[]) => Thread[])
+  next: Thread[] | ((prev: Thread[]) => Thread[]),
 ) {
   try {
     setThreads(next as any);
   } catch {}
 }
 
-// ✅ init/復旧経路で「古い list で UI を巻き戻す」のを防ぐ：prev が空の時だけ反映
-function applySetThreadsIfEmpty(setThreads: Dispatch<SetStateAction<Thread[]>>, list: Thread[]) {
+function applySetThreadsIfEmpty(
+  setThreads: Dispatch<SetStateAction<Thread[]>>,
+  list: Thread[],
+) {
   try {
     setThreads((prev) => {
       const p = Array.isArray(prev) ? prev : [];
@@ -45,61 +49,104 @@ function applySetThreadsIfEmpty(setThreads: Dispatch<SetStateAction<Thread[]>>, 
   } catch {}
 }
 
-// ✅ 重要：in-flight は “完了まで” 束ねる。ただしキー（clientRequestId）ごとに束ねる
 type InFlightEntry = { at: number; promise: Promise<EnsureResult> };
 const inFlightByKey = new Map<string, InFlightEntry>();
 
-// ✅ 事故対策：異常に長い in-flight は破棄して再作成できるようにする
 const CREATE_INFLIGHT_MAX_MS = 60_000;
 
-// ✅ PhaseC: useChatInit から型安全に渡すため、引数型を公開する
 export type EnsureActiveThreadArgs = {
   supabase: SupabaseClient;
   list: Thread[];
   uiLang: Lang;
   setActiveThreadId: (id: string | null) => void;
   setThreads: Dispatch<SetStateAction<Thread[]>>;
-
-  /**
-   * ✅ PhaseB: 「新規チャット」ボタン等からの明示的な新規作成
-   * - true の時は saved/先頭採用をスキップし、必ず insert する
-   */
   forceCreate?: boolean;
-
-  /**
-   * ✅ PhaseC: 新規作成の冪等化キー（クライアント起点）
-   * - 同一クリック（同一操作）内では同じIDを渡す（完了まで保持）
-   * - 未指定なら内部生成（従来互換）
-   */
   clientRequestId?: string;
 };
 
-export async function ensureActiveThread(args: EnsureActiveThreadArgs): Promise<EnsureResult> {
-  const { supabase, list, uiLang, setActiveThreadId, setThreads, forceCreate } = args;
+function threadIdOf(thread: Thread | null | undefined): string {
+  return String((thread as any)?.id ?? "").trim();
+}
 
-  // ✅ 受け取ったlistは“候補”として扱う（init/復旧で古いlistが来ても UI を巻き戻さない）
+function applyThreadToFront(
+  setThreads: Dispatch<SetStateAction<Thread[]>>,
+  list: Thread[],
+  nextThread: Thread,
+) {
+  const nextId = threadIdOf(nextThread);
+
+  applySetThreads(setThreads, (prev) => {
+    const base = Array.isArray(prev) && prev.length > 0 ? prev : list;
+    const filtered = base.filter((t) => threadIdOf(t) !== nextId);
+    return [nextThread, ...filtered];
+  });
+}
+
+function commitActiveThread(
+  setThreads: Dispatch<SetStateAction<Thread[]>>,
+  setActiveThreadId: (id: string | null) => void,
+  list: Thread[],
+  nextThread: Thread,
+): EnsureResult {
+  const nextId = threadIdOf(nextThread);
+  applyThreadToFront(setThreads, list, nextThread);
+  setActiveThreadId(nextId);
+  saveActiveThreadId(nextId);
+  return { ok: true, id: nextId };
+}
+
+function restoreThreadsOnFail(
+  setThreads: Dispatch<SetStateAction<Thread[]>>,
+  list: Thread[],
+) {
+  applySetThreads(setThreads, (prev) =>
+    Array.isArray(prev) && prev.length > 0 ? prev : list,
+  );
+}
+
+function failEnsureThread(
+  setThreads: Dispatch<SetStateAction<Thread[]>>,
+  list: Thread[],
+  error: string,
+): EnsureResult {
+  restoreThreadsOnFail(setThreads, list);
+  return { ok: false, id: null, error };
+}
+
+export async function ensureActiveThread(
+  args: EnsureActiveThreadArgs,
+): Promise<EnsureResult> {
+  const {
+    supabase,
+    list,
+    uiLang,
+    setActiveThreadId,
+    setThreads,
+    forceCreate,
+  } = args;
+
   applySetThreadsIfEmpty(setThreads, list);
 
   const saved = loadActiveThreadId();
 
-  // 1) localStorage の id があれば採用（ただし forceCreate の時は採用しない）
-  // - list の照合は “あるならチェック” に留め、list が空でも復旧できるようにする
   if (!forceCreate && saved) {
     if (!Array.isArray(list) || list.length === 0) {
       setActiveThreadId(saved);
       saveActiveThreadId(saved);
       return { ok: true, id: saved };
     }
-    if (list.some((t) => String((t as any)?.id ?? "").trim() === String(saved).trim())) {
+
+    if (
+      list.some((t) => threadIdOf(t) === String(saved).trim())
+    ) {
       setActiveThreadId(saved);
       saveActiveThreadId(saved);
       return { ok: true, id: saved };
     }
   }
 
-  // 2) list があるなら先頭を採用（ただし forceCreate の時は採用しない）
   if (!forceCreate && Array.isArray(list) && list.length > 0) {
-    const id = String((list[0] as any)?.id ?? "").trim();
+    const id = threadIdOf(list[0]);
     if (id) {
       setActiveThreadId(id);
       saveActiveThreadId(id);
@@ -107,11 +154,9 @@ export async function ensureActiveThread(args: EnsureActiveThreadArgs): Promise<
     }
   }
 
-  // 3) 新規作成（0件 or forceCreate）
   const titleFallback = uiLang === "en" ? "New chat" : "新規チャット";
-
-  // ✅ 同一「新規作成操作」内で DB 冪等化するためのキー
-  const clientRequestId = String(args.clientRequestId ?? "").trim() || safeUUID();
+  const clientRequestId =
+    String(args.clientRequestId ?? "").trim() || safeUUID();
   const key = clientRequestId;
 
   const existing = inFlightByKey.get(key);
@@ -135,6 +180,7 @@ export async function ensureActiveThread(args: EnsureActiveThreadArgs): Promise<
 
       if (error) {
         if (isNoRowsSingleError(error)) return null;
+
         if (isMissingColumnError(error)) {
           try {
             const { data: data2, error: error2 } = await supabase
@@ -151,6 +197,7 @@ export async function ensureActiveThread(args: EnsureActiveThreadArgs): Promise<
               if (isAuthNotReadyError(error2)) return null;
               return null;
             }
+
             if (!data2?.id) return null;
 
             return normalizeThreadRow(data2, titleFallback, {
@@ -161,9 +208,11 @@ export async function ensureActiveThread(args: EnsureActiveThreadArgs): Promise<
             return null;
           }
         }
+
         if (isAuthNotReadyError(error)) return null;
         return null;
       }
+
       if (!data?.id) return null;
 
       return normalizeThreadRow(data, titleFallback, {
@@ -178,26 +227,19 @@ export async function ensureActiveThread(args: EnsureActiveThreadArgs): Promise<
   const doCreate = async (): Promise<EnsureResult> => {
     const auth = await waitForAuthReady(supabase);
     if (!auth.ok) {
-      applySetThreads(setThreads, (prev) => (Array.isArray(prev) && prev.length > 0 ? prev : list));
-      return { ok: false, id: null, error: "auth_not_ready" };
+      return failEnsureThread(setThreads, list, "auth_not_ready");
     }
 
     const preExisting = await tryReadBackByClientRequestId();
     if (preExisting?.id) {
-      const nextId = String((preExisting as any)?.id ?? "").trim();
-
-      applySetThreads(setThreads, (prev) => {
-        const base = Array.isArray(prev) && prev.length > 0 ? prev : list;
-        const filtered = base.filter((t) => String((t as any)?.id ?? "").trim() !== nextId);
-        return [preExisting, ...filtered];
-      });
-
-      setActiveThreadId(nextId);
-      saveActiveThreadId(nextId);
-      return { ok: true, id: nextId };
+      return commitActiveThread(
+        setThreads,
+        setActiveThreadId,
+        list,
+        preExisting,
+      );
     }
 
-    // 1) upsert（冪等化）
     try {
       const { data: rowU, error: errorU } = await supabase
         .from("conversations")
@@ -206,7 +248,7 @@ export async function ensureActiveThread(args: EnsureActiveThreadArgs): Promise<
           {
             onConflict: "user_id,client_request_id",
             ignoreDuplicates: false,
-          } as any
+          } as any,
         )
         .select(THREAD_SELECT_FULL)
         .single();
@@ -223,17 +265,12 @@ export async function ensureActiveThread(args: EnsureActiveThreadArgs): Promise<
         if (isOnConflictConstraintMissingError(errorU)) {
           const existed = await tryReadBackByClientRequestId();
           if (existed?.id) {
-            const nextId = String((existed as any)?.id ?? "").trim();
-
-            applySetThreads(setThreads, (prev) => {
-              const base = Array.isArray(prev) && prev.length > 0 ? prev : list;
-              const filtered = base.filter((t) => String((t as any)?.id ?? "").trim() !== nextId);
-              return [existed, ...filtered];
-            });
-
-            setActiveThreadId(nextId);
-            saveActiveThreadId(nextId);
-            return { ok: true, id: nextId };
+            return commitActiveThread(
+              setThreads,
+              setActiveThreadId,
+              list,
+              existed,
+            );
           }
         }
 
@@ -248,19 +285,13 @@ export async function ensureActiveThread(args: EnsureActiveThreadArgs): Promise<
         bumpNowForEventIfMissingUpdated: true,
       });
 
-      const nextId = String((nextThread as any)?.id ?? "").trim();
-      applySetThreads(setThreads, (prev) => {
-        const base = Array.isArray(prev) && prev.length > 0 ? prev : list;
-        const filtered = base.filter((t) => String((t as any)?.id ?? "").trim() !== nextId);
-        return [nextThread, ...filtered];
-      });
-
-      setActiveThreadId(nextId);
-      saveActiveThreadId(nextId);
-
-      return { ok: true, id: nextId };
+      return commitActiveThread(
+        setThreads,
+        setActiveThreadId,
+        list,
+        nextThread,
+      );
     } catch (eUpsert) {
-      // 2) insert（互換）
       try {
         const { data: row, error } = await supabase
           .from("conversations")
@@ -279,24 +310,15 @@ export async function ensureActiveThread(args: EnsureActiveThreadArgs): Promise<
 
           const existed = await tryReadBackByClientRequestId();
           if (existed?.id) {
-            const nextId = String((existed as any)?.id ?? "").trim();
-
-            applySetThreads(setThreads, (prev) => {
-              const base = Array.isArray(prev) && prev.length > 0 ? prev : list;
-              const filtered = base.filter((t) => String((t as any)?.id ?? "").trim() !== nextId);
-              return [existed, ...filtered];
-            });
-
-            setActiveThreadId(nextId);
-            saveActiveThreadId(nextId);
-            return { ok: true, id: nextId };
+            return commitActiveThread(
+              setThreads,
+              setActiveThreadId,
+              list,
+              existed,
+            );
           }
 
-          const msg = normMsg(error);
-
-          applySetThreads(setThreads, (prev) => (Array.isArray(prev) && prev.length > 0 ? prev : list));
-
-          return { ok: false, id: null, error: msg };
+          return failEnsureThread(setThreads, list, normMsg(error));
         }
 
         const nextThread = normalizeThreadRow(row, titleFallback, {
@@ -304,19 +326,13 @@ export async function ensureActiveThread(args: EnsureActiveThreadArgs): Promise<
           bumpNowForEventIfMissingUpdated: true,
         });
 
-        const nextId = String((nextThread as any)?.id ?? "").trim();
-        applySetThreads(setThreads, (prev) => {
-          const base = Array.isArray(prev) && prev.length > 0 ? prev : list;
-          const filtered = base.filter((t) => String((t as any)?.id ?? "").trim() !== nextId);
-          return [nextThread, ...filtered];
-        });
-
-        setActiveThreadId(nextId);
-        saveActiveThreadId(nextId);
-
-        return { ok: true, id: nextId };
+        return commitActiveThread(
+          setThreads,
+          setActiveThreadId,
+          list,
+          nextThread,
+        );
       } catch (e) {
-        // 2-2) client_request_id / current系 列が無い等 → title のみ insert
         try {
           const { data: row, error } = await supabase
             .from("conversations")
@@ -337,14 +353,12 @@ export async function ensureActiveThread(args: EnsureActiveThreadArgs): Promise<
                   if (isMissingColumnError(error2)) {
                     throw error2;
                   }
+
                   if (isAuthNotReadyError(error2)) {
                     return { ok: false, id: null, error: "auth_not_ready" };
                   }
-                  const msg = normMsg(error2);
 
-                  applySetThreads(setThreads, (prev) => (Array.isArray(prev) && prev.length > 0 ? prev : list));
-
-                  return { ok: false, id: null, error: msg };
+                  return failEnsureThread(setThreads, list, normMsg(error2));
                 }
 
                 const nextThread = normalizeThreadRow(row2, titleFallback, {
@@ -352,29 +366,22 @@ export async function ensureActiveThread(args: EnsureActiveThreadArgs): Promise<
                   bumpNowForEventIfMissingUpdated: true,
                 });
 
-                const nextId = String((nextThread as any)?.id ?? "").trim();
-                applySetThreads(setThreads, (prev) => {
-                  const base = Array.isArray(prev) && prev.length > 0 ? prev : list;
-                  const filtered = base.filter((t) => String((t as any)?.id ?? "").trim() !== nextId);
-                  return [nextThread, ...filtered];
-                });
-
-                setActiveThreadId(nextId);
-                saveActiveThreadId(nextId);
-
-                return { ok: true, id: nextId };
+                return commitActiveThread(
+                  setThreads,
+                  setActiveThreadId,
+                  list,
+                  nextThread,
+                );
               } catch (eMin) {
                 throw eMin;
               }
             }
+
             if (isAuthNotReadyError(error)) {
               return { ok: false, id: null, error: "auth_not_ready" };
             }
-            const msg = normMsg(error);
 
-            applySetThreads(setThreads, (prev) => (Array.isArray(prev) && prev.length > 0 ? prev : list));
-
-            return { ok: false, id: null, error: msg };
+            return failEnsureThread(setThreads, list, normMsg(error));
           }
 
           const nextThread = normalizeThreadRow(row, titleFallback, {
@@ -382,19 +389,13 @@ export async function ensureActiveThread(args: EnsureActiveThreadArgs): Promise<
             bumpNowForEventIfMissingUpdated: true,
           });
 
-          const nextId = String((nextThread as any)?.id ?? "").trim();
-          applySetThreads(setThreads, (prev) => {
-            const base = Array.isArray(prev) && prev.length > 0 ? prev : list;
-            const filtered = base.filter((t) => String((t as any)?.id ?? "").trim() !== nextId);
-            return [nextThread, ...filtered];
-          });
-
-          setActiveThreadId(nextId);
-          saveActiveThreadId(nextId);
-
-          return { ok: true, id: nextId };
+          return commitActiveThread(
+            setThreads,
+            setActiveThreadId,
+            list,
+            nextThread,
+          );
         } catch (e2) {
-          // 3) updated_at 無し環境（created_at 等）でも作れるようにフォールバック
           try {
             const { data: row2, error: error2 } = await supabase
               .from("conversations")
@@ -411,11 +412,11 @@ export async function ensureActiveThread(args: EnsureActiveThreadArgs): Promise<
                   .single();
 
                 if (error3 || !row3?.id) {
-                  const msg = normMsg(error3 ?? error2 ?? e2 ?? eUpsert);
-
-                  applySetThreads(setThreads, (prev) => (Array.isArray(prev) && prev.length > 0 ? prev : list));
-
-                  return { ok: false, id: null, error: msg };
+                  return failEnsureThread(
+                    setThreads,
+                    list,
+                    normMsg(error3 ?? error2 ?? e2 ?? eUpsert),
+                  );
                 }
 
                 const nextThread = normalizeThreadRow(row3, titleFallback, {
@@ -423,24 +424,19 @@ export async function ensureActiveThread(args: EnsureActiveThreadArgs): Promise<
                   bumpNowForEventIfMissingUpdated: true,
                 });
 
-                const nextId = String((nextThread as any)?.id ?? "").trim();
-                applySetThreads(setThreads, (prev) => {
-                  const base = Array.isArray(prev) && prev.length > 0 ? prev : list;
-                  const filtered = base.filter((t) => String((t as any)?.id ?? "").trim() !== nextId);
-                  return [nextThread, ...filtered];
-                });
-
-                setActiveThreadId(nextId);
-                saveActiveThreadId(nextId);
-
-                return { ok: true, id: nextId };
+                return commitActiveThread(
+                  setThreads,
+                  setActiveThreadId,
+                  list,
+                  nextThread,
+                );
               }
 
-              const msg = normMsg(error2 ?? e2 ?? eUpsert);
-
-              applySetThreads(setThreads, (prev) => (Array.isArray(prev) && prev.length > 0 ? prev : list));
-
-              return { ok: false, id: null, error: msg };
+              return failEnsureThread(
+                setThreads,
+                list,
+                normMsg(error2 ?? e2 ?? eUpsert),
+              );
             }
 
             const nextThread = normalizeThreadRow(row2, titleFallback, {
@@ -448,23 +444,18 @@ export async function ensureActiveThread(args: EnsureActiveThreadArgs): Promise<
               bumpNowForEventIfMissingUpdated: true,
             });
 
-            const nextId = String((nextThread as any)?.id ?? "").trim();
-            applySetThreads(setThreads, (prev) => {
-              const base = Array.isArray(prev) && prev.length > 0 ? prev : list;
-              const filtered = base.filter((t) => String((t as any)?.id ?? "").trim() !== nextId);
-              return [nextThread, ...filtered];
-            });
-
-            setActiveThreadId(nextId);
-            saveActiveThreadId(nextId);
-
-            return { ok: true, id: nextId };
+            return commitActiveThread(
+              setThreads,
+              setActiveThreadId,
+              list,
+              nextThread,
+            );
           } catch (e3) {
-            const msg = normMsg(e3 ?? e2 ?? eUpsert);
-
-            applySetThreads(setThreads, (prev) => (Array.isArray(prev) && prev.length > 0 ? prev : list));
-
-            return { ok: false, id: null, error: msg };
+            return failEnsureThread(
+              setThreads,
+              list,
+              normMsg(e3 ?? e2 ?? eUpsert),
+            );
           }
         }
       }
@@ -486,3 +477,17 @@ export async function ensureActiveThread(args: EnsureActiveThreadArgs): Promise<
 
   return await p;
 }
+
+/*
+このファイルの正式役割
+active にする thread を決め、必要時だけ conversations へ新規作成し、
+一覧先頭反映と activeThreadId 保存までを担当する接続ファイル。
+本文取得や本文表示の責務は持たない。
+
+【今回このファイルで修正したこと】
+1. 新規作成成功時の「一覧先頭反映 + activeThreadId保存 + 成功返却」を commitActiveThread に一本化しました。
+2. 失敗時の「既存list復元 + 失敗返却」を failEnsureThread に一本化しました。
+3. 各 fallback の分岐順、auth待機、in-flight 制御、DB insert/upsert 方針、normalizeThreadRow の意味は触っていません。
+*/
+
+/* /components/chat/lib/threadApiEnsureActiveThread.ts */

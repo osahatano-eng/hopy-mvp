@@ -6,10 +6,7 @@ import type { ChatMsg, Thread } from "./chatTypes";
 import type { HopyState } from "./stateBadge";
 import { useRenderMessages } from "./useRenderMessages";
 import { pickLatestAssistantStateMessage } from "./chatMessageState";
-import {
-  mergeThreadStateFromMessage,
-  readActiveThreadStateLevel,
-} from "./chatThreadState";
+import { mergeThreadStateFromMessage } from "./chatThreadState";
 
 type Params = {
   displayLoggedIn: boolean;
@@ -99,7 +96,7 @@ export function useChatClientViewState({
   userState,
   normalizedInput,
 }: Params) {
-  const currentViewThreadId = String(activeThreadId ?? "").trim();
+  const activeThreadKey = String(activeThreadId ?? "").trim();
 
   const { rendered, visibleTexts } = useRenderMessages({
     messages,
@@ -109,16 +106,14 @@ export function useChatClientViewState({
     tmap,
   });
 
-  const latestAssistantStateMsg = useMemo(() => {
-    return pickLatestAssistantStateMessage(messages);
-  }, [messages]);
+  const viewRendered = Array.isArray(rendered) ? rendered : [];
+  const viewVisibleTexts = Array.isArray(visibleTexts) ? visibleTexts : [];
+
+  const latestAssistantStateMsg = pickLatestAssistantStateMessage(messages);
 
   useEffect(() => {
     if (!displayLoggedIn) return;
-
-    const tid = String(activeThreadId ?? "").trim();
-    if (!tid) return;
-
+    if (!activeThreadKey) return;
     if (!latestAssistantStateMsg) return;
 
     setThreads((prev) => {
@@ -128,7 +123,7 @@ export function useChatClientViewState({
 
       const next = prev.map((thread) => {
         const id = String((thread as any)?.id ?? "").trim();
-        if (id !== tid) return thread;
+        if (id !== activeThreadKey) return thread;
 
         const merged = mergeThreadStateFromMessage(thread, latestAssistantStateMsg);
 
@@ -142,41 +137,41 @@ export function useChatClientViewState({
 
       return changed ? next : prev;
     });
-  }, [displayLoggedIn, activeThreadId, latestAssistantStateMsg, setThreads]);
-
-  const activeThread = useMemo<Thread | null>(() => {
-    if (!displayLoggedIn) return null;
-    const tid = String(activeThreadId ?? "").trim();
-    if (!tid) return null;
-    return (
-      threads.find((thread) => String((thread as any)?.id ?? "").trim() === tid) ??
-      null
-    );
-  }, [displayLoggedIn, activeThreadId, threads]);
+  }, [displayLoggedIn, activeThreadKey, latestAssistantStateMsg, setThreads]);
 
   const isDraftLikeActiveThread = useMemo(() => {
     if (!displayLoggedIn) return false;
-
-    const tid = String(activeThreadId ?? "").trim();
-    if (!tid) return false;
+    if (!activeThreadKey) return false;
 
     const hasNoMessages = messages.length === 0;
     const hasNoInput = !Boolean(normalizedInput);
     const hasNoAssistantState = !latestAssistantStateMsg;
 
     return hasNoMessages && hasNoInput && hasNoAssistantState;
-  }, [displayLoggedIn, activeThreadId, messages.length, normalizedInput, latestAssistantStateMsg]);
+  }, [
+    displayLoggedIn,
+    activeThreadKey,
+    messages.length,
+    normalizedInput,
+    latestAssistantStateMsg,
+  ]);
 
   const latestAssistantCanonicalState = useMemo<HopyState | null>(() => {
     if (!latestAssistantStateMsg) return null;
 
     const msgAny = latestAssistantStateMsg as any;
-
     return toCanonicalState(msgAny?.hopy_confirmed_payload?.state) ?? null;
   }, [latestAssistantStateMsg]);
 
   const viewActiveThread = useMemo<Thread | null>(() => {
-    if (!activeThread) return activeThread;
+    if (!displayLoggedIn) return null;
+    if (!activeThreadKey) return null;
+
+    const activeThread =
+      threads.find((thread) => String((thread as any)?.id ?? "").trim() === activeThreadKey) ??
+      null;
+
+    if (!activeThread) return null;
     if (!latestAssistantCanonicalState) return activeThread;
 
     return {
@@ -191,11 +186,7 @@ export function useChatClientViewState({
         (activeThread as any)?.updated_at ??
         null,
     } as Thread;
-  }, [activeThread, latestAssistantCanonicalState]);
-
-  const activeThreadStateLevel = useMemo<number | undefined>(() => {
-    return readActiveThreadStateLevel(viewActiveThread);
-  }, [viewActiveThread]);
+  }, [displayLoggedIn, activeThreadKey, threads, latestAssistantCanonicalState]);
 
   const resolvedViewUserState = useMemo<HopyState | null>(() => {
     if (!displayLoggedIn) return null;
@@ -221,45 +212,19 @@ export function useChatClientViewState({
 
   const viewUserState = useMemo<HopyState | null>(() => {
     if (!resolvedViewUserState) return null;
+    if (!userState || typeof userState !== "object") return resolvedViewUserState;
 
-    const baseUserState =
-      userState && typeof userState === "object"
-        ? (userState as Record<string, unknown>)
-        : null;
-
-    const resolvedState =
-      resolvedViewUserState && typeof resolvedViewUserState === "object"
-        ? (resolvedViewUserState as Record<string, unknown>)
-        : null;
-
-    if (baseUserState && resolvedState) {
-      return {
-        ...baseUserState,
-        ...resolvedState,
-      } as HopyState;
-    }
-
-    return resolvedViewUserState;
+    return {
+      ...(userState as HopyState),
+      ...resolvedViewUserState,
+    };
   }, [userState, resolvedViewUserState]);
 
-  const viewMessages = messages;
-  const viewRendered = rendered;
-  const viewVisibleTexts = visibleTexts;
-
-  const viewActiveThreadId = displayLoggedIn ? currentViewThreadId || "" : "";
-
   return {
-    rendered,
-    visibleTexts,
-    latestAssistantStateMsg,
-    activeThread,
-    isDraftLikeActiveThread,
-    viewMessages,
+    viewMessages: messages,
     viewRendered,
     viewVisibleTexts,
-    viewActiveThreadId,
     viewActiveThread,
-    activeThreadStateLevel,
     viewUserState,
   };
 }
@@ -284,32 +249,26 @@ userState
 normalizedInput
 
 このファイルが渡すもの
-rendered
-visibleTexts
-latestAssistantStateMsg
-activeThread
-isDraftLikeActiveThread
 viewMessages
 viewRendered
 viewVisibleTexts
-viewActiveThreadId
 viewActiveThread
-activeThreadStateLevel
 viewUserState
 
 Compass 観点でこのファイルの意味
 このファイルは Compass を直接生成する場所ではない。
 messages を useRenderMessages(...) に渡し、
-画面表示直前に使う rendered / visibleTexts を組み立てる表示中継層である。
+画面表示直前に使う viewRendered / viewVisibleTexts を組み立てる表示中継層である。
 そのため、Compass を含んだ assistant message が messages に入っていれば、
 その message を描画用データへ渡す側のファイルである。
 */
 
 /*
 【今回このファイルで修正したこと】
-1. lastStableViewThreadIdRef / lastStableMessagesRef / lastStableRenderedRef / lastStableVisibleTextsRef を削除しました。
-2. canReuseStableWorkspace / renderSourceMessages を削除し、描画元を常に current messages に固定しました。
-3. viewMessages / viewRendered / viewVisibleTexts を、現在の messages / rendered / visibleTexts そのままに統一しました。
-4. これにより、このファイル内で旧表示の再利用によって即時反映を遅らせる経路を止めました。
+1. activeThread の中間 useMemo を削除しました。
+2. 表示用 active thread の決定を viewActiveThread に一本化しました。
+3. viewUserState の merge を表示責務に必要な最小形へ整理しました。
+4. HOPY唯一の正、confirmed payload、state_changed、HOPY回答○、Compass、DB保存/復元の意味仕様には触っていません。
 */
+
 /* /components/chat/lib/useChatClientViewState.ts */

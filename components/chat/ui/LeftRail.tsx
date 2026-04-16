@@ -175,9 +175,7 @@ export default function LeftRail(props: LeftRailProps) {
     activeMenuOpen,
     activeMenuRef,
     setActiveMenuOpen,
-    createThread,
     titleCountMap,
-    emitSelectThread,
     promptRename,
     confirmDelete,
     handleReset,
@@ -400,7 +398,7 @@ export default function LeftRail(props: LeftRailProps) {
               disabled={disableNewChatSafe}
               onClick={() => {
                 if (disableNewChatSafe) return;
-                createThread();
+                onCreateThread?.();
                 if (shouldCloseAfterAction) {
                   closeLayer();
                 }
@@ -468,8 +466,8 @@ export default function LeftRail(props: LeftRailProps) {
               noThreads={t.noThreads}
               iconStyle={iconStyle}
               titleCountMap={titleCountMap}
-              onSelectThread={(threadId, threadTitle) => {
-                emitSelectThread(threadId, threadTitle);
+              onSelectThread={(threadId) => {
+                onSelectThread(threadId);
                 if (shouldCloseAfterAction) {
                   closeLayerNextFrame();
                 }
@@ -537,9 +535,9 @@ export default function LeftRail(props: LeftRailProps) {
 
 /*
 【今回このファイルで修正したこと】
-1. HopyState を数値で返していた箇所をやめ、current_phase を持つオブジェクトとして返すように修正しました。
-2. LeftRailActiveThreadSection には表示用の HopyState オブジェクトだけを渡すように維持しました。
-3. activeThreadState が欠けている場合は補わず、Current Chat セクションを無理に表示しない形を維持しました。
+1. スレッド選択押下時の処理を useLeftRailController の emitSelectThread() 経由ではなく、親から受け取った onSelectThread() の直接実行に変更しました。
+2. LeftRail 内でスレッド選択入口を1本に絞りました。
+3. 新規チャット直接実行、状態表示、メモリーズ、Recover には触っていません。
 */
 
 /* /components/chat/ui/LeftRail.tsx */
