@@ -101,10 +101,19 @@ export default function ChatClient() {
     threadBusyRef.current = threadBusy;
   }, [threadBusy]);
 
-  const setActiveThreadId = useCallback((v: string | null) => {
-    const nextId = String(v ?? "").trim() || null;
-    activeThreadIdRef.current = nextId;
-    setActiveThreadIdState(nextId);
+  const setActiveThreadId = useCallback<
+    React.Dispatch<React.SetStateAction<string | null>>
+  >((updater) => {
+    setActiveThreadIdState((prev) => {
+      const rawNext =
+        typeof updater === "function"
+          ? (updater as (prevState: string | null) => string | null)(prev)
+          : updater;
+
+      const nextId = String(rawNext ?? "").trim() || null;
+      activeThreadIdRef.current = nextId;
+      return nextId;
+    });
   }, []);
 
   const activeThreadId = activeThreadIdState;
@@ -655,9 +664,9 @@ ChatClientView へ表示用の値を接続する。
 
 /*
 【今回このファイルで修正したこと】
-1. PCは左カラムを閉じない / SPは左カラムを閉じる、を ChatClient の railOpen 基準へ戻しました。
-2. railOpen の初期値を viewport 幅から決めるようにし、ログイン中は media query 変化に合わせて PC=開く / SP=閉じる を同期する effect を追加しました。
-3. これにより、PC幅へ戻っても railOpen=false のまま残る持ち越し state を止めました。
+1. setActiveThreadId を React の state setter と同じ型契約へ揃えました。
+2. 値渡しと関数 updater の両方を受けられるようにしました。
+3. activeThreadIdRef への同期は維持したまま、build を止めていた型不一致だけを直しました。
 4. 既存の本文表示、送信、confirmed payload、state_changed、HOPY回答○、Compass、状態値 1..5 / 5段階の唯一の正には触っていません。
 */
 
