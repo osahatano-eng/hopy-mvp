@@ -106,6 +106,9 @@ export default function ChatClientView(props: ChatClientViewExtendedProps) {
   const disableNewChat = Boolean(disableNewChatProp);
   const renderedLength = Array.isArray(rendered) ? rendered.length : 0;
 
+  const scrollerDivRef =
+    scrollerRef as React.RefObject<HTMLDivElement | null>;
+
   const surface = useChatClientViewSurface({
     uiLang,
     ui,
@@ -158,7 +161,7 @@ export default function ChatClientView(props: ChatClientViewExtendedProps) {
     activeThreadId,
     renderedLength,
     inputRef,
-    scrollerRef,
+    scrollerRef: scrollerDivRef,
     atBottomRef,
     setAtBottom,
     scrollToBottom,
@@ -220,7 +223,7 @@ export default function ChatClientView(props: ChatClientViewExtendedProps) {
     visibleTexts,
     canShowMore,
     onShowMore,
-    scrollerRef,
+    scrollerRef: scrollerDivRef,
     bottomRef,
     paneLoading: loading,
     userStateErr,
@@ -353,9 +356,9 @@ Chat画面の親表示統合ファイル。
 
 /*
 【今回このファイルで修正したこと】
-1. setInputForComposer を追加し、(v: string) => void の setInput を React の state setter 契約へ合わせました。
-2. 値渡しと updater function の両方を受けられるようにしました。
-3. useChatClientViewComposerSectionProps へは setInputForComposer だけを渡すようにし、build を止めていた型不一致だけを直しました。
+1. scrollerDivRef を追加し、scrollerRef を HTMLDivElement 契約へこのファイル内だけで揃えました。
+2. useChatViewportController と useChatClientViewMessagePaneProps へは scrollerDivRef を渡すようにしました。
+3. build を止めていた scrollerRef の型不一致だけを直しました。
 4. 本文採用、confirmed payload、state_changed、HOPY回答○、Compass、DB保存・復元、1..5 の唯一の正には触っていません。
 */
 
