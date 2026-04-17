@@ -177,6 +177,9 @@ export default function ChatClientView(props: ChatClientViewExtendedProps) {
     onJumpToBottom,
   } = viewport;
 
+  const bottomDivRef =
+    bottomRef as React.RefObject<HTMLDivElement | null>;
+
   const rootInlineStyle = React.useMemo<React.CSSProperties>(() => {
     if (isMobile) {
       return {
@@ -224,7 +227,7 @@ export default function ChatClientView(props: ChatClientViewExtendedProps) {
     canShowMore,
     onShowMore,
     scrollerRef: scrollerDivRef,
-    bottomRef,
+    bottomRef: bottomDivRef,
     paneLoading: loading,
     userStateErr,
     shouldShowGuestHero,
@@ -244,6 +247,7 @@ export default function ChatClientView(props: ChatClientViewExtendedProps) {
   const messagePanePropsForRender = {
     ...messagePaneProps,
     scrollerRef: scrollerDivRef,
+    bottomRef: bottomDivRef,
   };
 
   const { composerSectionProps } = useChatClientViewComposerSectionProps({
@@ -361,9 +365,9 @@ Chat画面の親表示統合ファイル。
 
 /*
 【今回このファイルで修正したこと】
-1. messagePanePropsForRender を追加し、ChatMessagePane へ渡す直前の scrollerRef を HTMLDivElement 契約へ上書きしました。
-2. hook の戻り値そのものは触らず、描画直前の型不一致だけをこのファイル内で吸収しました。
-3. build を止めていた ChatMessagePane 受け渡し時の scrollerRef 型不一致だけを直しました。
+1. bottomDivRef を追加し、bottomRef を HTMLDivElement 契約へこのファイル内だけで揃えました。
+2. useChatClientViewMessagePaneProps と ChatMessagePane へ渡す直前の両方で bottomRef を上書きしました。
+3. build を止めていた ChatMessagePane 受け渡し時の bottomRef 型不一致だけを直しました。
 4. 本文採用、confirmed payload、state_changed、HOPY回答○、Compass、DB保存・復元、1..5 の唯一の正には触っていません。
 */
 
