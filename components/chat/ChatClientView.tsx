@@ -136,6 +136,20 @@ export default function ChatClientView(props: ChatClientViewExtendedProps) {
   const showRecoverUi = false;
   const showStuckUi = false;
 
+  const setInputForComposer = React.useCallback<
+    React.Dispatch<React.SetStateAction<string>>
+  >(
+    (updater) => {
+      const nextValue =
+        typeof updater === "function"
+          ? (updater as (prevState: string) => string)(input)
+          : updater;
+
+      setInput(String(nextValue ?? ""));
+    },
+    [input, setInput],
+  );
+
   useVisualViewportVars();
   useComposerOffset({ rootRef, composerRef, extraPx: 18 });
 
@@ -234,7 +248,7 @@ export default function ChatClientView(props: ChatClientViewExtendedProps) {
     threads,
     activeThreadId,
     input,
-    setInput,
+    setInput: setInputForComposer,
     inputRef,
     composerRef,
     composing,
@@ -339,9 +353,9 @@ Chat画面の親表示統合ファイル。
 
 /*
 【今回このファイルで修正したこと】
-1. rendered.length 用だけに使っていた useMemo をやめて、単純な renderedLength へ戻しました。
-2. 再読込処理を reloadPage へまとめ、親表示ファイル内の補助責務を少し整理しました。
-3. setWorkspaceHeroDismissed は、このファイルでは状態を持たず、no-op の受け渡しだけを明示しました。
+1. setInputForComposer を追加し、(v: string) => void の setInput を React の state setter 契約へ合わせました。
+2. 値渡しと updater function の両方を受けられるようにしました。
+3. useChatClientViewComposerSectionProps へは setInputForComposer だけを渡すようにし、build を止めていた型不一致だけを直しました。
 4. 本文採用、confirmed payload、state_changed、HOPY回答○、Compass、DB保存・復元、1..5 の唯一の正には触っていません。
 */
 
