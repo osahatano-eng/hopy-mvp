@@ -467,7 +467,7 @@ export default function LeftRail(props: LeftRailProps) {
               iconStyle={iconStyle}
               titleCountMap={titleCountMap}
               onSelectThread={(threadId) => {
-                onSelectThread(threadId);
+                onSelectThread?.(threadId);
                 if (shouldCloseAfterAction) {
                   closeLayerNextFrame();
                 }
@@ -537,7 +537,8 @@ export default function LeftRail(props: LeftRailProps) {
 【今回このファイルで修正したこと】
 1. スレッド選択押下時の処理を useLeftRailController の emitSelectThread() 経由ではなく、親から受け取った onSelectThread() の直接実行に変更しました。
 2. LeftRail 内でスレッド選択入口を1本に絞りました。
-3. 新規チャット直接実行、状態表示、メモリーズ、Recover には触っていません。
+3. さらに、onSelectThread が未定義の可能性を型どおりに扱うため、直接呼び出しを optional call に修正しました。
+4. 新規チャット直接実行、状態表示、メモリーズ、Recover には触っていません。
 */
 
 /* /components/chat/ui/LeftRail.tsx */
