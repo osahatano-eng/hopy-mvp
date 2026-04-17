@@ -533,7 +533,7 @@ export function createInitController<TState>(args: InitControllerArgs<TState>) {
       const user = isSessionUsable(session) ? session.user : null;
 
       if (!user) {
-        const prev = pendingInitRef.current;
+        const prev: PendingInit | null = pendingInitRef.current;
         pendingInitRef.current = {
           force: Boolean(prev?.force || force),
           sessionHint: null,
@@ -633,7 +633,7 @@ export function createInitController<TState>(args: InitControllerArgs<TState>) {
           clearActiveThreadId();
         } catch {}
 
-        const prev = pendingInitRef.current;
+        const prev: PendingInit | null = pendingInitRef.current;
         pendingInitRef.current = {
           force: Boolean(prev?.force),
           sessionHint: session,
@@ -905,9 +905,9 @@ session 確立後の初期化、threads 再取得、activeThread 復元、新規
 
 /*
 【今回このファイルで修正したこと】
-1. init 内で user が取れなかったとき、lastUserIdRef.current があっても early return せず retry を予約するように修正しました。
-2. これにより、reload では通る session 再取得ルートを、tab復帰後でも同じように再試行させます。
-3. 今回は no session 時の retry 入口 1か所だけを対象にし、DB仕様、confirmed payload、state_changed、HOPY回答○、Compass、状態値 1..5 / 5段階の唯一の正には触っていません。
+1. pendingInitRef.current を読む2か所で、prev を PendingInit | null と明示しました。
+2. これにより、同関数内で pendingInitRef.current = null 済みでも prev?.force を never 扱いされないようにしました。
+3. retry 制御、DB仕様、confirmed payload、state_changed、HOPY回答○、Compass、状態値 1..5 / 5段階の唯一の正には触っていません。
 */
 
 /* /components/chat/lib/useChatInitParts.ts */
