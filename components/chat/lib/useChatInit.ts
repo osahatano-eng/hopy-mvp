@@ -230,7 +230,7 @@ export function useChatInit<TState>(params: UseChatInitParams<TState>) {
       } catch {}
     };
 
-    const onThreadsRefresh = createThreadsRefreshHandler<TState>({
+    const onThreadsRefresh = createThreadsRefreshHandler({
       isAlive,
       supabase,
       paramsRef,
@@ -485,10 +485,9 @@ workspace 再開入口と、正式な select-thread 観測だけを扱う。
 
 /*
 【今回このファイルで修正したこと】
-1. tab復帰専用の再開入口として visibilitychange / pageshow を追加しました。
-2. これにより、reload後には存在していた初期化入口を、tab復帰後にも同じように通せるようにしました。
-3. 再開入口は lastResumeAtRef / resumeInFlightRef / RESUME_DEDUPE_MS で重複起動しないようにしています。
-4. online 復帰、SIGNED_OUT、INITIAL_SESSION 系、DB仕様、confirmed payload、state_changed、HOPY回答○、Compass、状態値 1..5 / 5段階の唯一の正には触っていません。
+createThreadsRefreshHandler の呼び出しから不要な型引数 <TState> を外しました。
+この修正で、Expected 0 type arguments, but got 1. のビルドエラーだけを直しています。
+createInitController<TState>、tab復帰処理、認証処理、状態値 1..5 / 5段階、HOPY唯一の正には触っていません。
 */
 
 /* /components/chat/lib/useChatInit.ts */
