@@ -420,6 +420,10 @@ export function createInitController<TState>(args: InitControllerArgs<TState>) {
     }
   };
 
+  const readPendingInit = (): PendingInit | null => {
+    return pendingInitRef.current;
+  };
+
   const schedulePostInitThreadsRefresh = (
     seq: number,
     delayMs: number,
@@ -533,7 +537,7 @@ export function createInitController<TState>(args: InitControllerArgs<TState>) {
       const user = isSessionUsable(session) ? session.user : null;
 
       if (!user) {
-        const prev: PendingInit | null = pendingInitRef.current;
+        const prev = readPendingInit();
         pendingInitRef.current = {
           force: Boolean(prev?.force || force),
           sessionHint: null,
@@ -633,7 +637,7 @@ export function createInitController<TState>(args: InitControllerArgs<TState>) {
           clearActiveThreadId();
         } catch {}
 
-        const prev: PendingInit | null = pendingInitRef.current;
+        const prev = readPendingInit();
         pendingInitRef.current = {
           force: Boolean(prev?.force),
           sessionHint: session,
@@ -905,9 +909,9 @@ session 確立後の初期化、threads 再取得、activeThread 復元、新規
 
 /*
 【今回このファイルで修正したこと】
-1. pendingInitRef.current を読む2か所で、prev を PendingInit | null と明示しました。
-2. これにより、同関数内で pendingInitRef.current = null 済みでも prev?.force を never 扱いされないようにしました。
-3. retry 制御、DB仕様、confirmed payload、state_changed、HOPY回答○、Compass、状態値 1..5 / 5段階の唯一の正には触っていません。
+1. pendingInitRef.current 直接参照をやめ、readPendingInit() 経由で読むようにしました。
+2. これにより、init 冒頭の pendingInitRef.current = null による TypeScript の過剰な null 固定を避けています。
+3. retry 制御の意味、DB仕様、confirmed payload、state_changed、HOPY回答○、Compass、状態値 1..5 / 5段階の唯一の正には触っていません。
 */
 
 /* /components/chat/lib/useChatInitParts.ts */
