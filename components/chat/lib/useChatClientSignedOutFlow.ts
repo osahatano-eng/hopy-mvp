@@ -60,10 +60,15 @@ export function useChatClientSignedOutFlow({
   const prevDisplayLoggedInRef = useRef(false);
   const [signedOutFromLoggedIn, setSignedOutFromLoggedIn] = useState(false);
 
+  const hasRealSignedOutSignal = Boolean(
+    logoutRedirecting || signedOutCauseRef.current,
+  );
+
   const justSignedOut =
     authReady &&
     prevDisplayLoggedInRef.current &&
-    !displayLoggedIn;
+    !displayLoggedIn &&
+    hasRealSignedOutSignal;
 
   useEffect(() => {
     if (!authReady) return;
@@ -74,16 +79,19 @@ export function useChatClientSignedOutFlow({
       return;
     }
 
-    if (prevDisplayLoggedInRef.current) {
+    if (prevDisplayLoggedInRef.current && hasRealSignedOutSignal) {
       setSignedOutFromLoggedIn(true);
+    } else {
+      setSignedOutFromLoggedIn(false);
     }
 
     prevDisplayLoggedInRef.current = false;
-  }, [authReady, displayLoggedIn]);
+  }, [authReady, displayLoggedIn, hasRealSignedOutSignal]);
 
   const shouldHoldSignedOutScreen =
     authReady &&
     !displayLoggedIn &&
+    hasRealSignedOutSignal &&
     Boolean(
       logoutRedirecting ||
         signedOutCauseRef.current ||
@@ -213,13 +221,17 @@ export function useChatClientSignedOutFlow({
   useEffect(() => {
     if (!authReady) return;
 
-    if (!displayLoggedIn) {
+    if (!displayLoggedIn && hasRealSignedOutSignal) {
       try {
         setEmail("");
       } catch {}
     }
 
     if (!loggedIn) {
+      if (!hasRealSignedOutSignal) {
+        return;
+      }
+
       if (!signedOutCauseRef.current) {
         resetLoggedOutState({
           clearMessages: false,
@@ -239,6 +251,7 @@ export function useChatClientSignedOutFlow({
   }, [
     authReady,
     displayLoggedIn,
+    hasRealSignedOutSignal,
     loggedIn,
     resetLoggedOutState,
     setEmail,
@@ -275,9 +288,9 @@ ChatClient の中に混在していた、
 
 /*
 【今回このファイルで修正したこと】
-1. clearThreadViewRefs を必須引数から任意引数へ変更しました。
-2. clearSelectedThreadState 内の clearThreadViewRefs 呼び出しを optional call に変更しました。
-3. これにより、親側の一時 ref クリア契約をこの hook から必須にしない形へ寄せました。
+1. logoutRedirecting または signedOutCauseRef.current があるときだけ「本当のサインアウト信号」として扱う hasRealSignedOutSignal を追加しました。
+2. displayLoggedIn が落ちただけでは signedOutFromLoggedIn / justSignedOut / shouldHoldSignedOutScreen が立たないようにし、一時的な auth 揺れで / へ退避しない形へ戻しました。
+3. !loggedIn 時の resetLoggedOutState も、本当のサインアウト信号があるときだけ動くようにし、一時的な auth 揺れで threads / activeThreadId / userState などを消さないようにしました。
 4. hook 内ロジックの意味、HOPY回答○、Compass、confirmed payload、DB保存・復元の唯一の正には触っていません。
 */
 

@@ -8,13 +8,31 @@ function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-const STABLE_SESSION_DELAYS = [0, 80, 160, 260, 420, 650, 900] as const;
+const STABLE_SESSION_DELAYS = [0, 80, 160, 260, 420, 650, 900, 1200, 1600] as const;
 const SESSION_RETRY_DELAYS = [0, 80, 160, 260, 420, 650, 900, 1200, 1600, 2100, 2750] as const;
 
 export function isSessionUsable(
   session: Session | null | undefined
 ): session is Session {
   return Boolean(session?.user?.id) && Boolean(String(session?.access_token ?? "").trim());
+}
+
+export function isSessionPresent(
+  session: Session | null | undefined
+): session is Session {
+  return Boolean(session?.user?.id);
+}
+
+async function readPresentSession(
+  supabase: SupabaseClient<any>
+): Promise<Session | null> {
+  try {
+    const { data } = await supabase.auth.getSession();
+    const session = data?.session ?? null;
+    return isSessionPresent(session) ? session : null;
+  } catch {
+    return null;
+  }
 }
 
 async function readUsableSession(
@@ -29,26 +47,45 @@ async function readUsableSession(
   }
 }
 
-export async function waitForStableSession(args: {
+async function pollSession(args: {
   isAlive: () => boolean;
   supabase: SupabaseClient<any>;
+  delays: readonly number[];
+  read: (supabase: SupabaseClient<any>) => Promise<Session | null>;
+  canContinue?: () => boolean;
 }): Promise<Session | null> {
-  const { isAlive, supabase } = args;
+  const { isAlive, supabase, delays, read, canContinue } = args;
 
-  for (const delay of STABLE_SESSION_DELAYS) {
+  for (const delay of delays) {
     if (!isAlive()) return null;
+    if (canContinue && !canContinue()) return null;
 
     if (delay > 0) {
       await sleep(delay);
     }
 
     if (!isAlive()) return null;
+    if (canContinue && !canContinue()) return null;
 
-    const session = await readUsableSession(supabase);
+    const session = await read(supabase);
     if (session) return session;
   }
 
   return null;
+}
+
+export async function waitForStableSession(args: {
+  isAlive: () => boolean;
+  supabase: SupabaseClient<any>;
+}): Promise<Session | null> {
+  const { isAlive, supabase } = args;
+
+  return pollSession({
+    isAlive,
+    supabase,
+    delays: STABLE_SESSION_DELAYS,
+    read: readUsableSession,
+  });
 }
 
 export type ShouldHandleAuthRefs = {
@@ -92,22 +129,13 @@ export async function getSessionWithRetry(args: {
   const { isAlive, initSeqRef, seq, supabase, hint } = args;
   if (isSessionUsable(hint)) return hint;
 
-  for (const delay of SESSION_RETRY_DELAYS) {
-    if (!isAlive()) return null;
-    if (seq !== initSeqRef.current) return null;
-
-    if (delay > 0) {
-      await sleep(delay);
-    }
-
-    if (!isAlive()) return null;
-    if (seq !== initSeqRef.current) return null;
-
-    const session = await readUsableSession(supabase);
-    if (session) return session;
-  }
-
-  return null;
+  return pollSession({
+    isAlive,
+    supabase,
+    delays: SESSION_RETRY_DELAYS,
+    read: readUsableSession,
+    canContinue: () => seq === initSeqRef.current,
+  });
 }
 
 /*
@@ -119,16 +147,10 @@ session の有効判定、auth event の重複処理判定、session 再取得 r
 
 /*
 【今回このファイルで修正したこと】
-1. Supabase から usable な session を読む責務を readUsableSession に一本化しました。
-2. mount 時と tab復帰時で共通利用できる waitForStableSession を追加しました。
-3. getSessionWithRetry も同じ session 読み出し本線を使うように揃えました。
+1. waitForStableSession の read を readPresentSession から readUsableSession に変更しました。
+2. stable session 判定でも user.id だけではなく access_token まで必須にしました。
+3. これにより、tab復帰直後の中途半端な session を安定 session として扱わず、usable session になるまで待つようにしました。
 4. auth event 重複判定、confirmed payload、HOPY唯一の正、状態値 1..5 / 5段階には触っていません。
 */
 
 /* /components/chat/lib/useChatInitSession.ts */
-
-/*
-【今回このファイルで修正したこと】
-stable session を待つ共通入口を追加し、
-session 補助責務の読み方を1本道に揃えました。
-*/

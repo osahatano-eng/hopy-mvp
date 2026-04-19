@@ -17,6 +17,7 @@ export function useChatAuth({ supabase, setEmail }: Params) {
   const LOGOUT_REDIRECT_PATH = "/";
   const LOGOUT_REDIRECT_MARKER_KEY = "hopy_logout_redirect_pending_at";
   const LOGOUT_REDIRECT_MARKER_TTL_MS = 10_000;
+  const TRANSIENT_SESSION_GRACE_MS = 5_000;
 
   const didSignOutRedirectRef = useRef(false);
   const lastAuthEventRef = useRef<string>("");
@@ -24,6 +25,7 @@ export function useChatAuth({ supabase, setEmail }: Params) {
 
   const transientNullTimerRef = useRef<number | null>(null);
   const transientNullInFlightRef = useRef(false);
+  const sessionGraceTimerRef = useRef<number | null>(null);
 
   const [authReady, setAuthReady] = useState(false);
   const [authUserId, setAuthUserId] = useState<string | null>(null);
@@ -41,7 +43,24 @@ export function useChatAuth({ supabase, setEmail }: Params) {
     sessionOkRef.current = sessionOk;
   }, [sessionOk]);
 
+  const [sessionGraceUntil, setSessionGraceUntil] = useState(0);
   const [logoutRedirecting, setLogoutRedirecting] = useState(false);
+
+  const startSessionGrace = () => {
+    if (signedOutCauseRef.current) return;
+
+    try {
+      setSessionGraceUntil((prev) =>
+        Math.max(prev, Date.now() + TRANSIENT_SESSION_GRACE_MS),
+      );
+    } catch {}
+  };
+
+  const clearSessionGrace = () => {
+    try {
+      setSessionGraceUntil(0);
+    } catch {}
+  };
 
   const markLogoutRedirectPending = () => {
     if (typeof window === "undefined") return;
@@ -118,6 +137,40 @@ export function useChatAuth({ supabase, setEmail }: Params) {
     } catch {}
   }, []);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    try {
+      const t = sessionGraceTimerRef.current;
+      if (t != null) window.clearTimeout(t);
+    } catch {}
+
+    sessionGraceTimerRef.current = null;
+
+    const remaining = sessionGraceUntil - Date.now();
+    if (remaining <= 0) {
+      if (sessionGraceUntil !== 0) {
+        setSessionGraceUntil(0);
+      }
+      return;
+    }
+
+    try {
+      sessionGraceTimerRef.current = window.setTimeout(() => {
+        sessionGraceTimerRef.current = null;
+        setSessionGraceUntil(0);
+      }, remaining);
+    } catch {}
+
+    return () => {
+      try {
+        const t = sessionGraceTimerRef.current;
+        if (t != null) window.clearTimeout(t);
+      } catch {}
+      sessionGraceTimerRef.current = null;
+    };
+  }, [sessionGraceUntil]);
+
   const waitForSessionOk = async (alive: () => boolean) => {
     const waits = [0, 60, 120, 200, 320, 480, 700, 1000];
 
@@ -159,6 +212,7 @@ export function useChatAuth({ supabase, setEmail }: Params) {
 
         if (ok) {
           clearLogoutRedirectPending();
+          clearSessionGrace();
           setSessionOk(true);
           setLogoutRedirecting(false);
         }
@@ -205,6 +259,7 @@ export function useChatAuth({ supabase, setEmail }: Params) {
                 hasFreshLogoutRedirectPending();
 
               if (signedOutCauseRef.current) {
+                clearSessionGrace();
                 setAuthUserId(null);
                 setEmail("");
                 emailRef.current = "";
@@ -212,11 +267,14 @@ export function useChatAuth({ supabase, setEmail }: Params) {
               } else {
                 const had = Boolean(String(authUserIdRef.current ?? "").trim());
                 if (!had) {
+                  clearSessionGrace();
                   setAuthUserId(null);
                   setEmail("");
                   emailRef.current = "";
                   setSessionOk(false);
                 } else {
+                  startSessionGrace();
+                  setSessionOk(false);
                   // 以前ログイン済みなら authUserId は一時維持
                 }
               }
@@ -245,8 +303,15 @@ export function useChatAuth({ supabase, setEmail }: Params) {
             const ok =
               Boolean(uid2) &&
               Boolean(String(s?.access_token ?? "").trim());
-            setSessionOk(ok);
-            if (ok) setLogoutRedirecting(false);
+
+            if (ok) {
+              clearSessionGrace();
+              setSessionOk(true);
+              setLogoutRedirecting(false);
+            } else {
+              startSessionGrace();
+              setSessionOk(false);
+            }
           } catch {
           } finally {
             transientNullInFlightRef.current = false;
@@ -272,7 +337,18 @@ export function useChatAuth({ supabase, setEmail }: Params) {
 
         const ok =
           Boolean(uid) && Boolean(String(session?.access_token ?? "").trim());
-        setSessionOk(ok);
+
+        if (ok) {
+          clearSessionGrace();
+          setSessionOk(true);
+        } else {
+          if (uid) {
+            startSessionGrace();
+          } else {
+            clearSessionGrace();
+          }
+          setSessionOk(false);
+        }
 
         if (ok) {
           clearLogoutRedirectPending();
@@ -300,6 +376,7 @@ export function useChatAuth({ supabase, setEmail }: Params) {
         signedOutCauseRef.current = true;
         markLogoutRedirectPending();
         clearTransientTimer();
+        clearSessionGrace();
 
         setAuthUserId(null);
         setEmail("");
@@ -333,10 +410,13 @@ export function useChatAuth({ supabase, setEmail }: Params) {
         const tokenOk = Boolean(
           String((session as any)?.access_token ?? "").trim(),
         );
+
         if (uid && tokenOk) {
+          clearSessionGrace();
           setSessionOk(true);
           setLogoutRedirecting(false);
         } else {
+          startSessionGrace();
           setSessionOk(false);
 
           (async () => {
@@ -345,6 +425,7 @@ export function useChatAuth({ supabase, setEmail }: Params) {
 
             if (ok) {
               clearLogoutRedirectPending();
+              clearSessionGrace();
               setSessionOk(true);
               setLogoutRedirecting(false);
             }
@@ -366,8 +447,14 @@ export function useChatAuth({ supabase, setEmail }: Params) {
         if (t != null) window.clearTimeout(t);
       } catch {}
 
+      try {
+        const t = sessionGraceTimerRef.current;
+        if (t != null) window.clearTimeout(t);
+      } catch {}
+
       transientNullTimerRef.current = null;
       transientNullInFlightRef.current = false;
+      sessionGraceTimerRef.current = null;
 
       try {
         sub.subscription.unsubscribe();
@@ -375,7 +462,18 @@ export function useChatAuth({ supabase, setEmail }: Params) {
     };
   }, [router, setEmail, supabase]);
 
-  const loggedIn = authReady && Boolean(authUserId) && Boolean(sessionOk);
+  const withinSessionGrace = useMemo(() => {
+    if (!authUserId) return false;
+    if (signedOutCauseRef.current) return false;
+    if (logoutRedirecting) return false;
+    return sessionGraceUntil > Date.now();
+  }, [authUserId, logoutRedirecting, sessionGraceUntil]);
+
+  const loggedIn = useMemo(() => {
+    if (!authReady) return false;
+    if (!authUserId) return false;
+    return Boolean(sessionOk) || withinSessionGrace;
+  }, [authReady, authUserId, sessionOk, withinSessionGrace]);
 
   const displayLoggedIn = useMemo(() => {
     if (!authReady) return false;
@@ -407,9 +505,9 @@ export function useChatAuth({ supabase, setEmail }: Params) {
 
 /*
 【今回このファイルで修正したこと】
-1. SIGNED_OUT 時だけに依存せず、「直前に logout 済み」であることを sessionStorage に短時間だけ保持するようにしました。
-2. getSession() / 再評価で session なしが確定した場合でも、logout 直後の印が残っていれば / へ再収束するように固定しました。
-3. session 復帰成功時は logout 用の印を必ず消し、通常のログイン導線を壊さないようにしました。
+1. sessionOk が一時的に false へ落ちても、直前までログイン済みだった場合は短時間だけ loggedIn / displayLoggedIn を維持する session grace を追加しました。
+2. 本当の SIGNED_OUT と、一時的な session 不安定を分け、実ログアウト時だけ即クリアする形へ戻しました。
+3. session 復帰成功時は session grace を必ず解除し、通常導線へ自然に戻るようにしました。
 4. HOPY回答○ / Compass / state_changed / DB / 左カラム / MEMORIES には触っていません。
 */
 

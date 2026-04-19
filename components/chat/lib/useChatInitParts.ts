@@ -463,12 +463,24 @@ export function createInitController<TState>(args: InitControllerArgs<TState>) {
     const p = paramsRef.current;
 
     const incomingId = String(forceClientRequestId ?? "").trim();
+    const requestedForceCreate = Boolean(force);
+
+    const queuePendingInit = (next: PendingInit) => {
+      const prev = readPendingInit();
+      pendingInitRef.current = {
+        force: Boolean(prev?.force || next.force),
+        sessionHint: next.sessionHint ?? prev?.sessionHint ?? null,
+        clientRequestId: next.clientRequestId || prev?.clientRequestId,
+      };
+    };
 
     const schedulePendingInit = (delayMs: number) => {
       clearInitDebounceTimer();
 
       try {
         initDebounceTimerRef.current = window.setTimeout(() => {
+          initDebounceTimerRef.current = null;
+
           if (!isAlive()) return;
 
           if (initRunningRef.current) return;
@@ -488,8 +500,22 @@ export function createInitController<TState>(args: InitControllerArgs<TState>) {
       } catch {}
     };
 
+    if (initRunningRef.current) {
+      queuePendingInit({
+        force: requestedForceCreate,
+        sessionHint: sessionHint ?? null,
+        clientRequestId: incomingId || undefined,
+      });
+
+      logInfo("[useChatInit] init queued (running)", {
+        force: requestedForceCreate,
+        clientRequestId: incomingId || undefined,
+      });
+      return;
+    }
+
     const now = Date.now();
-    if (!force && now - lastInitAtRef.current < 100) {
+    if (!requestedForceCreate && now - lastInitAtRef.current < 100) {
       logInfo("[useChatInit] init ignored (debounced)", {
         clientRequestId: incomingId || undefined,
       });
@@ -504,14 +530,19 @@ export function createInitController<TState>(args: InitControllerArgs<TState>) {
 
     const seq = ++initSeqRef.current;
 
-    const initHadForceCreate = Boolean(forceCreateNextThreadRef.current);
+    const initHadForceCreate = Boolean(requestedForceCreate || forceCreateNextThreadRef.current);
+
+    if (!requestedForceCreate && forceCreateNextThreadRef.current && !createInFlightRef.current) {
+      logInfo("[useChatInit] drop stale force-create on passive init");
+      forceCreateNextThreadRef.current = false;
+    }
 
     let clientRequestIdForCreate = "";
     try {
       if (incomingId) {
         clientRequestIdForCreate = incomingId;
         createRequestRef.current = { id: incomingId, at: Date.now() };
-      } else if (force || forceCreateNextThreadRef.current) {
+      } else if (requestedForceCreate || forceCreateNextThreadRef.current) {
         const prev = createRequestRef.current;
         const age = Date.now() - (prev.at || 0);
         if (prev.id && age >= 0 && age <= CREATE_REQ_REUSE_MS) {
@@ -538,17 +569,20 @@ export function createInitController<TState>(args: InitControllerArgs<TState>) {
 
       if (!user) {
         const prev = readPendingInit();
+        const hadUser = Boolean(lastUserIdRef.current);
+        const retryDelayMs = hadUser ? 80 : 420;
+
         pendingInitRef.current = {
-          force: Boolean(prev?.force || force),
-          sessionHint: null,
+          force: Boolean(prev?.force || requestedForceCreate),
+          sessionHint: prev?.sessionHint ?? sessionHint ?? null,
           clientRequestId: incomingId || prev?.clientRequestId,
         };
         logWarn("[useChatInit] init no session -> schedule retry (no reset)", {
-          delayMs: 420,
-          hadUser: Boolean(lastUserIdRef.current),
+          delayMs: retryDelayMs,
+          hadUser,
           clientRequestId: pendingInitRef.current.clientRequestId || undefined,
         });
-        schedulePendingInit(420);
+        schedulePendingInit(retryDelayMs);
         return;
       }
 
@@ -601,7 +635,7 @@ export function createInitController<TState>(args: InitControllerArgs<TState>) {
       if (!isAlive()) return;
       if (seq !== initSeqRef.current) return;
 
-      const wantForceCreate = Boolean(forceCreateNextThreadRef.current);
+      const wantForceCreate = requestedForceCreate;
 
       if (tr.ok) {
         const incoming = Array.isArray(tr.list) ? tr.list : [];
@@ -909,9 +943,10 @@ session 確立後の初期化、threads 再取得、activeThread 復元、新規
 
 /*
 【今回このファイルで修正したこと】
-1. pendingInitRef.current 直接参照をやめ、readPendingInit() 経由で読むようにしました。
-2. これにより、init 冒頭の pendingInitRef.current = null による TypeScript の過剰な null 固定を避けています。
-3. retry 制御の意味、DB仕様、confirmed payload、state_changed、HOPY回答○、Compass、状態値 1..5 / 5段階の唯一の正には触っていません。
+1. init no session -> schedule retry 分岐で pendingInitRef.sessionHint を null 上書きしないようにしました。
+2. 既に積まれていた有効 sessionHint を保持したまま retry へ流すように戻しました。
+3. tab復帰直後の auth change が持ってきた session 情報を、このファイル内で捨てないようにしました。
+4. confirmed payload、state_changed、HOPY回答○、Compass、状態値 1..5 / 5段階、本文採用判定、DB保存/復元仕様には触っていません。
 */
 
 /* /components/chat/lib/useChatInitParts.ts */

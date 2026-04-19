@@ -90,16 +90,6 @@ export default function ChatClient() {
   const atBottomRef = useRef(true);
 
   const activeThreadIdRef = useRef<string | null>(null);
-  const loadingRef = useRef(false);
-  const threadBusyRef = useRef(false);
-
-  useEffect(() => {
-    loadingRef.current = loading;
-  }, [loading]);
-
-  useEffect(() => {
-    threadBusyRef.current = threadBusy;
-  }, [threadBusy]);
 
   const setActiveThreadId = useCallback<
     React.Dispatch<React.SetStateAction<string | null>>
@@ -203,8 +193,47 @@ export default function ChatClient() {
     loggedInRef,
   } = auth;
 
+  const { shouldHoldSignedOutScreen } = useChatClientSignedOutFlow({
+    authReady,
+    displayLoggedIn,
+    loggedIn,
+    logoutRedirecting,
+    signedOutCauseRef,
+    activeThreadId,
+    activeThreadIdRef,
+    resetRailState,
+    setEmail,
+    setMessages: guardedSetMessages,
+    setLoading,
+    setVisibleCount,
+    setThreads,
+    setActiveThreadId,
+    setThreadBusy,
+    setLastFailed,
+    setUserState,
+    setUserStateErr,
+  });
+
+  const [viewLoggedIn, setViewLoggedIn] = useState(false);
+
   useEffect(() => {
-    if (!displayLoggedIn) {
+    if (displayLoggedIn) {
+      setViewLoggedIn(true);
+      return;
+    }
+
+    if (!authReady) {
+      setViewLoggedIn(false);
+      return;
+    }
+
+    if (shouldHoldSignedOutScreen) {
+      setViewLoggedIn(false);
+    }
+  }, [authReady, displayLoggedIn, shouldHoldSignedOutScreen]);
+
+  useEffect(() => {
+    if (!viewLoggedIn) {
       setRailOpen(false);
       return;
     }
@@ -240,100 +269,7 @@ export default function ChatClient() {
     } catch {}
 
     return;
-  }, [displayLoggedIn]);
-
-  useEffect(() => {
-    const isDocumentVisible = () => {
-      try {
-        if (typeof document === "undefined") return true;
-        return document.visibilityState !== "hidden";
-      } catch {
-        return true;
-      }
-    };
-
-    const releaseStaleUiLocks = () => {
-      if (!displayLoggedIn) return;
-      if (!isDocumentVisible()) return;
-
-      loadingRef.current = false;
-      threadBusyRef.current = false;
-      setLoading(false);
-      setThreadBusy(false);
-    };
-
-    const handleResumeWorkspace = () => {
-      releaseStaleUiLocks();
-    };
-
-    const onFocus = () => {
-      handleResumeWorkspace();
-    };
-
-    const onPageShow = () => {
-      handleResumeWorkspace();
-    };
-
-    const onOnline = () => {
-      handleResumeWorkspace();
-    };
-
-    const onVisibilityChange = () => {
-      if (!isDocumentVisible()) return;
-      handleResumeWorkspace();
-    };
-
-    handleResumeWorkspace();
-
-    try {
-      window.addEventListener("focus", onFocus as any);
-    } catch {}
-    try {
-      window.addEventListener("pageshow", onPageShow as any);
-    } catch {}
-    try {
-      window.addEventListener("online", onOnline as any);
-    } catch {}
-    try {
-      document.addEventListener("visibilitychange", onVisibilityChange as any);
-    } catch {}
-
-    return () => {
-      try {
-        window.removeEventListener("focus", onFocus as any);
-      } catch {}
-      try {
-        window.removeEventListener("pageshow", onPageShow as any);
-      } catch {}
-      try {
-        window.removeEventListener("online", onOnline as any);
-      } catch {}
-      try {
-        document.removeEventListener("visibilitychange", onVisibilityChange as any);
-      } catch {}
-    };
-  }, [displayLoggedIn]);
-
-  const { shouldHoldSignedOutScreen } = useChatClientSignedOutFlow({
-    authReady,
-    displayLoggedIn,
-    loggedIn,
-    logoutRedirecting,
-    signedOutCauseRef,
-    activeThreadId,
-    activeThreadIdRef,
-    resetRailState,
-    setEmail,
-    setMessages: guardedSetMessages,
-    setLoading,
-    setVisibleCount,
-    setThreads,
-    setActiveThreadId,
-    setThreadBusy,
-    setLastFailed,
-    setUserState,
-    setUserStateErr,
-  });
+  }, [viewLoggedIn]);
 
   useChatThreadEvents({
     supabase,
@@ -405,7 +341,7 @@ export default function ChatClient() {
   const normalizedInput = cleanForDecision(input);
 
   const { ensureThreadId, onThreadIdResolved } = useChatThreadCreation({
-    displayLoggedIn,
+    displayLoggedIn: viewLoggedIn,
     activeThreadIdRef,
     setThreadBusy,
     setUserStateErr,
@@ -458,7 +394,7 @@ export default function ChatClient() {
     viewActiveThread,
     viewUserState,
   } = useChatClientViewState({
-    displayLoggedIn,
+    displayLoggedIn: viewLoggedIn,
     activeThreadId,
     threads,
     setThreads,
@@ -481,14 +417,14 @@ export default function ChatClient() {
 
   const { resolvedActiveThreadForView, resolvedActiveThreadState } =
     resolveActiveThreadStateForView({
-      displayLoggedIn,
+      displayLoggedIn: viewLoggedIn,
       isViewingPendingEmptyThread,
       viewActiveThread,
       normalizedResolvedViewUserState,
     });
 
   useBroadcastUserStateLabel({
-    displayLoggedIn,
+    displayLoggedIn: viewLoggedIn,
     resolvedActiveThreadState,
     userStateErr,
     uiLang,
@@ -540,17 +476,17 @@ export default function ChatClient() {
     getIsComposing: () => Boolean(composingRef.current),
   });
 
-  const canSendNow = displayLoggedIn
+  const canSendNow = viewLoggedIn
     ? !loading && !threadBusy && Boolean(normalizedInput)
     : !loading && Boolean(normalizedInput);
 
   const shouldBootScreen =
     !shouldHoldSignedOutScreen && !authReady && !displayLoggedIn;
 
-  const disableNewChat = displayLoggedIn && loading;
+  const disableNewChat = viewLoggedIn && loading;
 
   const shouldHoldBlankThreadStage =
-    displayLoggedIn && isViewingPendingEmptyThread;
+    viewLoggedIn && isViewingPendingEmptyThread;
 
   const canShowMore =
     !shouldHoldBlankThreadStage && viewMessages.length > visibleCount;
@@ -595,23 +531,23 @@ export default function ChatClient() {
   return (
     <ChatClientViewAny
       rootRef={rootRef}
-      loggedIn={displayLoggedIn}
-      email={displayLoggedIn ? email : ""}
+      loggedIn={viewLoggedIn}
+      email={viewLoggedIn ? email : ""}
       uiLang={uiLang}
       ui={ui}
       input={input}
       setInput={setInput}
       messages={viewMessages}
       loading={loading}
-      threads={displayLoggedIn ? threads : EMPTY_THREADS}
-      activeThreadId={displayLoggedIn ? activeThreadKey || null : null}
+      threads={viewLoggedIn ? threads : EMPTY_THREADS}
+      activeThreadId={viewLoggedIn ? activeThreadKey || null : null}
       activeThread={resolvedActiveThreadForView}
       activeThreadState={
-        displayLoggedIn && !isViewingPendingEmptyThread
+        viewLoggedIn && !isViewingPendingEmptyThread
           ? resolvedActiveThreadState ?? null
           : null
       }
-      threadBusy={displayLoggedIn && threadBusy}
+      threadBusy={viewLoggedIn && threadBusy}
       shouldHoldBlankThreadStage={shouldHoldBlankThreadStage}
       memOpen={memOpen}
       setMemOpen={setMemOpen}
@@ -664,10 +600,10 @@ ChatClientView へ表示用の値を接続する。
 
 /*
 【今回このファイルで修正したこと】
-1. setActiveThreadId を React の state setter と同じ型契約へ揃えました。
-2. 値渡しと関数 updater の両方を受けられるようにしました。
-3. activeThreadIdRef への同期は維持したまま、build を止めていた型不一致だけを直しました。
-4. 既存の本文表示、送信、confirmed payload、state_changed、HOPY回答○、Compass、状態値 1..5 / 5段階の唯一の正には触っていません。
+1. displayLoggedIn が一時的に落ちても、real sign-out 画面へ入っていない限り UI 側のログイン表示を維持する viewLoggedIn を追加しました。
+2. threads / activeThreadId / threadBusy / email / child hook への displayLoggedIn 受け渡しを viewLoggedIn 基準へ寄せ、一時的な auth 揺れで本文と左カラムが空扱いへ落ちないようにしました。
+3. railOpen の同期も viewLoggedIn 基準へ寄せ、PC 左カラムが一時的な auth 揺れで閉じないようにしました。
+4. confirmed payload、state_changed、HOPY回答○、Compass、状態値 1..5 / 5段階の唯一の正には触っていません。
 */
 
 /* /components/chat/ChatClient.tsx */
