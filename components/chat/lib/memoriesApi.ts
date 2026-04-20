@@ -141,6 +141,12 @@ export type MemoriesListResult = {
   total: number;
 };
 
+const AUTH_HEADER_DELAYS = [0, 80, 160, 260, 420, 650, 900, 1200, 1600] as const;
+
+function sleep(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
 function toQS(params: Record<string, string | number | boolean | undefined | null>) {
   const usp = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) {
@@ -166,10 +172,32 @@ async function json<T>(res: Response): Promise<T | null> {
   }
 }
 
+async function apiErrorMessage(res: Response): Promise<string> {
+  const data = await json<any>(res);
+  const bodyMessage = String(data?.error ?? data?.message ?? "").trim();
+  const statusText = String(res.statusText ?? "").trim();
+
+  if (bodyMessage) return bodyMessage;
+  if (statusText) return statusText;
+  return `HTTP ${res.status}`;
+}
+
 async function authHeaders(): Promise<Record<string, string>> {
-  const { data } = await supabase.auth.getSession();
-  const token = data.session?.access_token;
-  return token ? { Authorization: `Bearer ${token}` } : {};
+  for (let i = 0; i < AUTH_HEADER_DELAYS.length; i++) {
+    const delay = AUTH_HEADER_DELAYS[i];
+    if (delay > 0) await sleep(delay);
+
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = String(data.session?.access_token ?? "").trim();
+
+      if (token) {
+        return { Authorization: `Bearer ${token}` };
+      }
+    } catch {}
+  }
+
+  return {};
 }
 
 function clampText(s: any, max = 800) {
@@ -705,7 +733,8 @@ export async function listMemoriesWithTotal(
   });
 
   if (!res.ok) {
-    return { items: [], total: 0 };
+    const reason = await apiErrorMessage(res);
+    throw new Error(`memories list failed: ${reason}`);
   }
 
   const data = await json<any>(res);
@@ -818,3 +847,21 @@ export async function hardDeleteMemory(id: string): Promise<boolean> {
 
   return res.ok;
 }
+
+/*
+このファイルの正式役割
+MEMORIES API のクライアント側取得・作成・更新・削除・復元・完全削除の窓口。
+/api/memories へ Authorization を付けて fetch し、
+返ってきた MEMORIES データを UI 用 MemoryItem[] へ正規化して返す。
+このファイルは MEMORIES の取得窓口であり、UI表示・modal状態・ChatClient workspace・threadBusy・messages・HOPY唯一の正は持たない。
+*/
+
+/*
+【今回このファイルで修正したこと】
+1. listMemoriesWithTotal() が /api/memories の失敗を空一覧へ潰さないようにしました。
+2. /api/memories が 401 / 500 などを返した場合、APIの error / message / statusText を Error として上位へ返すようにしました。
+3. 一覧が本当に空なのか、取得失敗なのかを分けられるようにしました。
+4. MEMORIES API の fetch 本体、正規化処理、state 1..5、HOPY唯一の正、confirmed payload、state_changed、HOPY回答○、Compass、DB保存・復元仕様には触っていません。
+*/
+
+/* /components/chat/lib/memoriesApi.ts */

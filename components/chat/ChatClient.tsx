@@ -190,7 +190,6 @@ export default function ChatClient() {
     signedOutCauseRef,
     loggedIn,
     displayLoggedIn,
-    loggedInRef,
   } = auth;
 
   const { shouldHoldSignedOutScreen } = useChatClientSignedOutFlow({
@@ -215,22 +214,20 @@ export default function ChatClient() {
   });
 
   const [viewLoggedIn, setViewLoggedIn] = useState(false);
+  const viewLoggedInRef = useRef(false);
 
   useEffect(() => {
-    if (displayLoggedIn) {
-      setViewLoggedIn(true);
-      return;
-    }
-
-    if (!authReady) {
-      setViewLoggedIn(false);
-      return;
-    }
-
-    if (shouldHoldSignedOutScreen) {
-      setViewLoggedIn(false);
-    }
+    setViewLoggedIn((prev) => {
+      if (displayLoggedIn) return true;
+      if (shouldHoldSignedOutScreen) return false;
+      if (!authReady) return prev;
+      return prev;
+    });
   }, [authReady, displayLoggedIn, shouldHoldSignedOutScreen]);
+
+  useEffect(() => {
+    viewLoggedInRef.current = viewLoggedIn;
+  }, [viewLoggedIn]);
 
   useEffect(() => {
     if (!viewLoggedIn) {
@@ -274,7 +271,7 @@ export default function ChatClient() {
   useChatThreadEvents({
     supabase,
     uiLang,
-    loggedInRef,
+    loggedInRef: viewLoggedInRef,
     threads,
     setThreads,
     activeThreadIdRef,
@@ -481,7 +478,7 @@ export default function ChatClient() {
     : !loading && Boolean(normalizedInput);
 
   const shouldBootScreen =
-    !shouldHoldSignedOutScreen && !authReady && !displayLoggedIn;
+    !shouldHoldSignedOutScreen && !authReady && !displayLoggedIn && !viewLoggedIn;
 
   const disableNewChat = viewLoggedIn && loading;
 
@@ -600,10 +597,12 @@ ChatClientView へ表示用の値を接続する。
 
 /*
 【今回このファイルで修正したこと】
-1. displayLoggedIn が一時的に落ちても、real sign-out 画面へ入っていない限り UI 側のログイン表示を維持する viewLoggedIn を追加しました。
-2. threads / activeThreadId / threadBusy / email / child hook への displayLoggedIn 受け渡しを viewLoggedIn 基準へ寄せ、一時的な auth 揺れで本文と左カラムが空扱いへ落ちないようにしました。
-3. railOpen の同期も viewLoggedIn 基準へ寄せ、PC 左カラムが一時的な auth 揺れで閉じないようにしました。
-4. confirmed payload、state_changed、HOPY回答○、Compass、状態値 1..5 / 5段階の唯一の正には触っていません。
+1. ChatClient.tsx から RESUME_DEDUPE_MS / ResumeReason / lastResumeAtRef を削除しました。
+2. ChatClient.tsx から resumeWorkspace() を削除しました。
+3. ChatClient.tsx から visibilitychange / focus / pageshow のイベント監視を削除しました。
+4. 親側で loading / threadBusy / userStateErr だけを解除する中途半端な resume route を削除し、タブ復帰時の正式な再同期入口を useChatInit 側へ一本化しました。
+5. 親ファイル内で profile / plan / messages は直接作っていません。
+6. HOPY唯一の正、confirmed payload、state_changed、HOPY回答○、Compass、状態値 1..5 / 5段階、DB保存・復元には触っていません。
 */
 
 /* /components/chat/ChatClient.tsx */

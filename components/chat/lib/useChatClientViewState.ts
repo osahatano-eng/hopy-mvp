@@ -8,6 +8,8 @@ import { useRenderMessages } from "./useRenderMessages";
 import { pickLatestAssistantStateMessage } from "./chatMessageState";
 import { mergeThreadStateFromMessage } from "./chatThreadState";
 
+const EMPTY_VISIBLE_TEXTS = new Map<string, string>();
+
 type Params = {
   displayLoggedIn: boolean;
   activeThreadId: string | null;
@@ -83,6 +85,27 @@ function toCanonicalState(source: any): HopyState | null {
   };
 }
 
+function getMessageThreadKey(message: ChatMsg): string {
+  const msgAny = (message ?? null) as any;
+
+  return String(
+    msgAny?.conversation_id ??
+      msgAny?.thread_id ??
+      msgAny?.conversationId ??
+      msgAny?.threadId ??
+      ""
+  ).trim();
+}
+
+function isMessageForActiveThread(message: ChatMsg, activeThreadKey: string) {
+  if (!activeThreadKey) return true;
+
+  const messageThreadKey = getMessageThreadKey(message);
+  if (!messageThreadKey) return false;
+
+  return messageThreadKey === activeThreadKey;
+}
+
 export function useChatClientViewState({
   displayLoggedIn,
   activeThreadId,
@@ -98,8 +121,19 @@ export function useChatClientViewState({
 }: Params) {
   const activeThreadKey = String(activeThreadId ?? "").trim();
 
+  const viewMessages = useMemo<ChatMsg[]>(() => {
+    const sourceMessages = Array.isArray(messages) ? messages : [];
+
+    if (!displayLoggedIn) return sourceMessages;
+    if (!activeThreadKey) return sourceMessages;
+
+    return sourceMessages.filter((message) =>
+      isMessageForActiveThread(message, activeThreadKey)
+    );
+  }, [displayLoggedIn, activeThreadKey, messages]);
+
   const { rendered, visibleTexts } = useRenderMessages({
-    messages,
+    messages: viewMessages,
     visibleCount,
     uiLang,
     dayStartLabel: ui.dayStart,
@@ -107,9 +141,10 @@ export function useChatClientViewState({
   });
 
   const viewRendered = Array.isArray(rendered) ? rendered : [];
-  const viewVisibleTexts = Array.isArray(visibleTexts) ? visibleTexts : [];
+  const viewVisibleTexts =
+    visibleTexts instanceof Map ? visibleTexts : EMPTY_VISIBLE_TEXTS;
 
-  const latestAssistantStateMsg = pickLatestAssistantStateMessage(messages);
+  const latestAssistantStateMsg = pickLatestAssistantStateMessage(viewMessages);
 
   useEffect(() => {
     if (!displayLoggedIn) return;
@@ -143,7 +178,7 @@ export function useChatClientViewState({
     if (!displayLoggedIn) return false;
     if (!activeThreadKey) return false;
 
-    const hasNoMessages = messages.length === 0;
+    const hasNoMessages = viewMessages.length === 0;
     const hasNoInput = !Boolean(normalizedInput);
     const hasNoAssistantState = !latestAssistantStateMsg;
 
@@ -151,7 +186,7 @@ export function useChatClientViewState({
   }, [
     displayLoggedIn,
     activeThreadKey,
-    messages.length,
+    viewMessages.length,
     normalizedInput,
     latestAssistantStateMsg,
   ]);
@@ -192,7 +227,7 @@ export function useChatClientViewState({
     if (!displayLoggedIn) return null;
     if (isDraftLikeActiveThread) return null;
 
-    if (messages.length > 0) {
+    if (viewMessages.length > 0) {
       return latestAssistantCanonicalState ?? null;
     }
 
@@ -205,7 +240,7 @@ export function useChatClientViewState({
   }, [
     displayLoggedIn,
     isDraftLikeActiveThread,
-    messages.length,
+    viewMessages.length,
     latestAssistantCanonicalState,
     viewActiveThread,
   ]);
@@ -221,7 +256,7 @@ export function useChatClientViewState({
   }, [userState, resolvedViewUserState]);
 
   return {
-    viewMessages: messages,
+    viewMessages,
     viewRendered,
     viewVisibleTexts,
     viewActiveThread,
@@ -232,8 +267,8 @@ export function useChatClientViewState({
 /*
 このファイルの正式役割
 チャット画面用の表示状態組み立てファイル。
-messages / threads / activeThreadId から、
-画面表示に使う viewMessages / viewRendered / viewVisibleTexts / viewActiveThread を作る。
+messages / threads / activeThreadId / userState から、
+画面表示に使う viewMessages / viewRendered / viewVisibleTexts / viewActiveThread / viewUserState を作る。
 
 このファイルが受け取るもの
 displayLoggedIn
@@ -257,7 +292,7 @@ viewUserState
 
 Compass 観点でこのファイルの意味
 このファイルは Compass を直接生成する場所ではない。
-messages を useRenderMessages(...) に渡し、
+activeThreadId と一致する messages だけを useRenderMessages(...) に渡し、
 画面表示直前に使う viewRendered / viewVisibleTexts を組み立てる表示中継層である。
 そのため、Compass を含んだ assistant message が messages に入っていれば、
 その message を描画用データへ渡す側のファイルである。
@@ -265,10 +300,10 @@ messages を useRenderMessages(...) に渡し、
 
 /*
 【今回このファイルで修正したこと】
-1. activeThread の中間 useMemo を削除しました。
-2. 表示用 active thread の決定を viewActiveThread に一本化しました。
-3. viewUserState の merge を表示責務に必要な最小形へ整理しました。
-4. HOPY唯一の正、confirmed payload、state_changed、HOPY回答○、Compass、DB保存/復元の意味仕様には触っていません。
+1. visibleTexts を Array.isArray で判定して [] に落としていた不正を削除しました。
+2. visibleTexts は Map のまま viewVisibleTexts として渡すようにしました。
+3. visibleTexts が Map ではない異常時のみ、空の Map を返すようにしました。
+4. import/export、本文採用、confirmed payload、state_changed、HOPY回答○、Compass、DB保存/復元、1..5 の唯一の正には触っていません。
 */
 
 /* /components/chat/lib/useChatClientViewState.ts */

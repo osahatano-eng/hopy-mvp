@@ -3,7 +3,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Session, SupabaseClient } from "@supabase/supabase-js";
 import { microtask } from "./debugTools";
 
 type Params = {
@@ -26,6 +26,7 @@ export function useChatAuth({ supabase, setEmail }: Params) {
   const transientNullTimerRef = useRef<number | null>(null);
   const transientNullInFlightRef = useRef(false);
   const sessionGraceTimerRef = useRef<number | null>(null);
+  const resumeSessionCheckInFlightRef = useRef(false);
 
   const [authReady, setAuthReady] = useState(false);
   const [authUserId, setAuthUserId] = useState<string | null>(null);
@@ -236,6 +237,34 @@ export function useChatAuth({ supabase, setEmail }: Params) {
       transientNullInFlightRef.current = false;
     };
 
+    const applyActiveSession = (session: Session) => {
+      const uid = String(session.user.id ?? "") || null;
+      const em = String((session.user as any)?.email ?? "");
+
+      signedOutCauseRef.current = false;
+      clearLogoutRedirectPending();
+
+      setAuthUserId(uid);
+      setEmail(em);
+      emailRef.current = em;
+      setAuthReady(true);
+
+      if (didSignOutRedirectRef.current) {
+        didSignOutRedirectRef.current = false;
+      }
+
+      const tokenOk = Boolean(String(session.access_token ?? "").trim());
+
+      if (uid && tokenOk) {
+        clearSessionGrace();
+        setSessionOk(true);
+        setLogoutRedirecting(false);
+      } else {
+        startSessionGrace();
+        setSessionOk(false);
+      }
+    };
+
     const scheduleConfirmNoSession = () => {
       if (!alive) return;
       if (transientNullTimerRef.current != null) return;
@@ -289,28 +318,22 @@ export function useChatAuth({ supabase, setEmail }: Params) {
               return;
             }
 
-            const uid2 = String(s.user.id ?? "") || null;
-            const em2 = String((s.user as any)?.email ?? "");
-
-            signedOutCauseRef.current = false;
-            clearLogoutRedirectPending();
-
-            setAuthUserId(uid2);
-            setEmail(em2);
-            emailRef.current = em2;
-            setAuthReady(true);
+            applyActiveSession(s);
 
             const ok =
-              Boolean(uid2) &&
-              Boolean(String(s?.access_token ?? "").trim());
+              Boolean(s.user.id) &&
+              Boolean(String(s.access_token ?? "").trim());
 
-            if (ok) {
-              clearSessionGrace();
-              setSessionOk(true);
-              setLogoutRedirecting(false);
-            } else {
-              startSessionGrace();
-              setSessionOk(false);
+            if (!ok) {
+              const restored = await waitForSessionOk(() => alive);
+              if (!alive) return;
+
+              if (restored) {
+                clearLogoutRedirectPending();
+                clearSessionGrace();
+                setSessionOk(true);
+                setLogoutRedirecting(false);
+              }
             }
           } catch {
           } finally {
@@ -320,6 +343,63 @@ export function useChatAuth({ supabase, setEmail }: Params) {
       } catch {
         transientNullTimerRef.current = null;
       }
+    };
+
+    const recheckCurrentSession = async () => {
+      if (!alive) return;
+      if (signedOutCauseRef.current) return;
+      if (resumeSessionCheckInFlightRef.current) return;
+
+      resumeSessionCheckInFlightRef.current = true;
+
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (!alive) return;
+
+        const session = data?.session ?? null;
+
+        if (!session?.user) {
+          scheduleConfirmNoSession();
+          return;
+        }
+
+        clearTransientTimer();
+        applyActiveSession(session);
+
+        const ok =
+          Boolean(session.user.id) &&
+          Boolean(String(session.access_token ?? "").trim());
+
+        if (!ok) {
+          const restored = await waitForSessionOk(() => alive);
+          if (!alive) return;
+
+          if (restored) {
+            clearLogoutRedirectPending();
+            clearSessionGrace();
+            setSessionOk(true);
+            setLogoutRedirecting(false);
+          }
+        }
+      } catch {
+      } finally {
+        resumeSessionCheckInFlightRef.current = false;
+      }
+    };
+
+    const handlePageReturn = () => {
+      if (!alive) return;
+
+      try {
+        if (
+          typeof document !== "undefined" &&
+          document.visibilityState === "hidden"
+        ) {
+          return;
+        }
+      } catch {}
+
+      void recheckCurrentSession();
     };
 
     (async () => {
@@ -391,34 +471,11 @@ export function useChatAuth({ supabase, setEmail }: Params) {
 
       if (session?.user) {
         clearTransientTimer();
+        applyActiveSession(session);
 
-        const uid = String(session.user.id ?? "") || null;
-        const em = String((session.user as any)?.email ?? "");
+        const tokenOk = Boolean(String(session.access_token ?? "").trim());
 
-        signedOutCauseRef.current = false;
-        clearLogoutRedirectPending();
-
-        setAuthUserId(uid);
-        setEmail(em);
-        emailRef.current = em;
-        setAuthReady(true);
-
-        if (didSignOutRedirectRef.current) {
-          didSignOutRedirectRef.current = false;
-        }
-
-        const tokenOk = Boolean(
-          String((session as any)?.access_token ?? "").trim(),
-        );
-
-        if (uid && tokenOk) {
-          clearSessionGrace();
-          setSessionOk(true);
-          setLogoutRedirecting(false);
-        } else {
-          startSessionGrace();
-          setSessionOk(false);
-
+        if (!tokenOk) {
           (async () => {
             const ok = await waitForSessionOk(() => alive);
             if (!alive) return;
@@ -439,6 +496,12 @@ export function useChatAuth({ supabase, setEmail }: Params) {
       scheduleConfirmNoSession();
     });
 
+    try {
+      window.addEventListener("focus", handlePageReturn);
+      window.addEventListener("pageshow", handlePageReturn);
+      document.addEventListener("visibilitychange", handlePageReturn);
+    } catch {}
+
     return () => {
       alive = false;
 
@@ -455,6 +518,13 @@ export function useChatAuth({ supabase, setEmail }: Params) {
       transientNullTimerRef.current = null;
       transientNullInFlightRef.current = false;
       sessionGraceTimerRef.current = null;
+      resumeSessionCheckInFlightRef.current = false;
+
+      try {
+        window.removeEventListener("focus", handlePageReturn);
+        window.removeEventListener("pageshow", handlePageReturn);
+        document.removeEventListener("visibilitychange", handlePageReturn);
+      } catch {}
 
       try {
         sub.subscription.unsubscribe();
@@ -505,10 +575,10 @@ export function useChatAuth({ supabase, setEmail }: Params) {
 
 /*
 【今回このファイルで修正したこと】
-1. sessionOk が一時的に false へ落ちても、直前までログイン済みだった場合は短時間だけ loggedIn / displayLoggedIn を維持する session grace を追加しました。
-2. 本当の SIGNED_OUT と、一時的な session 不安定を分け、実ログアウト時だけ即クリアする形へ戻しました。
-3. session 復帰成功時は session grace を必ず解除し、通常導線へ自然に戻るようにしました。
-4. HOPY回答○ / Compass / state_changed / DB / 左カラム / MEMORIES には触っていません。
+1. タブ復帰時に focus / pageshow / visibilitychange から Supabase の現在 session を再確認する入口を追加しました。
+2. SIGNED_OUT が原因のログアウト中は、タブ復帰再確認でログイン状態へ戻さないようにしました。
+3. session 復帰時は authUserId / email / sessionOk / logoutRedirecting を同じ入口で戻すように整理しました。
+4. HOPY回答○ / Compass / state_changed / 状態1..5 / DB / 左カラム / MEMORIES 本体には触っていません。
 */
 
 /* /components/chat/lib/useChatAuth.ts */

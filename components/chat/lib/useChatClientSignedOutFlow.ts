@@ -1,7 +1,7 @@
 // /components/chat/lib/useChatClientSignedOutFlow.ts
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect } from "react";
 
 import type React from "react";
 import type { ChatMsg, Thread } from "./chatTypes";
@@ -41,7 +41,6 @@ export function useChatClientSignedOutFlow({
   displayLoggedIn,
   loggedIn,
   logoutRedirecting,
-  signedOutCauseRef,
   activeThreadId,
   activeThreadIdRef,
   clearThreadViewRefs,
@@ -57,57 +56,17 @@ export function useChatClientSignedOutFlow({
   setUserState,
   setUserStateErr,
 }: UseChatClientSignedOutFlowArgs) {
-  const prevDisplayLoggedInRef = useRef(false);
-  const [signedOutFromLoggedIn, setSignedOutFromLoggedIn] = useState(false);
-
-  const hasRealSignedOutSignal = Boolean(
-    logoutRedirecting || signedOutCauseRef.current,
-  );
-
-  const justSignedOut =
-    authReady &&
-    prevDisplayLoggedInRef.current &&
-    !displayLoggedIn &&
-    hasRealSignedOutSignal;
+  const shouldHoldSignedOutScreen = Boolean(logoutRedirecting);
 
   useEffect(() => {
-    if (!authReady) return;
-
-    if (displayLoggedIn) {
-      setSignedOutFromLoggedIn(false);
-      prevDisplayLoggedInRef.current = true;
-      return;
-    }
-
-    if (prevDisplayLoggedInRef.current && hasRealSignedOutSignal) {
-      setSignedOutFromLoggedIn(true);
-    } else {
-      setSignedOutFromLoggedIn(false);
-    }
-
-    prevDisplayLoggedInRef.current = false;
-  }, [authReady, displayLoggedIn, hasRealSignedOutSignal]);
-
-  const shouldHoldSignedOutScreen =
-    authReady &&
-    !displayLoggedIn &&
-    hasRealSignedOutSignal &&
-    Boolean(
-      logoutRedirecting ||
-        signedOutCauseRef.current ||
-        signedOutFromLoggedIn ||
-        justSignedOut,
-    );
-
-  useEffect(() => {
-    if (!shouldHoldSignedOutScreen) return;
+    if (!logoutRedirecting) return;
 
     try {
       if (window.location.pathname !== "/") {
         window.location.replace("/");
       }
     } catch {}
-  }, [shouldHoldSignedOutScreen]);
+  }, [logoutRedirecting]);
 
   const clearSelectedThreadState = useCallback(
     ({
@@ -221,23 +180,14 @@ export function useChatClientSignedOutFlow({
   useEffect(() => {
     if (!authReady) return;
 
-    if (!displayLoggedIn && hasRealSignedOutSignal) {
+    if (!displayLoggedIn && logoutRedirecting) {
       try {
         setEmail("");
       } catch {}
     }
 
     if (!loggedIn) {
-      if (!hasRealSignedOutSignal) {
-        return;
-      }
-
-      if (!signedOutCauseRef.current) {
-        resetLoggedOutState({
-          clearMessages: false,
-          clearLoading: false,
-          clearActiveThreadRef: false,
-        });
+      if (!logoutRedirecting) {
         return;
       }
 
@@ -251,11 +201,10 @@ export function useChatClientSignedOutFlow({
   }, [
     authReady,
     displayLoggedIn,
-    hasRealSignedOutSignal,
     loggedIn,
+    logoutRedirecting,
     resetLoggedOutState,
     setEmail,
-    signedOutCauseRef,
   ]);
 
   useEffect(() => {
@@ -288,10 +237,13 @@ ChatClient の中に混在していた、
 
 /*
 【今回このファイルで修正したこと】
-1. logoutRedirecting または signedOutCauseRef.current があるときだけ「本当のサインアウト信号」として扱う hasRealSignedOutSignal を追加しました。
-2. displayLoggedIn が落ちただけでは signedOutFromLoggedIn / justSignedOut / shouldHoldSignedOutScreen が立たないようにし、一時的な auth 揺れで / へ退避しない形へ戻しました。
-3. !loggedIn 時の resetLoggedOutState も、本当のサインアウト信号があるときだけ動くようにし、一時的な auth 揺れで threads / activeThreadId / userState などを消さないようにしました。
-4. hook 内ロジックの意味、HOPY回答○、Compass、confirmed payload、DB保存・復元の唯一の正には触っていません。
+1. ログアウト後の "/" 遷移を authReady / displayLoggedIn の変化待ちから切り離しました。
+2. logoutRedirecting=true を受けた時点で、即時に "/" へ replace する一本道にしました。
+3. prevDisplayLoggedInRef / signedOutFromLoggedIn / justSignedOut を削除しました。
+4. DevTools 起動中の focus / visibilitychange / auth 表示揺れで "/" 遷移タイミングを逃す経路を削除しました。
+5. 本当のログアウト時だけ workspace state を消す方針は維持しました。
+6. タブ復帰時の一時的な auth 揺れでは ChatClient 内の workspace state を維持する形を維持しました。
+7. HOPY回答○、Compass、confirmed payload、state_changed、状態値 1..5 / 5段階、DB保存・復元の唯一の正には触っていません。
 */
 
 /* /components/chat/lib/useChatClientSignedOutFlow.ts */

@@ -18,6 +18,8 @@ import {
   shouldHandleAuthEventWithRefs,
 } from "./useChatInitParts";
 
+type ResumeReason = "visibilitychange" | "pageshow" | "focus";
+
 function readThreadEventId(detail: unknown): string {
   const safe = (detail ?? {}) as Record<string, unknown>;
 
@@ -93,12 +95,6 @@ export function useChatInit<TState>(params: UseChatInitParams<TState>) {
     }
   };
 
-  const lastDispatchedThreadRef = useRef<{ id: string; at: number }>({
-    id: "",
-    at: 0,
-  });
-  const THREAD_EVENT_DEDUPE_MS = 650;
-
   const dispatchThreadEvent = (
     threadId: string,
     reason: string,
@@ -106,12 +102,6 @@ export function useChatInit<TState>(params: UseChatInitParams<TState>) {
   ) => {
     const tid = String(threadId ?? "").trim();
     if (!tid) return;
-
-    const now = Date.now();
-    const last = lastDispatchedThreadRef.current;
-
-    if (last.id === tid && now - last.at <= THREAD_EVENT_DEDUPE_MS) return;
-    lastDispatchedThreadRef.current = { id: tid, at: now };
 
     try {
       if (typeof window !== "undefined") {
@@ -127,7 +117,6 @@ export function useChatInit<TState>(params: UseChatInitParams<TState>) {
   const handledInitialSessionRef = useRef(false);
 
   const lastResumeAtRef = useRef(0);
-  const resumeInFlightRef = useRef(false);
   const RESUME_DEDUPE_MS = 900;
 
   useEffect(() => {
@@ -165,7 +154,6 @@ export function useChatInit<TState>(params: UseChatInitParams<TState>) {
       createInFlightRef.current = false;
 
       createRequestRef.current = { id: "", at: 0 };
-      lastDispatchedThreadRef.current = { id: "", at: 0 };
 
       threadMutationSeqRef.current = 0;
       lastThreadMutationAtRef.current = 0;
@@ -173,7 +161,6 @@ export function useChatInit<TState>(params: UseChatInitParams<TState>) {
       handledInitialSessionRef.current = false;
 
       lastResumeAtRef.current = 0;
-      resumeInFlightRef.current = false;
 
       p.setEmail("");
       p.setMessages([]);
@@ -214,7 +201,6 @@ export function useChatInit<TState>(params: UseChatInitParams<TState>) {
       handledInitialSessionRef.current = false;
 
       lastResumeAtRef.current = 0;
-      resumeInFlightRef.current = false;
 
       try {
         p.setEmail("");
@@ -291,7 +277,6 @@ export function useChatInit<TState>(params: UseChatInitParams<TState>) {
       softAuthLost,
 
       lastResumeAtRef,
-      resumeInFlightRef,
       RESUME_DEDUPE_MS,
     });
 
@@ -315,7 +300,9 @@ export function useChatInit<TState>(params: UseChatInitParams<TState>) {
       }
     })();
 
-    const resumeInit = (reason: "visibilitychange" | "pageshow" | "focus") => {
+    const resumeInit = (reason: ResumeReason) => {
+      if (!isAlive()) return;
+
       const now = Date.now();
       const lastResumeAt = lastResumeAtRef.current;
 
@@ -329,15 +316,14 @@ export function useChatInit<TState>(params: UseChatInitParams<TState>) {
 
       lastResumeAtRef.current = now;
 
-      try {
-        logInfo("[useChatInit] resume -> init (direct)", { reason });
-        controller.init(false, null);
-      } catch (e) {
-        logWarn("[useChatInit] resume failed", {
+      logInfo("[useChatInit] resume -> init", { reason });
+
+      void controller.init(false, null).catch((e) => {
+        logWarn("[useChatInit] resume init failed", {
           reason,
           err: errText(e),
         });
-      }
+      });
     };
 
     const onVisibilityChange = () => {
@@ -351,8 +337,7 @@ export function useChatInit<TState>(params: UseChatInitParams<TState>) {
       resumeInit("visibilitychange");
     };
 
-    const onPageShow = (event: PageTransitionEvent) => {
-      if (!event.persisted) return;
+    const onPageShow = () => {
       resumeInit("pageshow");
     };
 
@@ -368,8 +353,7 @@ export function useChatInit<TState>(params: UseChatInitParams<TState>) {
         if (!isAlive()) return;
 
         if (!session) {
-          logInfo("[useChatInit] online -> init (session pending)");
-          controller.init(false, null);
+          logInfo("[useChatInit] online -> keep workspace (session pending)");
           return;
         }
 
@@ -413,42 +397,8 @@ export function useChatInit<TState>(params: UseChatInitParams<TState>) {
         return;
       }
 
-      const recentResumeAge = Date.now() - lastResumeAtRef.current;
-      const resumedRecently =
-        lastResumeAtRef.current > 0 &&
-        recentResumeAge >= 0 &&
-        recentResumeAge <= RESUME_DEDUPE_MS + 1200;
-
       if (!session) {
-        if (resumedRecently) {
-          logInfo("[useChatInit] auth change (null session after resume) -> init");
-          controller.init(false, null);
-          return;
-        }
-
         logInfo("[useChatInit] auth change (null session) -> keep current state");
-        return;
-      }
-
-      if (evName === "TOKEN_REFRESHED") {
-        if (resumedRecently) {
-          logInfo("[useChatInit] auth change (token refreshed after resume) -> init");
-          controller.init(false, session);
-          return;
-        }
-
-        logInfo("[useChatInit] auth change (token refreshed) -> keep current state");
-        return;
-      }
-
-      if (evName === "SIGNED_IN") {
-        if (resumedRecently) {
-          logInfo("[useChatInit] auth change (signed in after resume) -> init");
-          controller.init(false, session);
-          return;
-        }
-
-        logInfo("[useChatInit] auth change (signed in) -> keep current state");
         return;
       }
 
@@ -458,6 +408,18 @@ export function useChatInit<TState>(params: UseChatInitParams<TState>) {
         session,
       );
       if (!ok) return;
+
+      if (evName === "TOKEN_REFRESHED") {
+        logInfo("[useChatInit] auth change (token refreshed) -> init");
+        controller.init(false, session);
+        return;
+      }
+
+      if (evName === "SIGNED_IN") {
+        logInfo("[useChatInit] auth change (signed in) -> init");
+        controller.init(false, session);
+        return;
+      }
 
       logInfo("[useChatInit] auth change", { event: evName });
       controller.init(false, session);
@@ -508,10 +470,12 @@ workspace 再開入口と、正式な select-thread 観測だけを扱う。
 
 /*
 【今回このファイルで修正したこと】
-1. tab復帰入口 resumeInit に最小限の dedupe を戻しました。
-2. visibilitychange / focus / pageshow が短時間に重なっても、controller.init(false, null) を1回だけ流すようにしました。
-3. 再同期入口の二重起動だけを止め、下流の createInitController 本線は触っていません。
-4. confirmed payload、state_changed、HOPY回答○、Compass、状態値 1..5、本文採用判定、DB保存/復元仕様には触っていません。
+1. resumeInit() 内の waitForStableSession() を削除しました。
+2. タブ復帰入口は session 確認を持たず、controller.init(false, null) を起動するだけにしました。
+3. session 確認責務を controller 側の getSessionWithRetry 本線へ一本化しました。
+4. focus / visibilitychange / pageshow の短い dedupe は維持しました。
+5. mount 初期化、online、auth change、create-thread、threads-refresh の処理は変更していません。
+6. confirmed payload、state_changed、HOPY回答○、Compass、状態値 1..5、本文採用判定、DB保存/復元仕様には触っていません。
 */
 
 /* /components/chat/lib/useChatInit.ts */

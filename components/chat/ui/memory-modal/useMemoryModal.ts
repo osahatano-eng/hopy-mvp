@@ -473,7 +473,7 @@ export function useMemoryModal({ open, onClose, ui, panelRef, newRef }: Params) 
   }
 
   async function requestCloseWorld() {
-    if (loading || creating) return;
+    if (creating) return;
 
     if (isDirty) {
       const ok = confirm(ui.dirtyConfirm);
@@ -652,3 +652,19 @@ export function useMemoryModal({ open, onClose, ui, panelRef, newRef }: Params) 
     requestCloseWorld,
   };
 }
+
+/*
+このファイルの正式役割
+MEMORIES モーダル内の状態管理と操作処理を担当する hook。
+一覧取得、件数取得、追加、編集、削除、復元、完全削除、検索、タブ切替、閉じる処理を管理する。
+表示そのものは MemoryModal.tsx と行コンポーネントへ渡し、このファイルは UI 描画本体を持たない。
+*/
+
+/*
+【今回このファイルで修正したこと】
+1. requestCloseWorld() が loading 中に即 return して、MEMORIES の閉じる操作まで止める処理を削除しました。
+2. MEMORIES 一覧取得が一時的に戻らない場合でも、閉じる操作だけは通せるようにしました。
+3. 送信、スレッド切り替え、ChatClient の loading / threadBusy、HOPY唯一の正、confirmed payload、state_changed、HOPY回答○、Compass、状態値 1..5 / 5段階、DB保存・復元には触っていません。
+*/
+
+/* /components/chat/ui/memory-modal/useMemoryModal.ts */

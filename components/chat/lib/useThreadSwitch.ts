@@ -7,6 +7,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { loadMessages, renameThread as renameThreadApi } from "./threadApi";
 import { normMsg } from "./threadApiSupport";
+import { saveActiveThreadId } from "./threadStore";
 import type { ChatMsg } from "./chatTypes";
 
 type UseThreadSwitchParams = {
@@ -97,9 +98,18 @@ export function useThreadSwitch(params: UseThreadSwitchParams) {
     paramsRef.current = params;
   }, [params]);
 
+  const mountedRef = useRef(true);
   const switchSeqRef = useRef(0);
   const activeThreadIdRef = useRef<string | null>(activeThreadId);
   const renameSeqByThreadRef = useRef<Record<string, number>>({});
+
+  useEffect(() => {
+    mountedRef.current = true;
+
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     activeThreadIdRef.current = activeThreadId;
@@ -120,6 +130,7 @@ export function useThreadSwitch(params: UseThreadSwitchParams) {
       const seq = ++switchSeqRef.current;
 
       const isCurrentRequestForSelectedThread = () => {
+        if (!mountedRef.current) return false;
         if (disposed) return false;
         if (seq !== switchSeqRef.current) return false;
         return String(activeThreadIdRef.current ?? "").trim() === nextId;
@@ -148,7 +159,9 @@ export function useThreadSwitch(params: UseThreadSwitchParams) {
             `messages load failed: ${normMsg(e)}`,
           );
         } finally {
-          setThreadBusySafe(false);
+          if (mountedRef.current && seq === switchSeqRef.current) {
+            setThreadBusySafe(false);
+          }
         }
       };
 
@@ -167,12 +180,16 @@ export function useThreadSwitch(params: UseThreadSwitchParams) {
       if (!isUuidLikeThreadId(nextId)) return;
 
       const prevId = String(activeThreadIdRef.current ?? "").trim();
-      if (nextId === prevId) {
-        loadSelectedThreadMessages(nextId);
+
+      activeThreadIdRef.current = nextId;
+      saveActiveThreadId(nextId);
+
+      if (nextId !== prevId) {
+        setActiveThreadId(nextId);
         return;
       }
 
-      setActiveThreadId(nextId);
+      loadSelectedThreadMessages(nextId);
     },
     [loadSelectedThreadMessages, setActiveThreadId],
   );
@@ -314,16 +331,17 @@ activeThreadId 更新と、その activeThreadId に基づく
 messages 再読込開始・現在要求かどうかの確認・反映までを行う。
 あわせて rename-thread を受けた rename 連携だけを行う。
 このファイルは hopy:thread を受けない。
-他タブ復帰時の可視状態監視や busy 解除は持たない。
+他タブ復帰時の可視状態監視は持たない。
 表示責務や HOPY唯一の正の再判定を持たない。
 */
 
 /*
 【今回このファイルで修正したこと】
-1. threadBusy の解除まで switchSeqRef.current に縛っていた guard を削除しました。
-2. 本文採用の現在要求判定は switchSeqRef.current に残しつつ、busy 解除だけは setThreadBusy(false) へ戻しました。
-3. これにより、tab復帰後に seq の持ち越し差で threadBusy だけ残り続ける余計な停止条件を削除しました。
-4. same-thread 再読込、rename 連携、confirmed payload、state_changed、HOPY回答○、Compass、DB保存/復元、状態1..5 の唯一の正には触っていません。
+1. lastRequestedThreadIdRef を削除しました。
+2. 「一度要求した thread_id は再読込しない」という保持型 guard を削除し、タブ復帰後や再同期時の正規の messages 再取得を止めないようにしました。
+3. activeThreadId が変わった場合は activeThreadId の useEffect から messages 再読込を開始する一本道に戻しました。
+4. hopy:select-thread で同じ thread_id が来た場合だけ、activeThreadId が変わらなくても messages 再読込を開始するようにしました。
+5. confirmed payload、state_changed、HOPY回答○、Compass、DB保存/復元、状態1..5 の唯一の正には触っていません。
 */
 
 /* /components/chat/lib/useThreadSwitch.ts */

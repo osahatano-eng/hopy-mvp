@@ -10,6 +10,7 @@ function sleep(ms: number) {
 
 const STABLE_SESSION_DELAYS = [0, 80, 160, 260, 420, 650, 900, 1200, 1600] as const;
 const SESSION_RETRY_DELAYS = [0, 80, 160, 260, 420, 650, 900, 1200, 1600, 2100, 2750] as const;
+const SESSION_READ_TIMEOUT_MS = 1_800;
 
 export function isSessionUsable(
   session: Session | null | undefined
@@ -17,34 +18,44 @@ export function isSessionUsable(
   return Boolean(session?.user?.id) && Boolean(String(session?.access_token ?? "").trim());
 }
 
-export function isSessionPresent(
-  session: Session | null | undefined
-): session is Session {
-  return Boolean(session?.user?.id);
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | null> {
+  let timer: number | null = null;
+
+  return Promise.race<T | null>([
+    promise,
+    new Promise<null>((resolve) => {
+      try {
+        timer = window.setTimeout(() => resolve(null), ms);
+      } catch {
+        resolve(null);
+      }
+    }),
+  ]).finally(() => {
+    if (timer != null) {
+      try {
+        window.clearTimeout(timer);
+      } catch {}
+    }
+  });
 }
 
-async function readPresentSession(
+async function readSessionOnce(
   supabase: SupabaseClient<any>
 ): Promise<Session | null> {
-  try {
-    const { data } = await supabase.auth.getSession();
-    const session = data?.session ?? null;
-    return isSessionPresent(session) ? session : null;
-  } catch {
-    return null;
-  }
+  return withTimeout(
+    supabase.auth
+      .getSession()
+      .then(({ data }) => data?.session ?? null)
+      .catch(() => null),
+    SESSION_READ_TIMEOUT_MS,
+  );
 }
 
 async function readUsableSession(
   supabase: SupabaseClient<any>
 ): Promise<Session | null> {
-  try {
-    const { data } = await supabase.auth.getSession();
-    const session = data?.session ?? null;
-    return isSessionUsable(session) ? session : null;
-  } catch {
-    return null;
-  }
+  const session = await readSessionOnce(supabase);
+  return isSessionUsable(session) ? session : null;
 }
 
 async function pollSession(args: {
@@ -147,10 +158,13 @@ session の有効判定、auth event の重複処理判定、session 再取得 r
 
 /*
 【今回このファイルで修正したこと】
-1. waitForStableSession の read を readPresentSession から readUsableSession に変更しました。
-2. stable session 判定でも user.id だけではなく access_token まで必須にしました。
-3. これにより、tab復帰直後の中途半端な session を安定 session として扱わず、usable session になるまで待つようにしました。
-4. auth event 重複判定、confirmed payload、HOPY唯一の正、状態値 1..5 / 5段階には触っていません。
+1. module 共通の sessionReadInFlight / sessionReadStartedAt を削除しました。
+2. タブ復帰直後の不安定な getSession() 結果を、後続の正式な getSessionWithRetry() が共有して巻き込まれる経路を削除しました。
+3. readSessionOnce() は、毎回その時点の supabase.auth.getSession() を timeout 付きで読むだけに戻しました。
+4. 未使用だった isSessionPresent / readPresentSession を削除しました。
+5. waitForStableSession / getSessionWithRetry の retry 幅と user.id + access_token 判定は維持しました。
+6. 初期化本体、threads、messages、profile / plan の正は作っていません。
+7. confirmed payload、HOPY唯一の正、state_changed、HOPY回答○、Compass、状態値 1..5 / 5段階、DB保存・復元仕様には触れていません。
 */
 
 /* /components/chat/lib/useChatInitSession.ts */

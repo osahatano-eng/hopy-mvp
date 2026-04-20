@@ -98,9 +98,6 @@ export const ChatOverlays = React.memo(function ChatOverlays(props: Props) {
     leftRailOpeningBackdropStyle = {},
   } = props;
 
-  void userState;
-  void userStateErr;
-
   const safeThreads = React.useMemo<Thread[]>(
     () => (Array.isArray(threads) ? threads : EMPTY_THREADS),
     [threads]
@@ -123,8 +120,8 @@ export const ChatOverlays = React.memo(function ChatOverlays(props: Props) {
           uiLang={uiLang}
           ui={ui}
           onOpenMemories={onOpenMemories}
-          userState={null}
-          userStateErr={null}
+          userState={userState}
+          userStateErr={userStateErr}
           onClose={onCloseRail}
           railOpen={railOpen}
           threads={safeThreads}
@@ -157,10 +154,10 @@ overlay 系 UI へ同じ正を中継する責務だけを持つ。
 
 /*
 【今回このファイルで修正したこと】
-1. LeftRail へ userState / userStateErr を実質通さないようにし、null 固定にしました。
-2. LeftRail へ渡す状態経路を activeThreadState 側へ寄せました。
-3. ChatOverlays.tsx 自身に二重の状態経路を残さない形へ整理しました。
-4. MemoryModal、GuestLeftRail、送信処理、Compass本体、MEMORIES、DB保存、DB復元には触っていません。
+1. LeftRail へ userState / userStateErr を null 固定で渡していた箇所を、親から受け取った userState / userStateErr をそのまま渡す形へ戻しました。
+2. userState / userStateErr を捨てるためだけの void 処理を削除しました。
+3. 左下アカウント表示・名前・プラン表示が、ChatClient 側で確定した userState を受け取れる経路へ戻しました。
+4. MemoryModal、GuestLeftRail、送信処理、Compass本体、MEMORIES、DB保存、DB復元、HOPY唯一の正には触っていません。
 */
 
 /* /components/chat/view/ChatOverlays.tsx */

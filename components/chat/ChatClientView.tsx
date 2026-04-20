@@ -130,6 +130,9 @@ export default function ChatClientView(props: ChatClientViewExtendedProps) {
     shouldShowWorkspaceHero,
   } = surface;
 
+  const shouldShowWorkspaceHeroForPane =
+    shouldShowWorkspaceHero && shouldHoldBlankThreadStageFromClient;
+
   const noopSetWorkspaceHeroDismissed = React.useCallback(
     (_next: boolean | ((prev: boolean) => boolean)) => {},
     [],
@@ -231,7 +234,7 @@ export default function ChatClientView(props: ChatClientViewExtendedProps) {
     paneLoading: loading,
     userStateErr,
     shouldShowGuestHero,
-    shouldShowWorkspaceHero,
+    shouldShowWorkspaceHero: shouldShowWorkspaceHeroForPane,
     shouldHoldBlankThreadStage: shouldHoldBlankThreadStageFromClient,
     shouldShowPreparing,
     showRecoverUi,
@@ -365,10 +368,11 @@ Chat画面の親表示統合ファイル。
 
 /*
 【今回このファイルで修正したこと】
-1. bottomDivRef を追加し、bottomRef を HTMLDivElement 契約へこのファイル内だけで揃えました。
-2. useChatClientViewMessagePaneProps と ChatMessagePane へ渡す直前の両方で bottomRef を上書きしました。
-3. build を止めていた ChatMessagePane 受け渡し時の bottomRef 型不一致だけを直しました。
-4. 本文採用、confirmed payload、state_changed、HOPY回答○、Compass、DB保存・復元、1..5 の唯一の正には触っていません。
+1. ChatMessagePane へ渡す shouldShowWorkspaceHero を shouldShowWorkspaceHeroForPane に限定しました。
+2. WorkspaceHero は shouldShowWorkspaceHero=true だけでは表示せず、shouldHoldBlankThreadStageFromClient=true のときだけ許可するようにしました。
+3. スレッド切り替え中の一時的な空状態では WorkspaceHero が出ないようにしました。
+4. 新規チャットの pending empty thread では WorkspaceHero を表示できる状態を維持しました。
+5. 本文採用、confirmed payload、state_changed、HOPY回答○、Compass、DB保存・復元、1..5 の唯一の正には触っていません。
 */
 
 /* /components/chat/ChatClientView.tsx */
