@@ -179,8 +179,6 @@ export function useChatInit<TState>(params: UseChatInitParams<TState>) {
     const softAuthLost = () => {
       const p = paramsRef.current;
 
-      initSeqRef.current += 1;
-
       initRunningRef.current = false;
       lastInitAtRef.current = 0;
 
@@ -202,15 +200,6 @@ export function useChatInit<TState>(params: UseChatInitParams<TState>) {
 
       lastResumeAtRef.current = 0;
 
-      try {
-        p.setEmail("");
-      } catch {}
-      try {
-        p.setUserState(null);
-      } catch {}
-      try {
-        p.setUserStateErr(null);
-      } catch {}
       try {
         p.setLastFailed(null);
       } catch {}
@@ -470,12 +459,13 @@ workspace 再開入口と、正式な select-thread 観測だけを扱う。
 
 /*
 【今回このファイルで修正したこと】
-1. resumeInit() 内の waitForStableSession() を削除しました。
-2. タブ復帰入口は session 確認を持たず、controller.init(false, null) を起動するだけにしました。
-3. session 確認責務を controller 側の getSessionWithRetry 本線へ一本化しました。
-4. focus / visibilitychange / pageshow の短い dedupe は維持しました。
-5. mount 初期化、online、auth change、create-thread、threads-refresh の処理は変更していません。
-6. confirmed payload、state_changed、HOPY回答○、Compass、状態値 1..5、本文採用判定、DB保存/復元仕様には触っていません。
+1. softAuthLost() で initSeqRef を進めないようにしました。
+2. softAuthLost() で email を空にしないようにしました。
+3. softAuthLost() で userState を null にしないようにしました。
+4. softAuthLost() で userStateErr を null にしないようにしました。
+5. タブ復帰時の一時的な auth 揺れで、左下Google表示・plan表示の元になる値を消さないようにしました。
+6. 本当のログアウト時だけ reset() が workspace / profile 表示を消す責務を持つ形に戻しました。
+7. confirmed payload、state_changed、HOPY回答○、Compass、状態値 1..5、本文採用判定、DB保存/復元仕様には触っていません。
 */
 
 /* /components/chat/lib/useChatInit.ts */
