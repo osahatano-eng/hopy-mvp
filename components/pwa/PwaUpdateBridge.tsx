@@ -143,30 +143,8 @@ export default function PwaUpdateBridge() {
 
         registration.addEventListener("updatefound", handleUpdateFound);
 
-        const triggerUpdateCheck = () => {
-          void registration
-            .update()
-            .then(() => {
-              scheduleWaitingWorkerCheck(registration, 4);
-            })
-            .catch(() => {
-              // 更新確認失敗は致命ではないため握りつぶす
-            });
-        };
-
-        const handleVisibilityChange = () => {
-          if (document.visibilityState === "visible") {
-            triggerUpdateCheck();
-          }
-        };
-
-        window.addEventListener("focus", triggerUpdateCheck);
-        document.addEventListener("visibilitychange", handleVisibilityChange);
-
         return () => {
           registration.removeEventListener("updatefound", handleUpdateFound);
-          window.removeEventListener("focus", triggerUpdateCheck);
-          document.removeEventListener("visibilitychange", handleVisibilityChange);
         };
       } catch {
         // service worker 登録失敗時は何も出さず通常利用を優先する
@@ -184,7 +162,7 @@ export default function PwaUpdateBridge() {
       clearWaitingCheckTimers();
       if (typeof cleanup === "function") cleanup();
     };
-  }, [bindInstallingWorker, clearWaitingCheckTimers, markWaitingWorker, scheduleWaitingWorkerCheck]);
+  }, [bindInstallingWorker, clearWaitingCheckTimers, markWaitingWorker]);
 
   if (updateState === "idle") {
     return null;
@@ -230,9 +208,12 @@ PWA更新検知と、ユーザーへの再読み込み導線をつなぐUIブリ
 */
 
 /*【今回このファイルで修正したこと】
-1. 更新通知バーの配置を bottom-4 から top-4 へ変更した
-2. 初見で目に入るように、画面上部固定へ変更した
-3. 更新判定ロジック、service worker 連携、文言、他UIには触れていない
+1. タブ復帰時に registration.update() を実行する focus 監視を削除しました。
+2. タブ復帰時に registration.update() を実行する visibilitychange 監視を削除しました。
+3. HOPY本体のタブ復帰 resume と PWA更新確認が同時に走る経路を削除しました。
+4. service worker の register、waiting 検知、updatefound 検知、controllerchange 後の reload は維持しました。
+5. PWA更新通知UIの文言と表示位置は変更していません。
+6. HOPY唯一の正、状態表示、Compass、本文系ロジック、Supabase Auth、DB取得には触れていません。
 */
 
 /* /components/pwa/PwaUpdateBridge.tsx */
