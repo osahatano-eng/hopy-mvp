@@ -10,14 +10,9 @@ import {
   sortThreadsByUpdatedDesc,
   mergeThreadsPreferNewer,
 } from "./useChatInitThreadList";
-import { getSessionWithRetry } from "./useChatInitSession";
-import {
-  fetchUserStateOnly,
-  type UseChatInitUserStateParams,
-} from "./useChatInitUserState";
 import { sleep, logWarn, errText } from "./useChatInitUtils";
 
-export type UseChatInitThreadsParams<TState> = UseChatInitUserStateParams<TState> & {
+export type UseChatInitThreadsParams<TState = unknown> = {
   uiLang: Lang;
   setThreads: Dispatch<SetStateAction<Thread[]>>;
 };
@@ -55,30 +50,6 @@ export async function fetchThreadsOnly<TState>(args: {
         mergeThreadsPreferNewer(Array.isArray(prev) ? prev : [], incoming, titleFallback),
       ),
     );
-
-    try {
-      const session = await getSessionWithRetry({
-        isAlive,
-        initSeqRef,
-        seq,
-        supabase,
-      });
-
-      if (!isAlive()) return incoming;
-      if (seq !== initSeqRef.current) return incoming;
-
-      const userId = String(session?.user?.id ?? "").trim();
-
-      if (userId) {
-        void fetchUserStateOnly<TState>({
-          isAlive,
-          initSeqRef,
-          seq,
-          paramsRef,
-          userId,
-        });
-      }
-    } catch {}
 
     return incoming;
   } catch (e) {
@@ -170,17 +141,17 @@ export async function fetchThreadsWithRetry<TState>(args: {
 このファイルの正式役割:
 useChatInitParts.ts から切り出した、threads 取得責務を担う。
 fetchThreadsOnly と fetchThreadsWithRetry により conversations / threads の取得、取得結果の merge、retry 結果の返却だけを担当する。
-profile / plan / userState 取得は useChatInitUserState.ts を呼び出すだけで、本体は持たない。
-activeThread 復元 / 新規thread作成 / messages / HOPY状態 / Compass / confirmed payload の正は作らない。
+profile / plan / userState 取得本体、activeThread 復元 / 新規thread作成 / messages / HOPY状態 / Compass / confirmed payload の正は作らない。
 */
 
 /*
 【今回このファイルで修正したこと】
-1. useChatInitParts.ts に混在していた threads 取得責務を、新規ファイルへ分離しました。
-2. fetchThreadsOnly と fetchThreadsWithRetry の本体をこのファイルへ移す前提で作成しました。
-3. このファイルは conversations / threads の取得と merge / retry 結果返却だけを担当します。
-4. profile / plan / userState 取得本体、activeThread 復元、新規thread作成制御、本文表示、送信、MEMORIES には触れていません。
-5. HOPY唯一の正、confirmed payload、state_changed、HOPY回答○、Compass、状態値 1..5 / 5段階、DB保存・復元仕様には触れていません。
+1. useChatInitThreads.ts から getSessionWithRetry の import と呼び出しを削除しました。
+2. useChatInitThreads.ts から fetchUserStateOnly の import と呼び出しを削除しました。
+3. fetchThreadsOnly() を conversations / threads の取得と setThreads 反映だけに戻しました。
+4. profile / plan / userState 取得責務は useChatInitUserState.ts 側に一本化しました。
+5. activeThread 復元、新規thread作成制御、本文表示、送信、MEMORIES には触れていません。
+6. HOPY唯一の正、confirmed payload、state_changed、HOPY回答○、Compass、状態値 1..5 / 5段階、DB保存・復元仕様には触れていません。
 */
 
 /* /components/chat/lib/useChatInitThreads.ts */

@@ -290,24 +290,38 @@ export function useChatInit<TState>(params: UseChatInitParams<TState>) {
     })();
 
     const resumeInit = (reason: ResumeReason) => {
-      if (!isAlive()) return;
+      void (async () => {
+        if (!isAlive()) return;
 
-      const now = Date.now();
-      const lastResumeAt = lastResumeAtRef.current;
+        const now = Date.now();
+        const lastResumeAt = lastResumeAtRef.current;
 
-      if (lastResumeAt > 0 && now - lastResumeAt <= RESUME_DEDUPE_MS) {
-        logInfo("[useChatInit] resume skipped (deduped)", {
-          reason,
-          sinceMs: now - lastResumeAt,
-        });
-        return;
-      }
+        if (lastResumeAt > 0 && now - lastResumeAt <= RESUME_DEDUPE_MS) {
+          logInfo("[useChatInit] resume skipped (deduped)", {
+            reason,
+            sinceMs: now - lastResumeAt,
+          });
+          return;
+        }
 
-      lastResumeAtRef.current = now;
+        lastResumeAtRef.current = now;
 
-      logInfo("[useChatInit] resume -> init", { reason });
+        logInfo("[useChatInit] resume -> stable session check", { reason });
 
-      void controller.init(false, null).catch((e) => {
+        const session = await waitForStableSession({ isAlive, supabase });
+        if (!isAlive()) return;
+
+        if (!session) {
+          logInfo("[useChatInit] resume -> keep workspace (session pending)", {
+            reason,
+          });
+          return;
+        }
+
+        logInfo("[useChatInit] resume -> init", { reason });
+
+        await controller.init(false, session);
+      })().catch((e) => {
         logWarn("[useChatInit] resume init failed", {
           reason,
           err: errText(e),
@@ -459,13 +473,11 @@ workspace 再開入口と、正式な select-thread 観測だけを扱う。
 
 /*
 【今回このファイルで修正したこと】
-1. softAuthLost() で initSeqRef を進めないようにしました。
-2. softAuthLost() で email を空にしないようにしました。
-3. softAuthLost() で userState を null にしないようにしました。
-4. softAuthLost() で userStateErr を null にしないようにしました。
-5. タブ復帰時の一時的な auth 揺れで、左下Google表示・plan表示の元になる値を消さないようにしました。
-6. 本当のログアウト時だけ reset() が workspace / profile 表示を消す責務を持つ形に戻しました。
-7. confirmed payload、state_changed、HOPY回答○、Compass、状態値 1..5、本文採用判定、DB保存/復元仕様には触っていません。
+1. resumeInit() が controller.init(false, null) を直接呼ばないようにしました。
+2. タブ復帰時に waitForStableSession() で session を再確認してから controller.init(false, session) へ進む一本道にしました。
+3. session pending の場合は workspace を消さず、その回の resume だけ止める形にしました。
+4. visibilitychange / pageshow / focus の入口、短い dedupe、本当のログアウト時だけ reset() する責務は維持しました。
+5. confirmed payload、state_changed、HOPY回答○、Compass、状態値 1..5、本文採用判定、DB保存/復元仕様には触っていません。
 */
 
 /* /components/chat/lib/useChatInit.ts */

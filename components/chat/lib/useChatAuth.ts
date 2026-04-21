@@ -26,7 +26,6 @@ export function useChatAuth({ supabase, setEmail }: Params) {
   const transientNullTimerRef = useRef<number | null>(null);
   const transientNullInFlightRef = useRef(false);
   const sessionGraceTimerRef = useRef<number | null>(null);
-  const resumeSessionCheckInFlightRef = useRef(false);
 
   const [authReady, setAuthReady] = useState(false);
   const [authUserId, setAuthUserId] = useState<string | null>(null);
@@ -304,7 +303,6 @@ export function useChatAuth({ supabase, setEmail }: Params) {
                 } else {
                   startSessionGrace();
                   setSessionOk(false);
-                  // 以前ログイン済みなら authUserId は一時維持
                 }
               }
 
@@ -343,63 +341,6 @@ export function useChatAuth({ supabase, setEmail }: Params) {
       } catch {
         transientNullTimerRef.current = null;
       }
-    };
-
-    const recheckCurrentSession = async () => {
-      if (!alive) return;
-      if (signedOutCauseRef.current) return;
-      if (resumeSessionCheckInFlightRef.current) return;
-
-      resumeSessionCheckInFlightRef.current = true;
-
-      try {
-        const { data } = await supabase.auth.getSession();
-        if (!alive) return;
-
-        const session = data?.session ?? null;
-
-        if (!session?.user) {
-          scheduleConfirmNoSession();
-          return;
-        }
-
-        clearTransientTimer();
-        applyActiveSession(session);
-
-        const ok =
-          Boolean(session.user.id) &&
-          Boolean(String(session.access_token ?? "").trim());
-
-        if (!ok) {
-          const restored = await waitForSessionOk(() => alive);
-          if (!alive) return;
-
-          if (restored) {
-            clearLogoutRedirectPending();
-            clearSessionGrace();
-            setSessionOk(true);
-            setLogoutRedirecting(false);
-          }
-        }
-      } catch {
-      } finally {
-        resumeSessionCheckInFlightRef.current = false;
-      }
-    };
-
-    const handlePageReturn = () => {
-      if (!alive) return;
-
-      try {
-        if (
-          typeof document !== "undefined" &&
-          document.visibilityState === "hidden"
-        ) {
-          return;
-        }
-      } catch {}
-
-      void recheckCurrentSession();
     };
 
     (async () => {
@@ -496,12 +437,6 @@ export function useChatAuth({ supabase, setEmail }: Params) {
       scheduleConfirmNoSession();
     });
 
-    try {
-      window.addEventListener("focus", handlePageReturn);
-      window.addEventListener("pageshow", handlePageReturn);
-      document.addEventListener("visibilitychange", handlePageReturn);
-    } catch {}
-
     return () => {
       alive = false;
 
@@ -518,13 +453,6 @@ export function useChatAuth({ supabase, setEmail }: Params) {
       transientNullTimerRef.current = null;
       transientNullInFlightRef.current = false;
       sessionGraceTimerRef.current = null;
-      resumeSessionCheckInFlightRef.current = false;
-
-      try {
-        window.removeEventListener("focus", handlePageReturn);
-        window.removeEventListener("pageshow", handlePageReturn);
-        document.removeEventListener("visibilitychange", handlePageReturn);
-      } catch {}
 
       try {
         sub.subscription.unsubscribe();
@@ -571,14 +499,17 @@ export function useChatAuth({ supabase, setEmail }: Params) {
 /*
 このファイルの正式役割
 チャット画面の認証状態を監視し、session・logout遷移・表示用ログイン状態を安定して返すためのhook。
+workspace 再同期入口は持たない。
 */
 
 /*
 【今回このファイルで修正したこと】
-1. タブ復帰時に focus / pageshow / visibilitychange から Supabase の現在 session を再確認する入口を追加しました。
-2. SIGNED_OUT が原因のログアウト中は、タブ復帰再確認でログイン状態へ戻さないようにしました。
-3. session 復帰時は authUserId / email / sessionOk / logoutRedirecting を同じ入口で戻すように整理しました。
-4. HOPY回答○ / Compass / state_changed / 状態1..5 / DB / 左カラム / MEMORIES 本体には触っていません。
+1. useChatAuth.ts から focus / pageshow / visibilitychange のタブ復帰イベント監視を削除しました。
+2. useChatAuth.ts から recheckCurrentSession() と resumeSessionCheckInFlightRef を削除しました。
+3. タブ復帰時の正式な再同期入口を useChatInit.ts 側へ一本化しました。
+4. useChatAuth.ts は Supabase auth 初期確認、auth state change、SIGNED_OUT 処理、表示用 loggedIn / displayLoggedIn を返す責務だけに戻しました。
+5. workspace、threads、messages、profile / plan 取得本体、MEMORIES、送信には触っていません。
+6. HOPY唯一の正、confirmed payload、state_changed、HOPY回答○、Compass、状態値 1..5 / 5段階、DB保存・復元仕様には触れていません。
 */
 
 /* /components/chat/lib/useChatAuth.ts */

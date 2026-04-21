@@ -198,7 +198,16 @@ export function createInitController<TState>(args: InitControllerArgs<TState>) {
     if (initRunningRef.current) {
       const runningAgeMs = Math.max(0, now - (lastInitAtRef.current || 0));
 
-      if (!requestedForceCreate && runningAgeMs > INIT_RUNNING_STALE_MS) {
+      if (!requestedForceCreate) {
+        logWarn("[useChatInit] passive init while running -> restart", {
+          runningAgeMs,
+          clientRequestId: incomingId || undefined,
+        });
+
+        initRunningRef.current = false;
+        clearInitDebounceTimer();
+        pendingInitRef.current = null;
+      } else if (runningAgeMs > INIT_RUNNING_STALE_MS) {
         logWarn("[useChatInit] init running stale -> restart", {
           runningAgeMs,
           clientRequestId: incomingId || undefined,
@@ -504,14 +513,12 @@ session 確立後の初期化本線を持ち、profile / plan / userState、thre
 
 /*
 【今回このファイルで修正したこと】
-1. fetchUserStateOnly() に controller で確認済みの session を sessionHint として渡しました。
-2. useChatInitUserState.ts 側で削除した重複 session retry の代わりに、確認済み session を userState 復元へ渡す一本道にしました。
-3. profile / plan / userState 取得本体は useChatInitUserState.ts を呼び出すだけのまま維持しました。
-4. threads 取得本体は useChatInitThreads.ts を呼び出すだけのまま維持しました。
-5. activeThread 復元補助は useChatInitActiveThread.ts を呼び出すだけのまま維持しました。
-6. 新規 thread 作成制御は useChatInitCreateThread.ts を呼び出すだけのまま維持しました。
-7. 本文表示、messages取得、送信、MEMORIES には触れていません。
-8. HOPY唯一の正、confirmed payload、state_changed、HOPY回答○、Compass、状態値 1..5 / 5段階、DB保存・復元仕様には触れていません。
+1. initRunningRef.current が true のとき、通常 init / resume init を pending に回して止める経路を削りました。
+2. 通常 init / resume init が来た場合は、古い running 状態を破棄して、最新の init を正式ルートとして開始するようにしました。
+3. force create 中だけは、既存どおり pending に回して新規チャット作成の二重実行を避けます。
+4. getSessionWithRetry → fetchUserStateOnly → fetchThreadsWithRetry → activeThread 復元 → dispatchThreadEvent の本線は変更していません。
+5. 本文表示、messages取得、送信、MEMORIES には触れていません。
+6. HOPY唯一の正、confirmed payload、state_changed、HOPY回答○、Compass、状態値 1..5 / 5段階、DB保存・復元仕様には触れていません。
 */
 
 /* /components/chat/lib/useChatInitControllerCore.ts */

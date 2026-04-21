@@ -15,7 +15,7 @@ const SESSION_READ_TIMEOUT_MS = 1_800;
 export function isSessionUsable(
   session: Session | null | undefined
 ): session is Session {
-  return Boolean(session?.user?.id) && Boolean(String(session?.access_token ?? "").trim());
+  return Boolean(session?.user?.id);
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | null> {
@@ -158,13 +158,12 @@ session の有効判定、auth event の重複処理判定、session 再取得 r
 
 /*
 【今回このファイルで修正したこと】
-1. module 共通の sessionReadInFlight / sessionReadStartedAt を削除しました。
-2. タブ復帰直後の不安定な getSession() 結果を、後続の正式な getSessionWithRetry() が共有して巻き込まれる経路を削除しました。
-3. readSessionOnce() は、毎回その時点の supabase.auth.getSession() を timeout 付きで読むだけに戻しました。
-4. 未使用だった isSessionPresent / readPresentSession を削除しました。
-5. waitForStableSession / getSessionWithRetry の retry 幅と user.id + access_token 判定は維持しました。
-6. 初期化本体、threads、messages、profile / plan の正は作っていません。
-7. confirmed payload、HOPY唯一の正、state_changed、HOPY回答○、Compass、状態値 1..5 / 5段階、DB保存・復元仕様には触れていません。
+1. isSessionUsable() の有効判定を session.user.id のみに戻しました。
+2. タブ復帰直後に access_token 表示値の揺れだけで session なし扱いになり、init 本線へ進めない可能性を減らしました。
+3. waitForStableSession / getSessionWithRetry の retry 幅は維持しました。
+4. module 共通の sessionReadInFlight / sessionReadStartedAt は戻していません。
+5. 初期化本体、threads、messages、profile / plan の正は作っていません。
+6. confirmed payload、HOPY唯一の正、state_changed、HOPY回答○、Compass、状態値 1..5 / 5段階、DB保存・復元仕様には触れていません。
 */
 
 /* /components/chat/lib/useChatInitSession.ts */
