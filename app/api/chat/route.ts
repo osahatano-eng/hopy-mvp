@@ -217,3 +217,5 @@ Compass 観点でこのファイルの意味
 - Compass 問題の核心はこのファイルの下流にある
 - 次に追うべき実在ファイルは /app/api/chat/_lib/route/authenticated.ts
 */
+
+/* /app/api/chat/route.ts */

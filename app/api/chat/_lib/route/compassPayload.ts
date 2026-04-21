@@ -40,9 +40,10 @@ Compass 表示に必要な状態情報だけを抜き出して返す。
 
 /*
 【今回このファイルで修正したこと】
-- 消失していた /app/api/chat/_lib/route/compassPayload.ts を再構築しました。
-- このファイル内で必要最小限の CompassPayload 型を定義しました。
-- 状態値は 1..5 / 5段階で固定しました。
-- buildCompassPayload の責務や返却ロジック自体は変えていません。
+- 消失していた /app/api/chat/_lib/route/compassPayload.ts を再構築した。
+- このファイル内で必要最小限の CompassPayload 型を定義した。
+- 状態値は 1..5 / 5段階で固定した。
+- buildCompassPayload の責務や返却ロジック自体は変えていない。
+- 最下部コメントを、このファイルのフルパス表記にそろえた。
 */
-// このファイルの正式役割: assistant の確定状態から Compass 用の最小 payload を組み立てる専用ファイル
+// /app/api/chat/_lib/route/compassPayload.ts
