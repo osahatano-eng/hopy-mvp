@@ -41,6 +41,10 @@ function normalizeResolvedPlan(value: ResolvedPlanLike): string {
   return String(value ?? "").trim().toLowerCase();
 }
 
+function hasRequiredProCompassFounderSection(compassText: string): boolean {
+  return String(compassText ?? "").includes("【創業者より、あなたへ】");
+}
+
 function buildStateStructureSystem(args: {
   uiLang: Lang;
 }): string {
@@ -177,6 +181,12 @@ function buildCompassStructureSystem(args: {
       "hopy_confirmed_payload.state.state_changed=true のときは hopy_confirmed_payload.compass を必ず付けること。",
       "その場合、hopy_confirmed_payload.compass.text は必ず非空で返すこと。",
       "その場合、hopy_confirmed_payload.compass.prompt も必ず非空で返すこと。",
+      ...(plan === "pro"
+        ? [
+            "Pro では hopy_confirmed_payload.compass.text に必ず「【創業者より、あなたへ】」の見出しを含めること。",
+            "Pro では「【創業者より、あなたへ】」を省略してはならない。",
+          ]
+        : []),
       "Compass をトップレベルへ置いてはならない。",
       "本文から Compass を推測したり、fallback 文字列でごまかしたりしてはならない。",
       'reply と state を "hopy_confirmed_payload" の外へ出してはならない。',
@@ -190,6 +200,12 @@ function buildCompassStructureSystem(args: {
     'When "hopy_confirmed_payload.state.state_changed" is true, you must include "hopy_confirmed_payload.compass".',
     '"hopy_confirmed_payload.compass.text" must be non-empty in that case.',
     '"hopy_confirmed_payload.compass.prompt" must also be non-empty in that case.',
+    ...(plan === "pro"
+      ? [
+          'On Pro, "hopy_confirmed_payload.compass.text" must include the exact section heading "【創業者より、あなたへ】".',
+          'On Pro, do not omit the exact section heading "【創業者より、あなたへ】".',
+        ]
+      : []),
     "Never place Compass at the top level.",
     "Do not infer Compass from reply wording, and do not fake it with fallback text.",
     'Never place reply or state outside "hopy_confirmed_payload".',
@@ -230,6 +246,7 @@ function buildEmptyJsonRetrySystem(args: {
 
 function buildContractRetrySystem(args: {
   uiLang: Lang;
+  proCompassFounderRequired: boolean;
 }): string {
   if (args.uiLang === "ja") {
     return [
@@ -244,6 +261,12 @@ function buildContractRetrySystem(args: {
       "Free では hopy_confirmed_payload.compass を付けてはなりません。",
       "Plus / Pro では state_changed=true の回に hopy_confirmed_payload.compass.text を必ず非空で返してください。",
       "Plus / Pro では state_changed=true の回に hopy_confirmed_payload.compass.prompt も必ず非空で返してください。",
+      ...(args.proCompassFounderRequired
+        ? [
+            "Pro では state_changed=true の回に hopy_confirmed_payload.compass.text へ必ず「【創業者より、あなたへ】」の見出しを含めてください。",
+            "Pro では「【創業者より、あなたへ】」を省略してはなりません。",
+          ]
+        : []),
       "空文字や省略や fallback でごまかしてはいけません。",
       "必ず JSON object 1個だけを返してください。",
     ].join("\n");
@@ -261,6 +284,12 @@ function buildContractRetrySystem(args: {
     'On Free, do not return "hopy_confirmed_payload.compass".',
     'On Plus / Pro, when state_changed=true, "hopy_confirmed_payload.compass.text" must be non-empty.',
     'On Plus / Pro, when state_changed=true, "hopy_confirmed_payload.compass.prompt" must also be non-empty.',
+    ...(args.proCompassFounderRequired
+      ? [
+          'On Pro, when state_changed=true, "hopy_confirmed_payload.compass.text" must include the exact section heading "【創業者より、あなたへ】".',
+          'On Pro, do not omit the exact section heading "【創業者より、あなたへ】".',
+        ]
+      : []),
     "Do not fake compliance with empty strings, omissions, or fallback text.",
     "Return exactly one JSON object.",
   ].join("\n");
@@ -558,6 +587,22 @@ function detectFreePlanFromMessages(messages: OpenAIChatMessage[]): boolean {
   );
 }
 
+function detectProPlanFromMessages(messages: OpenAIChatMessage[]): boolean {
+  const joined = messages
+    .map((message) => String(message.content ?? ""))
+    .join("\n")
+    .toLowerCase();
+
+  return (
+    joined.includes(
+      "pro では hopy_confirmed_payload.compass.text に必ず「【創業者より、あなたへ】」",
+    ) ||
+    joined.includes(
+      'on pro, "hopy_confirmed_payload.compass.text" must include the exact section heading "【創業者より、あなたへ】"',
+    )
+  );
+}
+
 function ensureJsonCompletionMatchesHopyContract(args: {
   completion: Awaited<ReturnType<OpenAI["chat"]["completions"]["create"]>>;
   messages: OpenAIChatMessage[];
@@ -591,6 +636,7 @@ function ensureJsonCompletionMatchesHopyContract(args: {
 
   const compass = readOptionalObjectField(confirmedPayload, "compass");
   const isFreePlan = detectFreePlanFromMessages(args.messages);
+  const isProPlan = detectProPlanFromMessages(args.messages);
 
   if (isFreePlan) {
     if (compass) {
@@ -627,6 +673,12 @@ function ensureJsonCompletionMatchesHopyContract(args: {
   if (!compassPrompt) {
     throw new Error(
       "invalid_hopy_json_contract | plus_or_pro_requires_compass_prompt_when_state_changed",
+    );
+  }
+
+  if (isProPlan && !hasRequiredProCompassFounderSection(compassText)) {
+    throw new Error(
+      "invalid_hopy_json_contract | pro_requires_founder_compass_heading",
     );
   }
 
@@ -772,6 +824,9 @@ export async function createJsonForcedCompletion(params: {
             role: "system",
             content: buildContractRetrySystem({
               uiLang: params.replyLang,
+              proCompassFounderRequired: detectProPlanFromMessages(
+                params.messages,
+              ),
             }),
           },
           {
@@ -821,15 +876,14 @@ OpenAI completion 実行時の timeout / 一時失敗制御を担うファイル
 HOPY唯一の正に従う confirmed payload の shape を OpenAI 実行層でも強制し、
 promptBundle と history から最終 messages を構成し、
 completion 実行を安定して OpenAI 呼び出し層へ渡す責務を持つ。
+Compass本文を後付け生成せず、OpenAI返却JSONがプランごとの契約を満たしているかだけを
+確定前に検証する。
 */
 
 /*
 【今回このファイルで修正したこと】
-- buildStateMeaningSystem(...) を追加し、今回ターンのユーザー入力と今回ターンの最終返答の意味から current / prev / state_changed を確定する明示指示を OpenAI 実行層で強制するようにしました。
-- buildOpenAIMessages(...) に stateMeaningSystem を追加し、通常実行時の messages にも state 意味確定ルールを載せるようにしました。
-- createJsonForcedCompletion(...) の retryMessages 最後に stateMeaningSystem を追加し、retry 時に shape 契約だけが強く残って state 意味指示が薄まる状態を止めました。
-- 既存の timeout、single retry、plain completion、contract 検証ロジックそのものには触っていません。
+- 未使用だった isProResolvedPlan を削除した。
+- Pro Compass の契約文、retry 指示、JSON契約検証は維持した。
+- Compass本文の後付け生成、固定補完、DB、UI、state_changed、state_level / current_phase / prev系には触っていない。
 */
-
-/* /app/api/chat/_lib/route/openaiExecution.ts */
-// このファイルの正式役割: OpenAI 実行層で confirmed payload の契約を強制するファイル
+// /app/api/chat/_lib/route/openaiExecution.ts
