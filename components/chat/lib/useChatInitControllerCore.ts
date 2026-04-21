@@ -130,6 +130,9 @@ export function createInitController<TState>(args: InitControllerArgs<TState>) {
     createRequestRef,
     CREATE_REQ_REUSE_MS,
 
+    threadMutationSeqRef,
+    lastThreadMutationAtRef,
+
     dispatchThreadEvent,
   } = args;
 
@@ -159,6 +162,27 @@ export function createInitController<TState>(args: InitControllerArgs<TState>) {
     const incomingId = String(forceClientRequestId ?? "").trim();
     const requestedForceCreate = Boolean(force);
     const now = Date.now();
+    const activeThreadIdAtInitStart = String(
+      activeThreadIdShadowRef.current ?? "",
+    ).trim();
+    const threadMutationSeqAtInitStart = threadMutationSeqRef.current;
+
+    const hasExternalThreadSelectionDuringInit = () => {
+      if (requestedForceCreate) return false;
+      if (threadMutationSeqRef.current === threadMutationSeqAtInitStart) {
+        return false;
+      }
+      if (lastThreadMutationAtRef.current < now) {
+        return false;
+      }
+
+      const latestActiveThreadId = String(
+        activeThreadIdShadowRef.current ?? "",
+      ).trim();
+
+      if (!latestActiveThreadId) return false;
+      return latestActiveThreadId !== activeThreadIdAtInitStart;
+    };
 
     const queuePendingInit = (next: PendingInit) => {
       const prev = readPendingInit();
@@ -371,6 +395,18 @@ export function createInitController<TState>(args: InitControllerArgs<TState>) {
         return;
       }
 
+      if (hasExternalThreadSelectionDuringInit()) {
+        logInfo("[useChatInit] skip active thread restore (selection changed during init)", {
+          activeThreadIdAtInitStart: activeThreadIdAtInitStart || null,
+          activeThreadIdNow: String(activeThreadIdShadowRef.current ?? "").trim() || null,
+          threadMutationSeqAtInitStart,
+          threadMutationSeqNow: threadMutationSeqRef.current,
+        });
+
+        microtask(() => p.inputRef?.current?.focus?.());
+        return;
+      }
+
       let tid: string | null = null;
 
       if (wantForceCreate) {
@@ -440,7 +476,7 @@ export function createInitController<TState>(args: InitControllerArgs<TState>) {
           threads: tr.ok ? sortedList.length : "unknown",
           forced: wantForceCreate,
           threadsOk: tr.ok,
-          clientRequestId: clientRequestIdForCreate || undefined,
+          clientRequestId: clientRequestIdForCreate,
         });
       }
 
@@ -505,14 +541,11 @@ session 確立後の初期化本線を持ち、profile / plan / userState、thre
 
 /*
 【今回このファイルで修正したこと】
-1. initRunningRef.current が true のとき、通常 init / resume init を restart する処理を削除しました。
-2. runningAgeMs が INIT_RUNNING_STALE_MS を超えた本当の stale の場合だけ restart するようにしました。
-3. 通常 init / resume init が実行中に重なった場合は pending に回し、実行中の init 本線を完走させるようにしました。
-4. runningAgeMs: 8 のような正常な重なりで initSeqRef を進め、先行 init 結果を捨てる経路を止めました。
-5. force create 中も、stale でない限り pending に回して新規チャット作成の二重実行を避ける形を維持しました。
-6. getSessionWithRetry → fetchUserStateOnly → fetchThreadsWithRetry → activeThread 復元 → dispatchThreadEvent の本線は変更していません。
-7. 本文表示、messages取得、送信、MEMORIES には触れていません。
-8. HOPY唯一の正、confirmed payload、state_changed、HOPY回答○、Compass、状態値 1..5 / 5段階、DB保存・復元仕様には触れていません。
+1. threadMutationSeqRef / lastThreadMutationAtRef を受け取り、init 開始後の外部スレッド選択変化を検知するようにしました。
+2. passive init 中にユーザーが別スレッドを選択した場合、init 完了時の activeThread 復元と dispatchThreadEvent をスキップするようにしました。
+3. タブ復帰 init が遅れて完了したときに、選択中スレッドと本文を古い復元結果で上書きする経路を止めました。
+4. force create、session retry、profile / plan、threads 取得、messages取得本体には触れていません。
+5. 本文表示、送信、MEMORIES には触れていません。
+6. HOPY唯一の正、confirmed payload、state_changed、HOPY回答○、Compass、状態値 1..5 / 5段階、DB保存・復元仕様には触れていません。
 */
-
-/* /components/chat/lib/useChatInitControllerCore.ts */
+// /components/chat/lib/useChatInitControllerCore.ts

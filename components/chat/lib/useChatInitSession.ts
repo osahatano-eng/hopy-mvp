@@ -12,6 +12,8 @@ const STABLE_SESSION_DELAYS = [0, 80, 160, 260, 420, 650, 900, 1200, 1600] as co
 const SESSION_RETRY_DELAYS = [0, 80, 160, 260, 420, 650, 900, 1200, 1600, 2100, 2750] as const;
 const SESSION_READ_TIMEOUT_MS = 1_800;
 
+let sessionReadInFlight: Promise<Session | null> | null = null;
+
 export function isSessionUsable(
   session: Session | null | undefined
 ): session is Session {
@@ -39,16 +41,31 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | null> {
   });
 }
 
+function readSupabaseSessionOnce(
+  supabase: SupabaseClient<any>
+): Promise<Session | null> {
+  if (sessionReadInFlight) {
+    return sessionReadInFlight;
+  }
+
+  const next = supabase.auth
+    .getSession()
+    .then(({ data }) => data?.session ?? null)
+    .catch(() => null)
+    .finally(() => {
+      if (sessionReadInFlight === next) {
+        sessionReadInFlight = null;
+      }
+    });
+
+  sessionReadInFlight = next;
+  return next;
+}
+
 async function readSessionOnce(
   supabase: SupabaseClient<any>
 ): Promise<Session | null> {
-  return withTimeout(
-    supabase.auth
-      .getSession()
-      .then(({ data }) => data?.session ?? null)
-      .catch(() => null),
-    SESSION_READ_TIMEOUT_MS,
-  );
+  return withTimeout(readSupabaseSessionOnce(supabase), SESSION_READ_TIMEOUT_MS);
 }
 
 async function readUsableSession(
@@ -158,12 +175,11 @@ session の有効判定、auth event の重複処理判定、session 再取得 r
 
 /*
 【今回このファイルで修正したこと】
-1. isSessionUsable() の有効判定を session.user.id のみに戻しました。
-2. タブ復帰直後に access_token 表示値の揺れだけで session なし扱いになり、init 本線へ進めない可能性を減らしました。
-3. waitForStableSession / getSessionWithRetry の retry 幅は維持しました。
-4. module 共通の sessionReadInFlight / sessionReadStartedAt は戻していません。
+1. sessionReadInFlight を追加し、同時に複数の supabase.auth.getSession() を起動しないようにしました。
+2. readSessionOnce() は既存の SESSION_READ_TIMEOUT_MS を維持しつつ、裏で残る getSession() を重複起動しない形にしました。
+3. タブ復帰時に visibilitychange / pageshow / focus が近い間隔で重なっても、session 読み取りは1本にまとまるようにしました。
+4. isSessionUsable() の user.id 判定、waitForStableSession / getSessionWithRetry の retry 幅は維持しました。
 5. 初期化本体、threads、messages、profile / plan の正は作っていません。
 6. confirmed payload、HOPY唯一の正、state_changed、HOPY回答○、Compass、状態値 1..5 / 5段階、DB保存・復元仕様には触れていません。
 */
-
-/* /components/chat/lib/useChatInitSession.ts */
+// /components/chat/lib/useChatInitSession.ts
