@@ -123,7 +123,6 @@ export default function ChatClientView(props: ChatClientViewExtendedProps) {
   const {
     workspaceMode,
     guestMode,
-    busy,
     uiForComposer,
     labels,
     shouldShowGuestHero,
@@ -239,7 +238,7 @@ export default function ChatClientView(props: ChatClientViewExtendedProps) {
     shouldShowPreparing,
     showRecoverUi,
     showStuckUi,
-    shouldShowJump: !busy && !atBottom,
+    shouldShowJump: !atBottom,
     onJumpToBottom,
     jumpAria: ui.jumpAria,
     onReload: reloadPage,
@@ -368,9 +367,11 @@ Chat画面の親表示統合ファイル。
 
 /*
 【今回このファイルで修正したこと】
-1. canRunWorkspaceAction が loading によって workspace 操作全体を止めないようにしました。
-2. タブ復帰後に loading=true が残った場合でも、左カラムのスレッド選択など workspace 操作入口が動けるようにしました。
-3. 新規チャットの disableNewChat、送信の canSend、threadBusy、本文採用、confirmed payload、state_changed、HOPY回答○、Compass、DB保存・復元、1..5 の唯一の正には触っていません。
+1. jumpボタンの表示条件から busy 依存を外しました。
+2. shouldShowJump は !atBottom のみで ChatMessagePane へ渡すようにしました。
+3. busy が残っているだけで jumpボタンが消える状態を避けました。
+4. 未使用になる busy の受け取りを削除しました。
+5. 新規チャットの disableNewChat、送信の canSend、threadBusy、本文採用、confirmed payload、state_changed、HOPY回答○、Compass、DB保存・復元、1..5 の唯一の正には触っていません。
 */
 
 /* /components/chat/ChatClientView.tsx */
