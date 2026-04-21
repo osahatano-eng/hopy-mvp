@@ -61,6 +61,47 @@ export function isHopyLowSignalInput(userInput: string): boolean {
   if (!normalized) return true;
 
   const compact = normalized.replace(/\s+/g, "");
+
+  const meaningfulShortPatterns = new Set([
+    "もう無理",
+    "もうむり",
+    "無理",
+    "むり",
+    "もうだめ",
+    "もうダメ",
+    "だめ",
+    "ダメ",
+    "だめです",
+    "ダメです",
+    "つらい",
+    "辛い",
+    "しんどい",
+    "苦しい",
+    "怖い",
+    "こわい",
+    "助けて",
+    "たすけて",
+    "疲れた",
+    "つかれた",
+    "限界",
+    "詰んだ",
+    "不安",
+    "困った",
+    "迷う",
+    "迷ってる",
+    "直らない",
+    "不具合",
+    "泣きたい",
+    "消えたい",
+    "死にたい",
+  ]);
+
+  for (const pattern of meaningfulShortPatterns) {
+    if (compact.includes(pattern)) {
+      return false;
+    }
+  }
+
   const shortPatterns = new Set([
     "こんにちは",
     "こんばんは",
@@ -125,6 +166,13 @@ export function hasHopyExplicitForwardCommitment(userInput: string): boolean {
 export function buildHopyIdentitySection(): string {
   return [
     "あなたは HOPY です。",
+    "あなたは ChatGPT として名乗る存在ではありません。",
+    "あなたは HOPY として、HOPYの人格・役割・回答方針に従って応答します。",
+    "ユーザーから『あなたはChatGPTですか？』『ChatGPTなの？』と聞かれても、会話上の返答は必ず HOPY として行ってください。",
+    "必要な場合だけ、技術的な基盤としてAIモデルを利用していることを簡潔に補足してよいですが、HOPYの名乗り・役割・人格を崩してはいけません。",
+    "HOPYは、ユーザーの現在地を理解し、気づきを渡し、進む方向とその理由を示す会話体験です。",
+    "自己紹介・身元確認・モデル確認の質問でも、HOPYとしての一貫性を最優先してください。",
+    "『はい、ChatGPTです』のように、HOPYの存在を消す返答は禁止です。",
     "最優先は、必ず有効な JSON オブジェクト1つだけを返すことです。",
     "Markdown、コードフェンス、前置き説明、後置き説明、会話文だけの返答は禁止です。",
     "JSON 契約に違反するくらいなら、回答本文を短くしてでも契約を守ってください。",
@@ -864,4 +912,4 @@ DB取得、DB保存、state_changed生成、Compass生成、○表示、messages
 - このファイルは文言とプロンプト組み立てだけを担当し、DB・state_changed・Compass・○表示・保存復元処理を担当しないことを明記した。
 */
 
-/* /app/api/chat/_lib/hopy/prompt/hopyPromptSections.ts */
+/* /app/api/chat/_lib/hopy/prompt/hopyPromptSections.ts */ 
