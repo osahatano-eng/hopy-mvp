@@ -122,6 +122,15 @@ function ChatStreamInner(props: {
 
   const shouldRenderLoadingRow = loading && hasAnyRenderedMessageRows;
 
+  const bottomSpacerStyle: React.CSSProperties = useMemo(() => {
+    return {
+      height: hasAnyRenderedMessageRows
+        ? "calc(72px + env(safe-area-inset-bottom))"
+        : "0px",
+      flex: "0 0 auto",
+    };
+  }, [hasAnyRenderedMessageRows]);
+
   const messageListNode = viewItems.map((it) => {
     if (it.kind === "divider") {
       return <DayDivider key={it.key} label={it.label} />;
@@ -172,6 +181,7 @@ function ChatStreamInner(props: {
           />
         </>
 
+        <div aria-hidden="true" data-bottom-spacer="" style={bottomSpacerStyle} />
         <div ref={bottomRef} aria-hidden="true" data-bottom-anchor="" />
       </div>
     </div>
@@ -192,11 +202,11 @@ MessageRow / DayDivider / Compass / LoadingRow を描画する。
 
 /*
 【今回このファイルで修正したこと】
-1. rawRenderedMessageNodes と shouldPreferRawRenderedMessages を削除しました。
-2. 最終描画の正を viewItems 1本に固定しました。
-3. hasTrailingAssistantMessage も rendered fallback をやめ、viewItems 基準に統一しました。
-4. ChatStream が上流で落とした本文を再表示する逃げ道を止めました。
-5. HOPY唯一の正である state_changed / HOPY回答○ / Compass判定 / DB保存 / DB復元 / 1..5 の意味判定には触っていません。
+1. 本文末尾の bottom spacer を 132px から 72px に下げました。
+2. 入力欄へのかぶりを避けつつ、アクセス時に本文が上へ押し上がりすぎない位置へ戻しました。
+3. 本文がない場合は bottom spacer を 0px にしました。
+4. YOU と HOPY の1往復が見えやすい表示位置に寄せました。
+5. 本文採用、thread 判定、送信処理、jumpボタン判定、confirmed payload、state_changed、HOPY回答○、Compass、DB保存/復元、1..5 の唯一の正には触っていません。
 */
 
 /* /components/chat/view/ChatStream.tsx */

@@ -3,6 +3,8 @@
 
 import React from "react";
 
+const COMPOSER_SCROLL_OFFSET_PX = 0;
+
 function isMobileNow() {
   if (typeof window === "undefined") return false;
   return window.matchMedia && window.matchMedia("(max-width: 640px)").matches;
@@ -55,7 +57,10 @@ export function useChatViewportController(args: {
   }, [scrollerRef, updateAtBottom]);
 
   const scrollScrollerToBottom = React.useCallback(
-    (behavior: ScrollBehavior | "auto" | "smooth" = "auto") => {
+    (
+      behavior: ScrollBehavior | "auto" | "smooth" = "auto",
+      offsetFromBottomPx = 0,
+    ) => {
       atBottomRef.current = true;
       setAtBottom(true);
 
@@ -63,15 +68,41 @@ export function useChatViewportController(args: {
         const sc = scrollerRef.current;
         if (!sc) return;
 
+        const offset = Math.max(0, Number(offsetFromBottomPx) || 0);
+        const nextTop = Math.max(
+          0,
+          sc.scrollHeight - sc.clientHeight - offset,
+        );
+
         if (behavior === "smooth") {
-          sc.scrollTo({ top: sc.scrollHeight, behavior: "smooth" });
+          sc.scrollTo({ top: nextTop, behavior: "smooth" });
         } else {
-          sc.scrollTop = sc.scrollHeight;
+          sc.scrollTop = nextTop;
         }
       } catch {}
     },
     [scrollerRef, atBottomRef, setAtBottom],
   );
+
+  React.useEffect(() => {
+    const sc = scrollerRef.current;
+    if (!sc) return;
+
+    const style = sc.style as CSSStyleDeclaration & {
+      overflowAnchor?: string;
+    };
+    const previousOverflowAnchor = style.overflowAnchor ?? "";
+
+    try {
+      style.overflowAnchor = "none";
+    } catch {}
+
+    return () => {
+      try {
+        style.overflowAnchor = previousOverflowAnchor;
+      } catch {}
+    };
+  }, [scrollerRef, workspaceMode, activeThreadId]);
 
   React.useEffect(() => {
     if (typeof window === "undefined") return;
@@ -222,7 +253,7 @@ export function useChatViewportController(args: {
   const stickToBottomNow = React.useCallback(() => {
     try {
       requestAnimationFrame(() => {
-        scrollScrollerToBottom("auto");
+        scrollScrollerToBottom("auto", COMPOSER_SCROLL_OFFSET_PX);
       });
     } catch {}
   }, [scrollScrollerToBottom]);
@@ -259,10 +290,85 @@ export function useChatViewportController(args: {
     } catch {}
   }, [workspaceMode, activeThreadId, renderedLength, scrollScrollerToBottom]);
 
+  const renderedGrowthRef = React.useRef<{
+    threadId: string;
+    renderedLength: number;
+  }>({
+    threadId: "",
+    renderedLength: 0,
+  });
+
+  const skipNextGrowthScrollRef = React.useRef<{
+    threadId: string;
+    shouldSkip: boolean;
+  }>({
+    threadId: "",
+    shouldSkip: false,
+  });
+
+  React.useEffect(() => {
+    if (!workspaceMode) return;
+
+    const tid = String(activeThreadId ?? "").trim();
+    if (!tid) return;
+    if (renderedLength === 0) return;
+
+    const prev = renderedGrowthRef.current;
+    const sameThread = prev.threadId === tid;
+    const didGrow = sameThread && renderedLength > prev.renderedLength;
+
+    if (!sameThread) {
+      skipNextGrowthScrollRef.current = {
+        threadId: tid,
+        shouldSkip: false,
+      };
+    }
+
+    renderedGrowthRef.current = {
+      threadId: tid,
+      renderedLength,
+    };
+
+    if (!didGrow) return;
+
+    const shouldSkip =
+      skipNextGrowthScrollRef.current.threadId === tid &&
+      skipNextGrowthScrollRef.current.shouldSkip;
+
+    if (shouldSkip) {
+      skipNextGrowthScrollRef.current = {
+        threadId: tid,
+        shouldSkip: false,
+      };
+      return;
+    }
+
+    if (!atBottomRef.current) return;
+
+    skipNextGrowthScrollRef.current = {
+      threadId: tid,
+      shouldSkip: true,
+    };
+
+    try {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          scrollScrollerToBottom("auto", COMPOSER_SCROLL_OFFSET_PX);
+        });
+      });
+    } catch {}
+  }, [
+    workspaceMode,
+    activeThreadId,
+    renderedLength,
+    atBottomRef,
+    scrollScrollerToBottom,
+  ]);
+
   const scrollComposerAreaToBottom = React.useCallback(() => {
     try {
       requestAnimationFrame(() => {
-        scrollScrollerToBottom("auto");
+        scrollScrollerToBottom("auto", COMPOSER_SCROLL_OFFSET_PX);
       });
     } catch {}
   }, [scrollScrollerToBottom]);
@@ -299,11 +405,12 @@ SP/PC のチャット表示領域に対して、入力欄 focus 補助・最下�
 
 /*
 【今回このファイルで修正したこと】
-1. atBottom 判定を IntersectionObserver 依存だけにせず、scroller の scroll 位置からも同期する処理を追加しました。
-2. scroll / resize / activeThreadId / renderedLength 変化時に atBottom を再判定するようにしました。
-3. bottomRef の監視 effect も activeThreadId / renderedLength 変化で再接続できるようにしました。
-4. atBottom 更新を updateAtBottom に一本化し、不要な setAtBottom 連打を避けました。
-5. 本文採用、confirmed payload、state_changed、HOPY回答○、Compass、DB保存/復元、1..5 の唯一の正には触っていません。
+1. YOU送信時の停止位置を、現在のHOPY回答後の最高位置に近づけるため、COMPOSER_SCROLL_OFFSET_PX を 96 から 0 にしました。
+2. HOPY回答の高さ変化でブラウザのスクロールアンカーが働いて画面がピクっと動く可能性を抑えるため、scroller に overflow-anchor: none を適用しました。
+3. HOPY回答追加時のスクロール補正スキップ処理は維持しました。
+4. 初回アクセス時・スレッド初期表示時・jumpボタン押下時の最下部移動は維持しました。
+5. ChatComposer.tsx は確認のみで、今回の直接修正対象にはしていません。
+6. ChatStream.tsx の下余白、本文採用、送信処理、jumpボタン判定、confirmed payload、state_changed、HOPY回答○、Compass、DB保存/復元、1..5 の唯一の正には触っていません。
 */
 
 /* /components/chat/view/hooks/useChatViewportController.ts */
