@@ -358,7 +358,7 @@ export async function loadMessages(a1: any, a2?: any): Promise<ChatMsg[]> {
       .from("messages")
       .select(SELECT_COLUMNS)
       .eq("conversation_id", tid)
-      .order("created_at", { ascending: true })
+      .order("created_at", { ascending: false })
       .limit(200);
   };
 
@@ -367,7 +367,7 @@ export async function loadMessages(a1: any, a2?: any): Promise<ChatMsg[]> {
       .from("messages")
       .select("id, conversation_id, role, content, lang, created_at")
       .eq("conversation_id", tid)
-      .order("created_at", { ascending: true })
+      .order("created_at", { ascending: false })
       .limit(200);
   };
 
@@ -422,7 +422,8 @@ export async function loadMessages(a1: any, a2?: any): Promise<ChatMsg[]> {
       throw new Error(reason || "messages_load_failed");
     }
 
-    const fixed = mapRowsToMessages(Array.isArray(rows) ? rows : [], tid);
+    const orderedRows = Array.isArray(rows) ? rows.slice().reverse() : [];
+    const fixed = mapRowsToMessages(orderedRows, tid);
 
     logInfo("[threadApi] loadMessages:ok", {
       threadId: tid,
@@ -483,9 +484,8 @@ threadId
 
 /*
 【今回このファイルで修正したこと】
-1. conversation_id で取得済み rows に対する二重の thread 絞り込み関数を削除しました。
-2. loadMessages は「取得して ChatMsg[] に戻すだけ」の役割へ寄せました。
-3. retry、state 1..5、Compass、hopy_confirmed_payload、UI更新しない方針は触っていません。
+1. 古いチャットで最新の送信・回答が復元対象から漏れないように、messages 取得を created_at 降順の最新200件に変更した。
+2. 描画順は壊さないように、取得後に reverse して古い順の ChatMsg[] へ戻した。
+3. retry、state 1..5、Compass、hopy_confirmed_payload、UI更新しない方針は触っていない。
 */
-
-/* /components/chat/lib/threadApiMessages.ts */
+// /components/chat/lib/threadApiMessages.ts

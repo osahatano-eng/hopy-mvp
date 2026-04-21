@@ -1,0 +1,5 @@
+[33m26dbada[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m)[m Remove unused pro plan helper
+[33m9ea485e[m Fix compass payload footer path
+[33m1a0c9ac[m Stabilize send and reply scroll position
+[33mbd40d30[m Fix jump button bottom detection
+[33m1827b01[m Fix new chat current thread sync
