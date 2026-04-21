@@ -321,10 +321,11 @@ IME composing 判定本体は持たず、子へ渡して結果を受け取る。
 
 /*
 【今回このファイルで修正したこと】
-1. reload でだけ消える余計な送信停止 guard 候補として sendGateRef を削除しました。
-2. sendMessage の入口は loading と sendCore 内の inflightRef に一本化しました。
-3. これにより、tab復帰後に sendGateRef が残って送信だけ止まる重複ガードを減らしました。
-4. pending user message、confirmed payload、state_changed、HOPY回答○、Compass、DB保存、DB復元、1..5 の意味判定には触っていません。
+1. 前回追加した dispatchThreadsRefresh() を削除しました。
+2. runSendThreadPostProcess 完了後に hopy:threads-refresh を通知する処理を削除しました。
+3. 自動タイトル生成前の threads 再取得で「新規チャット」が反映される改悪を戻しました。
+4. onThreadIdResolved の activeThreadId 確定処理、pending user message、assistant message 反映、送信条件には触っていません。
+5. confirmed payload、state_changed、HOPY回答○、Compass、DB保存、DB復元、1..5 の意味判定には触っていません。
 */
 
 /*

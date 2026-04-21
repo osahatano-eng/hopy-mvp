@@ -198,16 +198,7 @@ export function createInitController<TState>(args: InitControllerArgs<TState>) {
     if (initRunningRef.current) {
       const runningAgeMs = Math.max(0, now - (lastInitAtRef.current || 0));
 
-      if (!requestedForceCreate) {
-        logWarn("[useChatInit] passive init while running -> restart", {
-          runningAgeMs,
-          clientRequestId: incomingId || undefined,
-        });
-
-        initRunningRef.current = false;
-        clearInitDebounceTimer();
-        pendingInitRef.current = null;
-      } else if (runningAgeMs > INIT_RUNNING_STALE_MS) {
+      if (runningAgeMs > INIT_RUNNING_STALE_MS) {
         logWarn("[useChatInit] init running stale -> restart", {
           runningAgeMs,
           clientRequestId: incomingId || undefined,
@@ -225,6 +216,7 @@ export function createInitController<TState>(args: InitControllerArgs<TState>) {
 
         logInfo("[useChatInit] init queued (running)", {
           force: requestedForceCreate,
+          runningAgeMs,
           clientRequestId: incomingId || undefined,
         });
         return;
@@ -513,12 +505,14 @@ session 確立後の初期化本線を持ち、profile / plan / userState、thre
 
 /*
 【今回このファイルで修正したこと】
-1. initRunningRef.current が true のとき、通常 init / resume init を pending に回して止める経路を削りました。
-2. 通常 init / resume init が来た場合は、古い running 状態を破棄して、最新の init を正式ルートとして開始するようにしました。
-3. force create 中だけは、既存どおり pending に回して新規チャット作成の二重実行を避けます。
-4. getSessionWithRetry → fetchUserStateOnly → fetchThreadsWithRetry → activeThread 復元 → dispatchThreadEvent の本線は変更していません。
-5. 本文表示、messages取得、送信、MEMORIES には触れていません。
-6. HOPY唯一の正、confirmed payload、state_changed、HOPY回答○、Compass、状態値 1..5 / 5段階、DB保存・復元仕様には触れていません。
+1. initRunningRef.current が true のとき、通常 init / resume init を restart する処理を削除しました。
+2. runningAgeMs が INIT_RUNNING_STALE_MS を超えた本当の stale の場合だけ restart するようにしました。
+3. 通常 init / resume init が実行中に重なった場合は pending に回し、実行中の init 本線を完走させるようにしました。
+4. runningAgeMs: 8 のような正常な重なりで initSeqRef を進め、先行 init 結果を捨てる経路を止めました。
+5. force create 中も、stale でない限り pending に回して新規チャット作成の二重実行を避ける形を維持しました。
+6. getSessionWithRetry → fetchUserStateOnly → fetchThreadsWithRetry → activeThread 復元 → dispatchThreadEvent の本線は変更していません。
+7. 本文表示、messages取得、送信、MEMORIES には触れていません。
+8. HOPY唯一の正、confirmed payload、state_changed、HOPY回答○、Compass、状態値 1..5 / 5段階、DB保存・復元仕様には触れていません。
 */
 
 /* /components/chat/lib/useChatInitControllerCore.ts */

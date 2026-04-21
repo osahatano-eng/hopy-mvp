@@ -91,18 +91,16 @@ export const ChatComposer = React.memo(function ChatComposer(props: {
   const composerPlaceholder = String(ui.placeholder ?? "").trim();
   const hasTypedInput = String(input ?? "").trim().length > 0;
 
-  const desktopComposerFrameStyle = useMemo<React.CSSProperties | undefined>(() => {
-    if (isMobile) return undefined;
+  const desktopComposerFrameStyle = useMemo<React.CSSProperties>(() => {
     return {
       width: "100%",
       maxWidth: "100%",
       minWidth: 0,
       boxSizing: "border-box",
     };
-  }, [isMobile]);
+  }, []);
 
-  const desktopComposerContentStyle = useMemo<React.CSSProperties | undefined>(() => {
-    if (isMobile) return undefined;
+  const desktopComposerContentStyle = useMemo<React.CSSProperties>(() => {
     return {
       width: "min(100%, var(--pcContentMax))",
       maxWidth: "var(--pcContentMax)",
@@ -111,7 +109,7 @@ export const ChatComposer = React.memo(function ChatComposer(props: {
       minWidth: 0,
       boxSizing: "border-box",
     };
-  }, [isMobile]);
+  }, []);
 
   const onPointerDownCapture = useCallback(() => {
     try {
@@ -350,9 +348,10 @@ export default ChatComposer;
 
 /*
 【今回このファイルで修正したこと】
-1. 再送ボタンの disabled 条件を canSendNow 連動から切り離しました。
-2. 再送ボタンは lastFailed が存在し、かつ loading 中でも threadBusy 中でもない時だけ押せるように固定しました。
-3. 通常送信ボタンの条件、HOPY回答○、Compass、state_changed、DB には触っていません。
+1. desktopComposerFrameStyle が isMobile によって undefined になる分岐を削除しました。
+2. desktopComposerContentStyle が isMobile によって undefined になる分岐を削除しました。
+3. SSR と client 初回描画で style 属性の有無がズレないようにしました。
+4. 送信条件、再送条件、HOPY回答○、Compass、state_changed、DB には触っていません。
 */
 
 /* /components/chat/view/ChatComposer.tsx */

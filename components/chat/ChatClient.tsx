@@ -42,16 +42,6 @@ import { resolveMergedUserStateForView } from "./view/resolveMergedUserStateForV
 const EMPTY_THREADS: Thread[] = [];
 const PC_RAIL_MEDIA_QUERY = "(min-width: 1024px)";
 
-function isPcRailViewport() {
-  try {
-    if (typeof window === "undefined") return false;
-    if (typeof window.matchMedia !== "function") return false;
-    return window.matchMedia(PC_RAIL_MEDIA_QUERY).matches;
-  } catch {
-    return false;
-  }
-}
-
 export default function ChatClient() {
   usePreventHorizontalScroll(true);
 
@@ -79,7 +69,7 @@ export default function ChatClient() {
   const [threadBusy, setThreadBusy] = useState(false);
 
   const [memOpen, setMemOpen] = useState(false);
-  const [railOpen, setRailOpen] = useState<boolean>(() => isPcRailViewport());
+  const [railOpen, setRailOpen] = useState(false);
 
   const [lastFailed, setLastFailed] = useState<FailedSend | null>(null);
 
@@ -477,9 +467,6 @@ export default function ChatClient() {
     ? !loading && !threadBusy && Boolean(normalizedInput)
     : !loading && Boolean(normalizedInput);
 
-  const shouldBootScreen =
-    !shouldHoldSignedOutScreen && !authReady && !displayLoggedIn && !viewLoggedIn;
-
   const disableNewChat = viewLoggedIn && loading;
 
   const shouldHoldBlankThreadStage =
@@ -502,24 +489,6 @@ export default function ChatClient() {
           background: "var(--paper, #ffffff)",
         }}
       />
-    );
-  }
-
-  if (shouldBootScreen) {
-    return (
-      <main
-        style={{
-          minHeight: "100dvh",
-          width: "100%",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: 24,
-        }}
-        aria-label="booting chat"
-      >
-        <div style={{ fontSize: 14, opacity: 0.75 }}>Loading...</div>
-      </main>
     );
   }
 
@@ -597,12 +566,12 @@ ChatClientView へ表示用の値を接続する。
 
 /*
 【今回このファイルで修正したこと】
-1. ChatClient.tsx から RESUME_DEDUPE_MS / ResumeReason / lastResumeAtRef を削除しました。
-2. ChatClient.tsx から resumeWorkspace() を削除しました。
-3. ChatClient.tsx から visibilitychange / focus / pageshow のイベント監視を削除しました。
-4. 親側で loading / threadBusy / userStateErr だけを解除する中途半端な resume route を削除し、タブ復帰時の正式な再同期入口を useChatInit 側へ一本化しました。
-5. 親ファイル内で profile / plan / messages は直接作っていません。
-6. HOPY唯一の正、confirmed payload、state_changed、HOPY回答○、Compass、状態値 1..5 / 5段階、DB保存・復元には触っていません。
+1. railOpen の初期値を window.matchMedia() 依存から false 固定に変更しました。
+2. SSR と client 初回描画で railOpen が一致するようにしました。
+3. 未使用になった isPcRailViewport() を削除しました。
+4. viewLoggedIn 後に PC 幅なら railOpen を同期する既存 effect は維持しました。
+5. profile / plan / messages / threads の取得本体、送信、MEMORIES には触っていません。
+6. HOPY唯一の正、confirmed payload、state_changed、HOPY回答○、Compass、状態値 1..5 / 5段階、DB保存・復元には触れていません。
 */
 
 /* /components/chat/ChatClient.tsx */

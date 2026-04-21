@@ -343,6 +343,54 @@ export function useChatAuth({ supabase, setEmail }: Params) {
       }
     };
 
+    const recheckCurrentSession = async () => {
+      if (!alive) return;
+      if (signedOutCauseRef.current) return;
+
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (!alive) return;
+
+        const session = data?.session ?? null;
+
+        if (session?.user) {
+          clearTransientTimer();
+          applyActiveSession(session);
+          return;
+        }
+
+        const hadUser = Boolean(String(authUserIdRef.current ?? "").trim());
+
+        if (hadUser) {
+          startSessionGrace();
+          setAuthReady(true);
+          setSessionOk(false);
+          return;
+        }
+
+        scheduleConfirmNoSession();
+      } catch {}
+    };
+
+    const onVisibilityChange = () => {
+      try {
+        if (typeof document === "undefined") return;
+        if (document.visibilityState !== "visible") return;
+      } catch {
+        return;
+      }
+
+      void recheckCurrentSession();
+    };
+
+    const onPageShow = () => {
+      void recheckCurrentSession();
+    };
+
+    const onFocus = () => {
+      void recheckCurrentSession();
+    };
+
     (async () => {
       try {
         const { data } = await supabase.auth.getSession();
@@ -383,6 +431,16 @@ export function useChatAuth({ supabase, setEmail }: Params) {
         if (alive) setAuthReady(true);
       }
     })();
+
+    try {
+      document.addEventListener("visibilitychange", onVisibilityChange as any);
+    } catch {}
+    try {
+      window.addEventListener("pageshow", onPageShow as any);
+    } catch {}
+    try {
+      window.addEventListener("focus", onFocus as any);
+    } catch {}
 
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
       if (!alive) return;
@@ -439,6 +497,16 @@ export function useChatAuth({ supabase, setEmail }: Params) {
 
     return () => {
       alive = false;
+
+      try {
+        document.removeEventListener("visibilitychange", onVisibilityChange as any);
+      } catch {}
+      try {
+        window.removeEventListener("pageshow", onPageShow as any);
+      } catch {}
+      try {
+        window.removeEventListener("focus", onFocus as any);
+      } catch {}
 
       try {
         const t = transientNullTimerRef.current;
@@ -499,15 +567,15 @@ export function useChatAuth({ supabase, setEmail }: Params) {
 /*
 このファイルの正式役割
 チャット画面の認証状態を監視し、session・logout遷移・表示用ログイン状態を安定して返すためのhook。
-workspace 再同期入口は持たない。
+workspace 再同期本体は持たない。
 */
 
 /*
 【今回このファイルで修正したこと】
-1. useChatAuth.ts から focus / pageshow / visibilitychange のタブ復帰イベント監視を削除しました。
-2. useChatAuth.ts から recheckCurrentSession() と resumeSessionCheckInFlightRef を削除しました。
-3. タブ復帰時の正式な再同期入口を useChatInit.ts 側へ一本化しました。
-4. useChatAuth.ts は Supabase auth 初期確認、auth state change、SIGNED_OUT 処理、表示用 loggedIn / displayLoggedIn を返す責務だけに戻しました。
+1. visibilitychange / pageshow / focus で現在の Supabase session を再確認する入口を戻しました。
+2. タブ復帰後に sessionOk=false 側へ落ちたままになる可能性を減らしました。
+3. 復帰時に session があれば applyActiveSession() で authReady / authUserId / email / sessionOk / displayLoggedIn の元状態を復元するようにしました。
+4. 復帰時に session がまだ見えない場合でも、本当の SIGNED_OUT でない限り workspace を直接消さず、短い grace 側に寄せました。
 5. workspace、threads、messages、profile / plan 取得本体、MEMORIES、送信には触っていません。
 6. HOPY唯一の正、confirmed payload、state_changed、HOPY回答○、Compass、状態値 1..5 / 5段階、DB保存・復元仕様には触れていません。
 */

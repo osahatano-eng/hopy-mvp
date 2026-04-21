@@ -302,7 +302,7 @@ export default function ChatHeader(props: {
   const logoutBtn = usePressFeedback();
   const closeBtn = usePressFeedback();
 
-  const [isMobile, setIsMobile] = React.useState(() => isMobileNow());
+  const [isMobile, setIsMobile] = React.useState(false);
 
   const hasEmailProp = React.useMemo(() => Boolean(String(email ?? "").trim()), [email]);
 
@@ -611,7 +611,7 @@ export default function ChatHeader(props: {
     () => ({
       width: "100%",
       textAlign: "center",
-      fontSize: isMobile ? 14 : 14,
+      fontSize: 14,
       fontWeight: 720,
       letterSpacing: isMobile ? "0.08em" : "0.1em",
       opacity: 0.94,
@@ -957,9 +957,11 @@ export default function ChatHeader(props: {
 
 /*
 【今回このファイルで修正したこと】
-1. safeGoHome() の "/" 遷移を相対指定から origin基準の絶対URL遷移へ変更しました。
-2. dev tool起動時でもログアウト後の着地点が / に固定されやすいよう、遷移先の解釈ぶれを減らしました。
-3. signOut timeout、認証掃除、メニュー表示、言語切替、HOPY唯一の正には触っていません。
+1. isMobile の初期値を isMobileNow() から false 固定へ変更しました。
+2. SSR時とclient初回描画時の header inline style が一致するようにしました。
+3. client mount後の useEffect で実際の viewport に応じて isMobile を反映する既存処理は維持しました。
+4. hydration mismatch の原因になっていた padding / letterSpacing の初回差分を抑えました。
+5. signOut timeout、認証掃除、メニュー表示、言語切替、HOPY唯一の正には触っていません。
 */
 
 /*

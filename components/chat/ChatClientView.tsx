@@ -202,8 +202,8 @@ export default function ChatClientView(props: ChatClientViewExtendedProps) {
   }, []);
 
   const canRunWorkspaceAction = React.useCallback(() => {
-    return workspaceMode && !loading;
-  }, [workspaceMode, loading]);
+    return workspaceMode;
+  }, [workspaceMode]);
 
   const { onSelectThread, onCreateThread, onRenameThread, onDeleteThread } =
     useChatClientViewThreadActions({
@@ -368,11 +368,9 @@ Chat画面の親表示統合ファイル。
 
 /*
 【今回このファイルで修正したこと】
-1. ChatMessagePane へ渡す shouldShowWorkspaceHero を shouldShowWorkspaceHeroForPane に限定しました。
-2. WorkspaceHero は shouldShowWorkspaceHero=true だけでは表示せず、shouldHoldBlankThreadStageFromClient=true のときだけ許可するようにしました。
-3. スレッド切り替え中の一時的な空状態では WorkspaceHero が出ないようにしました。
-4. 新規チャットの pending empty thread では WorkspaceHero を表示できる状態を維持しました。
-5. 本文採用、confirmed payload、state_changed、HOPY回答○、Compass、DB保存・復元、1..5 の唯一の正には触っていません。
+1. canRunWorkspaceAction が loading によって workspace 操作全体を止めないようにしました。
+2. タブ復帰後に loading=true が残った場合でも、左カラムのスレッド選択など workspace 操作入口が動けるようにしました。
+3. 新規チャットの disableNewChat、送信の canSend、threadBusy、本文採用、confirmed payload、state_changed、HOPY回答○、Compass、DB保存・復元、1..5 の唯一の正には触っていません。
 */
 
 /* /components/chat/ChatClientView.tsx */

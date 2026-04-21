@@ -58,6 +58,13 @@ function resolvePendingThreadIdFromDetail(detail: unknown) {
   return "";
 }
 
+function dispatchThreadsRefresh(detail: Record<string, unknown>) {
+  try {
+    if (typeof window === "undefined") return;
+    window.dispatchEvent(new CustomEvent("hopy:threads-refresh", { detail }));
+  } catch {}
+}
+
 function shouldAdoptResolvedThreadId(args: {
   currentThreadId: string;
   pendingThreadId: string;
@@ -67,8 +74,10 @@ function shouldAdoptResolvedThreadId(args: {
   const pending = String(args.pendingThreadId ?? "").trim();
   const resolved = String(args.resolvedThreadId ?? "").trim();
 
-  if (!resolved) return false;
+  if (!canUseResolvedThreadId(resolved)) return false;
   if (current === resolved) return true;
+  if (!current) return true;
+  if (isTemporaryGuestThreadId(current)) return true;
   if (!pending) return false;
   return current === pending;
 }
@@ -92,10 +101,12 @@ export function useChatThreadCreation(params: Params) {
       if (!displayLoggedIn) return;
 
       const tid = String(threadId ?? "").trim();
-      if (!isPendingCreationTarget(tid)) return;
+      if (!tid) return;
 
       pendingThreadTargetRef.current = tid;
       lastResolvedThreadIdRef.current = "";
+
+      if (!isPendingCreationTarget(tid)) return;
 
       const current = String(activeThreadIdRef.current ?? "").trim();
       if (current === tid) return;
@@ -212,7 +223,7 @@ export function useChatThreadCreation(params: Params) {
       if (!displayLoggedIn) return;
 
       const tid = String(id ?? "").trim();
-      if (!tid) return;
+      if (!canUseResolvedThreadId(tid)) return;
 
       const current = String(activeThreadIdRef.current ?? "").trim();
       const pendingThreadId = pendingThreadTargetRef.current.trim();
@@ -239,6 +250,13 @@ export function useChatThreadCreation(params: Params) {
       setActiveThreadId(tid);
       setVisibleCount(200);
       setUserStateErr(null);
+
+      dispatchThreadsRefresh({
+        reason: "thread-resolved",
+        id: tid,
+        threadId: tid,
+        thread_id: tid,
+      });
     },
     [
       displayLoggedIn,
@@ -266,11 +284,11 @@ blank stage へ入るための表示対象切替も担当する。
 
 /*
 【今回このファイルで修正したこと】
-1. pending target は temporary id だけを採用するように絞りました。
-2. pendingThreadTargetRef を追加し、新規チャット起点の一時 target をこのファイル内で1つだけ保持するようにしました。
-3. onThreadIdResolved は、現在の表示 target がその pending target と一致している場合だけ resolved thread_id を採用するようにしました。
-4. これにより、遅れて返ってきた旧作成結果が通常のスレッド選択を上書きしにくい形へ戻しました。
-5. HOPY回答○、Compass、confirmed payload、DB保存/復元、state 1..5 の唯一の正には触っていません。
+1. pendingThreadTargetRef が temporary id 以外の clientRequestId も保持できるようにしました。
+2. activeThreadId が空、または temporary id のままの場合でも、実DBの resolved thread_id を active として採用できるようにしました。
+3. resolvedThreadId が temporary id の場合は採用しないように、onThreadIdResolved 側も canUseResolvedThreadId() で統一しました。
+4. 新規チャット送信後、本文側の実 thread_id と左カラムの activeThreadId が一致しやすい経路へ戻しました。
+5. 本文読込、送信本体、HOPY回答○、Compass、confirmed payload、DB保存/復元、state 1..5 の唯一の正には触っていません。
 */
 
 /* /components/chat/lib/useChatThreadCreation.ts */

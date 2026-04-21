@@ -17,14 +17,53 @@ type Result = {
   resolvedActiveThreadState: ConfirmedThreadState | null;
 };
 
+function resolveConfirmedStateFromSource(
+  source: Partial<ConfirmedThreadState> | HopyState | null
+): ConfirmedThreadState | null {
+  if (!source || typeof source !== "object") return null;
+
+  const sourceAny = source as Partial<ConfirmedThreadState>;
+
+  const currentPhase =
+    clampStatePhase(sourceAny.current_phase) ??
+    clampStatePhase(sourceAny.state_level);
+
+  if (!currentPhase) return null;
+
+  const stateLevel =
+    clampStatePhase(sourceAny.state_level) ??
+    currentPhase;
+
+  const prevPhase =
+    clampStatePhase(sourceAny.prev_phase) ??
+    clampStatePhase(sourceAny.prev_state_level) ??
+    currentPhase;
+
+  const prevStateLevel =
+    clampStatePhase(sourceAny.prev_state_level) ??
+    clampStatePhase(sourceAny.prev_phase) ??
+    stateLevel;
+
+  const stateChanged =
+    typeof sourceAny.state_changed === "boolean"
+      ? sourceAny.state_changed
+      : false;
+
+  return {
+    current_phase: currentPhase,
+    state_level: stateLevel,
+    prev_phase: prevPhase,
+    prev_state_level: prevStateLevel,
+    state_changed: stateChanged,
+  };
+}
+
 export function resolveActiveThreadStateForView({
   displayLoggedIn,
   isViewingPendingEmptyThread,
   viewActiveThread,
-  normalizedResolvedViewUserState: _normalizedResolvedViewUserState,
+  normalizedResolvedViewUserState,
 }: Params): Result {
-  void _normalizedResolvedViewUserState;
-
   const resolvedActiveThreadForView = useMemo(() => {
     if (!displayLoggedIn) return null;
     if (isViewingPendingEmptyThread) return null;
@@ -35,35 +74,20 @@ export function resolveActiveThreadStateForView({
   const resolvedActiveThreadState = useMemo<ConfirmedThreadState | null>(() => {
     if (!displayLoggedIn) return null;
     if (isViewingPendingEmptyThread) return null;
-    if (!resolvedActiveThreadForView) return null;
 
-    const source = resolvedActiveThreadForView as Partial<ConfirmedThreadState> | null;
-    if (!source) return null;
+    const stateFromActiveThread = resolveConfirmedStateFromSource(
+      resolvedActiveThreadForView as Partial<ConfirmedThreadState> | null
+    );
 
-    const currentPhase = clampStatePhase(source.current_phase);
-    const stateLevel = clampStatePhase(source.state_level);
-    const prevPhase = clampStatePhase(source.prev_phase);
-    const prevStateLevel = clampStatePhase(source.prev_state_level);
-    const stateChanged = source.state_changed;
+    if (stateFromActiveThread) return stateFromActiveThread;
 
-    if (
-      !currentPhase ||
-      !stateLevel ||
-      !prevPhase ||
-      !prevStateLevel ||
-      typeof stateChanged !== "boolean"
-    ) {
-      return null;
-    }
-
-    return {
-      current_phase: currentPhase,
-      state_level: stateLevel,
-      prev_phase: prevPhase,
-      prev_state_level: prevStateLevel,
-      state_changed: stateChanged,
-    };
-  }, [displayLoggedIn, isViewingPendingEmptyThread, resolvedActiveThreadForView]);
+    return resolveConfirmedStateFromSource(normalizedResolvedViewUserState);
+  }, [
+    displayLoggedIn,
+    isViewingPendingEmptyThread,
+    resolvedActiveThreadForView,
+    normalizedResolvedViewUserState,
+  ]);
 
   return {
     resolvedActiveThreadForView,
@@ -80,10 +104,11 @@ ChatClient 親本体から、表示用の activeThread 解決と activeThreadSta
 
 /*
 【今回このファイルで修正したこと】
-1. normalizedResolvedViewUserState を使った fallback 補完を削除しました。
-2. resolvedActiveThreadState は、active thread 自身が持つ確定値だけを採用する形に戻しました。
-3. current_phase / state_level / prev_phase / prev_state_level / state_changed のどれかが欠けている場合は、補わず null を返す形にしました。
-4. HOPY回答○、Compass、送信処理、DB保存、DB復元、他ファイルには触っていません。
+1. normalizedResolvedViewUserState を捨てていた void 処理を削除しました。
+2. active thread 自身に表示用状態がない場合、本文側の確定済み viewUserState を activeThreadState として使えるようにしました。
+3. 新規チャット送信直後に、本文側で確定した状態が左カラムの Current Chat 表示条件へ届く経路を戻しました。
+4. 状態値は 1..5 / 5段階だけを通し、0..4 前提にはしていません。
+5. HOPY回答○、Compass、送信処理、DB保存、DB復元、他ファイルには触っていません。
 */
 
 /* /components/chat/view/resolveActiveThreadStateForView.ts */

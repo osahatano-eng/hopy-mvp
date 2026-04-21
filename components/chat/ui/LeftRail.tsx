@@ -124,6 +124,16 @@ export default function LeftRail(props: LeftRailProps) {
     return resolveConfirmedThreadState(activeThreadState);
   }, [activeThreadState]);
 
+  const resolvedActiveThreadStateFromThread = React.useMemo<LeftRailProps["activeThreadState"]>(() => {
+    return resolveConfirmedThreadState(
+      activeThread as LeftRailProps["activeThreadState"]
+    );
+  }, [activeThread]);
+
+  const resolvedActiveThreadStateForRail = React.useMemo<LeftRailProps["activeThreadState"]>(() => {
+    return resolvedDirectActiveThreadState ?? resolvedActiveThreadStateFromThread;
+  }, [resolvedDirectActiveThreadState, resolvedActiveThreadStateFromThread]);
+
   const controllerProps = React.useMemo<LeftRailProps>(
     () => ({
       uiLang,
@@ -136,7 +146,7 @@ export default function LeftRail(props: LeftRailProps) {
       threads,
       activeThreadId,
       activeThread,
-      activeThreadState: resolvedDirectActiveThreadState,
+      activeThreadState: resolvedActiveThreadStateForRail,
       onSelectThread,
       onCreateThread,
       onRenameThread,
@@ -153,7 +163,7 @@ export default function LeftRail(props: LeftRailProps) {
       threads,
       activeThreadId,
       activeThread,
-      resolvedDirectActiveThreadState,
+      resolvedActiveThreadStateForRail,
       onSelectThread,
       onCreateThread,
       onRenameThread,
@@ -192,8 +202,8 @@ export default function LeftRail(props: LeftRailProps) {
   void showCloseBtn;
 
   const displayActiveThreadState = React.useMemo<HopyState | undefined>(() => {
-    return resolveDisplayActiveThreadState(resolvedDirectActiveThreadState);
-  }, [resolvedDirectActiveThreadState]);
+    return resolveDisplayActiveThreadState(resolvedActiveThreadStateForRail);
+  }, [resolvedActiveThreadStateForRail]);
 
   const {
     overlayStyle,
@@ -536,9 +546,10 @@ export default function LeftRail(props: LeftRailProps) {
 
 /*
 【今回このファイルで修正したこと】
-1. スレッド選択押下時の処理を、親から受け取った onSelectThread() の直接実行ではなく、useLeftRailController の emitSelectThread() 経由へ戻しました。
-2. emitSelectThread() の fallback dispatch 経路を復活させ、親側の onSelectThread が不安定な場合でも hopy:select-thread へ流れる余地を戻しました。
-3. New Chat、状態表示、メモリーズ、Recover、左下アカウント表示、HOPY唯一の正、state_changed、Compass、DB保存・復元には触っていません。
+1. activeThreadState だけでなく、activeThread 側に含まれる確定済み 1..5 状態も Current Chat 表示に使えるようにしました。
+2. Current Chat の表示判定に使う状態を resolvedActiveThreadStateForRail に一本化しました。
+3. useLeftRailController に渡す activeThreadState も resolvedActiveThreadStateForRail に統一しました。
+4. 状態の再判定、state_changed の再計算、HOPY回答○、Compass、DB保存・復元には触っていません。
 */
 
 /* /components/chat/ui/LeftRail.tsx */

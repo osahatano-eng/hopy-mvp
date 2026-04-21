@@ -6,6 +6,8 @@ import type { Session, SupabaseClient } from "@supabase/supabase-js";
 
 import { errText, logWarn } from "./useChatInitUtils";
 
+const USER_STATE_READ_TIMEOUT_MS = 1_800;
+
 export type UseChatInitUserStateParams<TState> = {
   supabase: SupabaseClient<any>;
 
@@ -14,6 +16,33 @@ export type UseChatInitUserStateParams<TState> = {
 
   normalizeState: (x: any) => TState | null;
 };
+
+type ProfileReadResult = {
+  data: any;
+  error: any;
+  timedOut?: boolean;
+};
+
+function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  let timer: number | null = null;
+
+  return Promise.race<T>([
+    promise,
+    new Promise<T>((resolve) => {
+      try {
+        timer = window.setTimeout(() => resolve(fallback), ms);
+      } catch {
+        resolve(fallback);
+      }
+    }),
+  ]).finally(() => {
+    if (timer != null) {
+      try {
+        window.clearTimeout(timer);
+      } catch {}
+    }
+  });
+}
 
 export async function fetchUserStateOnly<TState>(args: {
   isAlive: () => boolean;
@@ -47,19 +76,28 @@ export async function fetchUserStateOnly<TState>(args: {
     const resolvedUserImageUrl =
       String(metadata?.avatar_url ?? metadata?.picture ?? "").trim() || null;
 
-    const { data: profileRow, error: profileError } = await p.supabase
-      .from("profiles")
-      .select("plan")
-      .eq("user_id", userId)
-      .maybeSingle();
+    const profileResult = await withTimeout<ProfileReadResult>(
+      p.supabase
+        .from("profiles")
+        .select("plan")
+        .eq("user_id", userId)
+        .maybeSingle() as unknown as Promise<ProfileReadResult>,
+      USER_STATE_READ_TIMEOUT_MS,
+      { data: null, error: null, timedOut: true },
+    );
 
     if (!isAlive()) return;
     if (seq !== initSeqRef.current) return;
 
-    if (profileError) {
-      throw profileError;
+    if (profileResult?.error) {
+      throw profileResult.error;
     }
 
+    if (profileResult?.timedOut) {
+      logWarn("[useChatInit] fetchUserStateOnly profile timed out -> continue");
+    }
+
+    const profileRow = profileResult?.data ?? null;
     const resolvedPlan = String((profileRow as any)?.plan ?? "").trim() || null;
 
     const rawState = {
@@ -117,13 +155,11 @@ threads / activeThread / messages / 新規thread作成 / HOPY状態 / Compass / 
 
 /*
 【今回このファイルで修正したこと】
-1. fetchUserStateOnly() 内の重複した getSessionWithRetry() を削除しました。
-2. controller 側で session 確認済みのあとに、profile / plan 取得前でもう一度 session retry へ戻る経路を削除しました。
-3. profiles.plan 取得をこのファイルの本線として先に進める形へ戻しました。
-4. session 情報は sessionHint が渡された場合だけ userState へ反映する形にしました。
-5. 現時点では sessionHint を渡す側のファイルはまだ触っていません。
-6. このファイルは threads取得、activeThread復元、新規thread作成制御、本文表示、送信、MEMORIES には触れていません。
-7. HOPY唯一の正、confirmed payload、state_changed、HOPY回答○、Compass、状態値 1..5 / 5段階、DB保存・復元仕様には触れていません。
+1. profiles.plan 取得に USER_STATE_READ_TIMEOUT_MS を追加しました。
+2. タブ復帰後に profiles 取得が戻らない場合でも、fetchUserStateOnly() 全体が止まり続けないようにしました。
+3. profile 取得 timeout 時は plan=null の userState を作り、controller.init() が threads 取得へ進める余地を残しました。
+4. session 再判定、threads 取得、messages 取得、本文表示、送信、MEMORIES には触っていません。
+5. HOPY唯一の正、confirmed payload、state_changed、HOPY回答○、Compass、状態値 1..5 / 5段階、DB保存・復元仕様には触れていません。
 */
 
 /* /components/chat/lib/useChatInitUserState.ts */

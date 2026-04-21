@@ -293,6 +293,19 @@ export function useChatInit<TState>(params: UseChatInitParams<TState>) {
       void (async () => {
         if (!isAlive()) return;
 
+        logInfo("[useChatInit] resume -> stable session check", { reason });
+
+        const session = await waitForStableSession({ isAlive, supabase });
+        if (!isAlive()) return;
+
+        if (!session) {
+          lastResumeAtRef.current = 0;
+          logInfo("[useChatInit] resume -> keep workspace (session pending)", {
+            reason,
+          });
+          return;
+        }
+
         const now = Date.now();
         const lastResumeAt = lastResumeAtRef.current;
 
@@ -305,18 +318,6 @@ export function useChatInit<TState>(params: UseChatInitParams<TState>) {
         }
 
         lastResumeAtRef.current = now;
-
-        logInfo("[useChatInit] resume -> stable session check", { reason });
-
-        const session = await waitForStableSession({ isAlive, supabase });
-        if (!isAlive()) return;
-
-        if (!session) {
-          logInfo("[useChatInit] resume -> keep workspace (session pending)", {
-            reason,
-          });
-          return;
-        }
 
         logInfo("[useChatInit] resume -> init", { reason });
 
@@ -473,10 +474,10 @@ workspace 再開入口と、正式な select-thread 観測だけを扱う。
 
 /*
 【今回このファイルで修正したこと】
-1. resumeInit() が controller.init(false, null) を直接呼ばないようにしました。
-2. タブ復帰時に waitForStableSession() で session を再確認してから controller.init(false, session) へ進む一本道にしました。
-3. session pending の場合は workspace を消さず、その回の resume だけ止める形にしました。
-4. visibilitychange / pageshow / focus の入口、短い dedupe、本当のログアウト時だけ reset() する責務は維持しました。
+1. resumeInit() の dedupe 判定を、session 確認前ではなく session 確認後へ移動しました。
+2. session pending の時点で lastResumeAtRef を消費しないようにしました。
+3. session pending の場合は lastResumeAtRef を 0 に戻し、その後の pageshow / focus / visibilitychange が正式 init へ進める余地を残しました。
+4. タブ復帰時の正式ルートを「resume event → session 再確認 → session がある場合だけ短い dedupe → controller.init(false, session)」に整理しました。
 5. confirmed payload、state_changed、HOPY回答○、Compass、状態値 1..5、本文採用判定、DB保存/復元仕様には触っていません。
 */
 
