@@ -25,16 +25,24 @@ export function buildStateStructureSystem(args: {
       "state_changed は shape の飾りではない。",
       "state_changed は、その回に HOPY が確定した状態変化の正をそのまま返すこと。",
       "state_changed を false に固定したり、無難だから false にしたりしてはならない。",
-      "固定コピー防止のため、この指示内では current_phase / state_level / prev_phase / prev_state_level / state_changed の実例値を示さない。",
+      "下の JSON は出力形を守るための構造例であり、state の数値や boolean は固定値ではない。",
+      "この例の current_phase / state_level / prev_phase / prev_state_level / state_changed は、今回ターンの意味で必ず決め直すこと。",
       '"confirmed_memory_candidates" は必須で、配列にすること。',
-      "正式構造:",
-      "- hopy_confirmed_payload.reply: string",
-      "- hopy_confirmed_payload.state.current_phase: 1|2|3|4|5",
-      "- hopy_confirmed_payload.state.state_level: 1|2|3|4|5",
-      "- hopy_confirmed_payload.state.prev_phase: 1|2|3|4|5",
-      "- hopy_confirmed_payload.state.prev_state_level: 1|2|3|4|5",
-      "- hopy_confirmed_payload.state.state_changed: boolean",
-      "- confirmed_memory_candidates: array",
+      "正式JSON構造例:",
+      "{",
+      '  "hopy_confirmed_payload": {',
+      '    "reply": "HOPYの本文",',
+      '    "state": {',
+      '      "current_phase": 3,',
+      '      "state_level": 3,',
+      '      "prev_phase": 2,',
+      '      "prev_state_level": 2,',
+      '      "state_changed": true',
+      "    }",
+      "  },",
+      '  "confirmed_memory_candidates": []',
+      "}",
+      "重要: 上の 3 / 2 / true は固定コピー禁止。今回ターンに合わない場合は必ず変更すること。",
     ].join("\n");
   }
 
@@ -53,16 +61,24 @@ export function buildStateStructureSystem(args: {
     "state_changed is not decorative shape data.",
     "state_changed must reflect HOPY's confirmed transition truth for this turn.",
     "Do not default state_changed to false just because it looks safer.",
-    "To prevent fixed-value copying, this instruction does not show example values for current_phase, state_level, prev_phase, prev_state_level, or state_changed.",
+    "The JSON below is a structure example for valid output. The state numbers and boolean are not fixed values.",
+    "You must decide current_phase, state_level, prev_phase, prev_state_level, and state_changed from this turn's meaning.",
     '"confirmed_memory_candidates" is required and must be an array.',
-    "Official structure:",
-    "- hopy_confirmed_payload.reply: string",
-    "- hopy_confirmed_payload.state.current_phase: 1|2|3|4|5",
-    "- hopy_confirmed_payload.state.state_level: 1|2|3|4|5",
-    "- hopy_confirmed_payload.state.prev_phase: 1|2|3|4|5",
-    "- hopy_confirmed_payload.state.prev_state_level: 1|2|3|4|5",
-    "- hopy_confirmed_payload.state.state_changed: boolean",
-    "- confirmed_memory_candidates: array",
+    "Official JSON structure example:",
+    "{",
+    '  "hopy_confirmed_payload": {',
+    '    "reply": "main reply",',
+    '    "state": {',
+    '      "current_phase": 3,',
+    '      "state_level": 3,',
+    '      "prev_phase": 2,',
+    '      "prev_state_level": 2,',
+    '      "state_changed": true',
+    "    }",
+    "  },",
+    '  "confirmed_memory_candidates": []',
+    "}",
+    "Important: the 3 / 2 / true values above must not be copied blindly. Change them whenever they do not match this turn.",
   ].join("\n");
 }
 
@@ -78,7 +94,10 @@ export function buildStateMeaningSystem(args: {
       "入力前状態をそのまま current に持ち込んではならない。",
       "current と prev の意味が異なるなら state_changed=true にすること。",
       "current と prev の意味が同じときだけ state_changed=false にしてよい。",
-      "『整理できた』『やることが見えてきた』『次の一歩が見えた』『方向が定まった』など前進意味なのに、prev=1 / current=1 / state_changed=false の固定コピーで逃げてはならない。",
+      "HOPYが候補から一つを提案しただけでは、ユーザーの状態が整理へ確定したとは限らない。",
+      "ユーザーがまだ『どれを選ぶべきか』をHOPYに委ねている場合は、候補があっても混線または模索のままでよい。",
+      "ユーザー自身が『これに決めました』『この順番で進めます』『理由はこうです』のように選択・理由・採用を明示した場合は、整理または収束へ進みやすい。",
+      "『整理できた』『やることが見えてきた』『次の一歩が見えた』『方向が定まった』など前進意味なのに、固定値コピーで逃げてはならない。",
       "下流は再判定しないため、このターンで自分が確定した真値をそのまま返すこと。",
     ].join("\n");
   }
@@ -91,7 +110,10 @@ export function buildStateMeaningSystem(args: {
     "Do not carry the pre-turn state into current unchanged by default.",
     "If current and prev differ in meaning, set state_changed=true.",
     "Set state_changed=false only when current and prev truly mean the same state.",
-    'Do not escape with a copied prev=1 / current=1 / state_changed=false pattern when the reply clearly means progress such as "things became clearer", "the next step became visible", or "direction was found".',
+    "When HOPY merely chooses one option for the user, the user's state is not necessarily confirmed as organized.",
+    "If the user is still asking HOPY to choose what to pick, the state may remain mixed or exploring even when options exist.",
+    'If the user explicitly says something like "I decided", "I will proceed in this order", or gives their own reason for adopting an option, the state is more likely to move into organized or converging.',
+    'Do not escape with fixed copied values when the turn clearly means progress such as "things became clearer", "the next step became visible", or "direction was found".',
     "Downstream will not re-judge this, so return the truth you confirmed in this turn.",
   ].join("\n");
 }
@@ -164,6 +186,7 @@ export function buildEmptyJsonRetrySystem(args: {
       '"confirmed_memory_candidates" は空配列でもよいので必ず返してください。',
       "top-level の reply / state / compassText / compassPrompt は禁止です。",
       "state_changed を false に固定して逃げてはいけません。",
+      "JSON object の外に説明文を出してはいけません。",
     ].join("\n");
   }
 
@@ -178,6 +201,7 @@ export function buildEmptyJsonRetrySystem(args: {
     '"confirmed_memory_candidates" may be empty but must be present.',
     "Top-level reply, state, compassText, and compassPrompt are forbidden.",
     "Do not escape by defaulting state_changed to false.",
+    "Do not output any explanation outside the JSON object.",
   ].join("\n");
 }
 
@@ -199,6 +223,22 @@ export function buildContractRetrySystem(args: {
       "Plus / Pro では state_changed=true の回に hopy_confirmed_payload.compass.prompt も必ず非空で返してください。",
       "空文字や省略や fallback でごまかしてはいけません。",
       "必ず JSON object 1個だけを返してください。",
+      "JSON object の外に説明文を出してはいけません。",
+      "正式JSON構造例:",
+      "{",
+      '  "hopy_confirmed_payload": {',
+      '    "reply": "HOPYの本文",',
+      '    "state": {',
+      '      "current_phase": 3,',
+      '      "state_level": 3,',
+      '      "prev_phase": 2,',
+      '      "prev_state_level": 2,',
+      '      "state_changed": true',
+      "    }",
+      "  },",
+      '  "confirmed_memory_candidates": []',
+      "}",
+      "重要: 上の 3 / 2 / true は固定コピー禁止。今回ターンに合わない場合は必ず変更すること。",
     ].join("\n");
   }
 
@@ -216,6 +256,22 @@ export function buildContractRetrySystem(args: {
     'On Plus / Pro, when state_changed=true, "hopy_confirmed_payload.compass.prompt" must also be non-empty.',
     "Do not fake compliance with empty strings, omissions, or fallback text.",
     "Return exactly one JSON object.",
+    "Do not output any explanation outside the JSON object.",
+    "Official JSON structure example:",
+    "{",
+    '  "hopy_confirmed_payload": {',
+    '    "reply": "main reply",',
+    '    "state": {',
+    '      "current_phase": 3,',
+    '      "state_level": 3,',
+    '      "prev_phase": 2,',
+    '      "prev_state_level": 2,',
+    '      "state_changed": true',
+    "    }",
+    "  },",
+    '  "confirmed_memory_candidates": []',
+    "}",
+    "Important: the 3 / 2 / true values above must not be copied blindly. Change them whenever they do not match this turn.",
   ].join("\n");
 }
 
@@ -228,9 +284,10 @@ OpenAI completion 実行、timeout / retry 実行、JSON parse、契約検証、
 
 /*
 【今回このファイルで修正したこと】
-- buildStateStructureSystem(...) 内の正式shapeから、current_phase: 1 / state_level: 1 / prev_phase: 1 / prev_state_level: 1 / state_changed: false の固定値例を削除しました。
-- JSON shape の実例ではなく、必要なキーと型だけを示す正式構造へ変更しました。
-- モデルが shape 例の 1 / false を固定コピーして、2発話目以降も 1=混線 / state_changed=false のまま返す危険を下げました。
+- buildStateStructureSystem(...) に JSON object の正式構造例を戻し、parse_failed の危険を下げました。
+- ただし current_phase: 1 / state_level: 1 / prev_phase: 1 / prev_state_level: 1 / state_changed: false の固定コピーを避けるため、構造例の state 値は 3 / 2 / true にし、固定コピー禁止を明記しました。
+- buildStateMeaningSystem(...) に、HOPYが一つを提案しただけではユーザーの整理確定ではないこと、ユーザー自身の選択・理由・採用が整理/収束の信号になることを追加しました。
+- buildContractRetrySystem(...) に JSON object の正式構造例を戻し、retry 時も JSON 形が崩れにくいようにしました。
 - state値は 1..5 / 5段階のまま維持し、0..4 前提にはしていません。
 - HOPY唯一の正、Compass判定、DB保存復元、OpenAI実行処理、JSON契約検証処理はこのファイルでは再判定・再生成していません。
 */
