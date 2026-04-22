@@ -2,98 +2,22 @@
 import OpenAI from "openai";
 
 import { ensureJsonCompletionIsValid } from "../hopy/contract/hopyJsonCompletionContract";
+import type { OpenAIChatMessage } from "../hopy/openai/hopyOpenAIMessages";
 import { withSingleRetry, withTimeout } from "../hopy/openai/hopyOpenAIRetry";
 import {
-  buildCompassStructureSystem,
   buildContractRetrySystem,
   buildEmptyJsonRetrySystem,
   buildStateMeaningSystem,
-  buildStateStructureSystem,
 } from "../hopy/prompt/hopyOpenAIJsonContractPrompt";
 import { phaseParams } from "../phase/phaseParams";
 import type { Lang } from "../router/simpleRouter";
-import type { PromptBundle } from "./promptBundle";
-import type { ResolvedPlanLike } from "./openaiPlan";
-import {
-  memoryOutputContractSystem,
-  planPrioritySystem,
-} from "./openaiContracts";
-import { buildFinalHistory } from "./history";
 
+export { buildOpenAIMessages } from "../hopy/openai/hopyOpenAIMessages";
+export type {
+  HistoryItem,
+  OpenAIChatMessage,
+} from "../hopy/openai/hopyOpenAIMessages";
 export { withTimeout } from "../hopy/openai/hopyOpenAIRetry";
-
-export type HistoryItem = {
-  role: "user" | "assistant";
-  content: string;
-};
-
-export type OpenAIChatMessage = {
-  role: "system" | "user" | "assistant";
-  content: string;
-};
-
-export function buildOpenAIMessages(args: {
-  promptBundle: PromptBundle;
-  history: HistoryItem[];
-  userText: string;
-  replyLang: Lang;
-  resolvedPlan: ResolvedPlanLike;
-}): OpenAIChatMessage[] {
-  const finalHistory = buildFinalHistory({
-    history: args.history,
-    userText: args.userText,
-    resolvedPlan: args.resolvedPlan,
-  });
-
-  const normalizedHopyUserPrompt = String(
-    args.promptBundle.userPrompt ?? "",
-  ).trim();
-
-  const stateStructureSystem = buildStateStructureSystem({
-    uiLang: args.replyLang,
-  });
-
-  const stateMeaningSystem = buildStateMeaningSystem({
-    uiLang: args.replyLang,
-  });
-
-  const compassStructureSystem = buildCompassStructureSystem({
-    uiLang: args.replyLang,
-    resolvedPlan: args.resolvedPlan,
-  });
-
-  return [
-    { role: "system", content: args.promptBundle.coreSystemPrompt },
-    { role: "system", content: args.promptBundle.baseSystemPrompt },
-    { role: "system", content: args.promptBundle.continuitySystemPrompt },
-    { role: "system", content: args.promptBundle.personaSystemPrompt },
-    { role: "system", content: args.promptBundle.styleSystemPrompt },
-    {
-      role: "system",
-      content: planPrioritySystem({
-        uiLang: args.replyLang,
-        resolvedPlan: args.resolvedPlan,
-      }),
-    },
-    ...(stateStructureSystem
-      ? [{ role: "system" as const, content: stateStructureSystem }]
-      : []),
-    ...(stateMeaningSystem
-      ? [{ role: "system" as const, content: stateMeaningSystem }]
-      : []),
-    ...(compassStructureSystem
-      ? [{ role: "system" as const, content: compassStructureSystem }]
-      : []),
-    { role: "system", content: args.promptBundle.antiPlatitudePrompt },
-    { role: "system", content: args.promptBundle.complianceSystemPrompt },
-    { role: "system", content: args.promptBundle.replyLanguageLockPrompt },
-    { role: "system", content: memoryOutputContractSystem(args.replyLang) },
-    ...(normalizedHopyUserPrompt
-      ? [{ role: "system" as const, content: normalizedHopyUserPrompt }]
-      : []),
-    ...finalHistory.map((m) => ({ role: m.role, content: m.content })),
-  ];
-}
 
 async function runJsonForcedCompletion(params: {
   openai: OpenAI;
@@ -204,8 +128,9 @@ export async function createPlainCompletion(params: {
 
 /*
 このファイルの正式役割:
-OpenAI へ渡す messages の組み立てと、
 OpenAI completion 実行本体を担うファイル。
+OpenAI へ渡す messages の組み立ては、
+/app/api/chat/_lib/hopy/openai/hopyOpenAIMessages.ts から読み込む。
 HOPY JSON 契約プロンプト文言は、
 /app/api/chat/_lib/hopy/prompt/hopyOpenAIJsonContractPrompt.ts から読み込む。
 HOPY confirmed payload の JSON 契約検証は、
@@ -213,16 +138,16 @@ HOPY confirmed payload の JSON 契約検証は、
 OpenAI completion 実行時の timeout / single retry は、
 /app/api/chat/_lib/hopy/openai/hopyOpenAIRetry.ts から読み込む。
 このファイルは OpenAI 実行層として、
-promptBundle と history から最終 messages を構成し、
 completion 実行を安定して OpenAI 呼び出し層へ渡す責務を持つ。
 */
 
 /*
 【今回このファイルで修正したこと】
-- timeout / retry 責務を /app/api/chat/_lib/hopy/openai/hopyOpenAIRetry.ts へ移し、このファイルでは withTimeout(...) / withSingleRetry(...) を import して使うだけにしました。
-- sleep(...)、isRetryableOpenAIError(...)、withSingleRetry(...) の本体をこのファイルから削除しました。
-- 既存互換のため withTimeout はこのファイルからも re-export し、他ファイルが既存 import を使っていても壊れにくい形にしました。
-- OpenAI 実行、plain completion、messages 組み立て、JSON契約検証、state値 1..5、Compass契約条件は変更していません。
+- messages 組み立て責務を /app/api/chat/_lib/hopy/openai/hopyOpenAIMessages.ts へ移し、このファイルでは buildOpenAIMessages(...) を re-export するだけにしました。
+- HistoryItem / OpenAIChatMessage 型も /app/api/chat/_lib/hopy/openai/hopyOpenAIMessages.ts から re-export する形にしました。
+- PromptBundle、ResolvedPlanLike、buildFinalHistory、memoryOutputContractSystem、planPrioritySystem、buildStateStructureSystem、buildCompassStructureSystem の import と buildOpenAIMessages(...) 本体をこのファイルから削除しました。
+- 既存互換のため buildOpenAIMessages / HistoryItem / OpenAIChatMessage / withTimeout はこのファイルからも引き続き export します。
+- OpenAI 実行、plain completion、JSON契約検証、state値 1..5、Compass契約条件は変更していません。
 */
 
 /* /app/api/chat/_lib/route/openaiExecution.ts */
