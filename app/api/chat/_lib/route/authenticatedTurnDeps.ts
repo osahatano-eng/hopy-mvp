@@ -13,6 +13,10 @@ import {
 import type { Lang } from "../router/simpleRouter";
 import type { NotificationState } from "../state/notification";
 import { buildAuthenticatedTurnResult } from "./authenticatedTurnResult";
+import {
+  saveFutureChainFromConfirmedPayload,
+  type HopyFutureChainConfirmedPayload,
+} from "../hopy/future-chain";
 
 type ResolvedPlan = "free" | "plus" | "pro";
 
@@ -95,6 +99,26 @@ function normalizeOptionalText(value: unknown): string {
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   return value as Record<string, unknown>;
+}
+
+function isTrueLike(value: unknown): boolean {
+  if (value === true) return true;
+  if (typeof value !== "string") return false;
+
+  const normalized = value.trim().toLowerCase();
+  return normalized === "true" || normalized === "1" || normalized === "yes";
+}
+
+function resolveFutureChainDevelopmentTestFlag(body: unknown): boolean {
+  const bodyRecord = asRecord(body);
+  if (!bodyRecord) return false;
+
+  return (
+    isTrueLike(bodyRecord.hopy_future_chain_skip) ||
+    isTrueLike(bodyRecord.future_chain_skip) ||
+    isTrueLike(bodyRecord.is_development_test) ||
+    isTrueLike(bodyRecord.hopy_is_development_test)
+  );
 }
 
 function resolveStateChanged(value: unknown): boolean {
@@ -493,6 +517,7 @@ export function createAuthenticatedTurnDeps(params: {
         return;
       }
 
+      const confirmedPayload = asRecord(result.hopy_confirmed_payload);
       const confirmedTurn = resolveConfirmedTurnFromBuiltResult(result);
 
       const saveAssistantRes = await saveAssistantMessageOrError({
@@ -519,6 +544,25 @@ export function createAuthenticatedTurnDeps(params: {
         insAsstOk: saveAssistantRes.insAsstOk,
       });
 
+      if (confirmedPayload) {
+        await saveFutureChainFromConfirmedPayload({
+          supabase: params.internalWriteSupabase,
+          sourceContext: {
+            userId: params.authedUserId,
+            threadId: params.resolvedConversationId,
+            userMessageId: params.userMessageId,
+            assistantMessageId: saveAssistantRes.assistantMessageId,
+            language: params.replyLang,
+            hopyConfirmedPayload:
+              confirmedPayload as HopyFutureChainConfirmedPayload,
+            isFirstUserMessageInThread: resolvedHistory.length <= 0,
+            isDevelopmentTest: resolveFutureChainDevelopmentTestFlag(
+              params.body,
+            ),
+          },
+        }).catch(() => null);
+      }
+
       const learningLogsOutcome = await saveAssistantLearningLogs({
         supabase: params.internalWriteSupabase,
         assistantMessageId: saveAssistantRes.assistantMessageId,
@@ -542,6 +586,7 @@ export function createAuthenticatedTurnDeps(params: {
     },
   };
 }
+
 /*
 このファイルの正式役割
 authenticated 経路の runHopyTurn 用 deps 作成ファイル。
@@ -557,11 +602,15 @@ authenticated 経路の runHopyTurn 用 deps 作成ファイル。
 confirmedTurn は hopy_confirmed_payload からのみ復元する。
 turnRecord は唯一の正の fallback に使わない。
 */
+
 /*
 【今回このファイルで修正したこと】
-- resolveConfirmedTurnFromBuiltResult(...) で hopy_confirmed_payload.thread_summary を読み取り、confirmedTurn へ載せるようにしました。
-- 保存先の受け取り名ぶれを避けるため、threadSummary と thread_summary の両方へ同じ値を載せました。
-- state_changed / compass / reply の唯一の正の流れには触れていません。
+- Future Chain 専用フォルダの入口 saveFutureChainFromConfirmedPayload(...) を import した。
+- persistTurn 内で assistant message 保存後に、Future Chain service を1回だけ呼ぶようにした。
+- Future Chain 呼び出しは hopy_confirmed_payload を起点にし、state_changed / state_level / current_phase / Compass をこのファイルで再判定していない。
+- Future Chain 保存に失敗しても既存の assistant 保存、Learning logs 保存、チャット返却を壊さないように、呼び出し結果は既存フローへ影響させない。
+- 開発テスト除外用の最小フラグ解決だけを追加した。
+- HOPY回答○、Compass、Learning既存保存条件、state_transition_signals 保存処理そのものには触れていない。
 */
 
 /* /app/api/chat/_lib/route/authenticatedTurnDeps.ts */
