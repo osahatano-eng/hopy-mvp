@@ -25,22 +25,16 @@ export function buildStateStructureSystem(args: {
       "state_changed は shape の飾りではない。",
       "state_changed は、その回に HOPY が確定した状態変化の正をそのまま返すこと。",
       "state_changed を false に固定したり、無難だから false にしたりしてはならない。",
-      "下の数値と boolean は shape の例であり、そのまま固定コピーしてはならない。",
+      "固定コピー防止のため、この指示内では current_phase / state_level / prev_phase / prev_state_level / state_changed の実例値を示さない。",
       '"confirmed_memory_candidates" は必須で、配列にすること。',
-      "正式shape:",
-      "{",
-      '  "hopy_confirmed_payload": {',
-      '    "reply": "HOPYの本文",',
-      '    "state": {',
-      '      "current_phase": 1,',
-      '      "state_level": 1,',
-      '      "prev_phase": 1,',
-      '      "prev_state_level": 1,',
-      '      "state_changed": false',
-      "    }",
-      "  },",
-      '  "confirmed_memory_candidates": []',
-      "}",
+      "正式構造:",
+      "- hopy_confirmed_payload.reply: string",
+      "- hopy_confirmed_payload.state.current_phase: 1|2|3|4|5",
+      "- hopy_confirmed_payload.state.state_level: 1|2|3|4|5",
+      "- hopy_confirmed_payload.state.prev_phase: 1|2|3|4|5",
+      "- hopy_confirmed_payload.state.prev_state_level: 1|2|3|4|5",
+      "- hopy_confirmed_payload.state.state_changed: boolean",
+      "- confirmed_memory_candidates: array",
     ].join("\n");
   }
 
@@ -59,22 +53,16 @@ export function buildStateStructureSystem(args: {
     "state_changed is not decorative shape data.",
     "state_changed must reflect HOPY's confirmed transition truth for this turn.",
     "Do not default state_changed to false just because it looks safer.",
-    "The numbers and boolean shown below are shape examples only, and must not be copied blindly.",
+    "To prevent fixed-value copying, this instruction does not show example values for current_phase, state_level, prev_phase, prev_state_level, or state_changed.",
     '"confirmed_memory_candidates" is required and must be an array.',
-    "Official shape:",
-    "{",
-    '  "hopy_confirmed_payload": {',
-    '    "reply": "main reply",',
-    '    "state": {',
-    '      "current_phase": 1,',
-    '      "state_level": 1,',
-    '      "prev_phase": 1,',
-    '      "prev_state_level": 1,',
-    '      "state_changed": false',
-    "    }",
-    "  },",
-    '  "confirmed_memory_candidates": []',
-    "}",
+    "Official structure:",
+    "- hopy_confirmed_payload.reply: string",
+    "- hopy_confirmed_payload.state.current_phase: 1|2|3|4|5",
+    "- hopy_confirmed_payload.state.state_level: 1|2|3|4|5",
+    "- hopy_confirmed_payload.state.prev_phase: 1|2|3|4|5",
+    "- hopy_confirmed_payload.state.prev_state_level: 1|2|3|4|5",
+    "- hopy_confirmed_payload.state.state_changed: boolean",
+    "- confirmed_memory_candidates: array",
   ].join("\n");
 }
 
@@ -240,8 +228,9 @@ OpenAI completion 実行、timeout / retry 実行、JSON parse、契約検証、
 
 /*
 【今回このファイルで修正したこと】
-- /app/api/chat/_lib/route/openaiExecution.ts に同居していた HOPY JSON 契約プロンプト文言責務を受け取る新規ファイルとして作成しました。
-- state structure、state meaning、Compass structure、empty JSON retry、contract retry の文言生成関数を export しました。
+- buildStateStructureSystem(...) 内の正式shapeから、current_phase: 1 / state_level: 1 / prev_phase: 1 / prev_state_level: 1 / state_changed: false の固定値例を削除しました。
+- JSON shape の実例ではなく、必要なキーと型だけを示す正式構造へ変更しました。
+- モデルが shape 例の 1 / false を固定コピーして、2発話目以降も 1=混線 / state_changed=false のまま返す危険を下げました。
 - state値は 1..5 / 5段階のまま維持し、0..4 前提にはしていません。
 - HOPY唯一の正、Compass判定、DB保存復元、OpenAI実行処理、JSON契約検証処理はこのファイルでは再判定・再生成していません。
 */
