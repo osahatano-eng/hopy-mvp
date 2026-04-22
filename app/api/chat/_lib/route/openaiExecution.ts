@@ -1,6 +1,13 @@
 // /app/api/chat/_lib/route/openaiExecution.ts
 import OpenAI from "openai";
 
+import {
+  buildCompassStructureSystem,
+  buildContractRetrySystem,
+  buildEmptyJsonRetrySystem,
+  buildStateMeaningSystem,
+  buildStateStructureSystem,
+} from "../hopy/prompt/hopyOpenAIJsonContractPrompt";
 import { phaseParams } from "../phase/phaseParams";
 import type { Lang } from "../router/simpleRouter";
 import type { PromptBundle } from "./promptBundle";
@@ -36,235 +43,6 @@ const FORBIDDEN_TOP_LEVEL_KEYS = [
   "compassPrompt",
   "compass",
 ] as const;
-
-function normalizeResolvedPlan(value: ResolvedPlanLike): string {
-  return String(value ?? "").trim().toLowerCase();
-}
-
-function buildStateStructureSystem(args: {
-  uiLang: Lang;
-}): string {
-  if (args.uiLang === "ja") {
-    return [
-      "最重要出力ルール:",
-      "返答は JSON object 1個だけで返すこと。",
-      "markdown・コードブロック・説明文は禁止。",
-      'トップレベルキーは "hopy_confirmed_payload" / "confirmed_memory_candidates" のみとすること。',
-      "top-level の reply / state / assistant_state / compassText / compassPrompt / compass は返してはならない。",
-      '"hopy_confirmed_payload" は必須。',
-      '"hopy_confirmed_payload.reply" は 1文字以上必須。',
-      '"hopy_confirmed_payload.state" は必須。',
-      "hopy_confirmed_payload.state.current_phase / state_level / prev_phase / prev_state_level は 1|2|3|4|5 の整数必須。",
-      "0..4 は禁止。",
-      "hopy_confirmed_payload.state.state_changed は boolean 必須。",
-      "state_changed は shape の飾りではない。",
-      "state_changed は、その回に HOPY が確定した状態変化の正をそのまま返すこと。",
-      "state_changed を false に固定したり、無難だから false にしたりしてはならない。",
-      "下の数値と boolean は shape の例であり、そのまま固定コピーしてはならない。",
-      '"confirmed_memory_candidates" は必須で、配列にすること。',
-      "正式shape:",
-      "{",
-      '  "hopy_confirmed_payload": {',
-      '    "reply": "HOPYの本文",',
-      '    "state": {',
-      '      "current_phase": 1,',
-      '      "state_level": 1,',
-      '      "prev_phase": 1,',
-      '      "prev_state_level": 1,',
-      '      "state_changed": false',
-      "    }",
-      "  },",
-      '  "confirmed_memory_candidates": []',
-      "}",
-    ].join("\n");
-  }
-
-  return [
-    "Most important output rule:",
-    "Return exactly one JSON object.",
-    "Do not output markdown, code fences, or explanations.",
-    'The top-level keys must be only "hopy_confirmed_payload" and "confirmed_memory_candidates".',
-    "Never return top-level reply, state, assistant_state, compassText, compassPrompt, or compass.",
-    '"hopy_confirmed_payload" is required.',
-    '"hopy_confirmed_payload.reply" must be a non-empty string.',
-    '"hopy_confirmed_payload.state" is required.',
-    "hopy_confirmed_payload.state.current_phase, state_level, prev_phase, and prev_state_level must be integers in 1|2|3|4|5.",
-    "Never use 0..4.",
-    "hopy_confirmed_payload.state.state_changed must be a boolean.",
-    "state_changed is not decorative shape data.",
-    "state_changed must reflect HOPY's confirmed transition truth for this turn.",
-    "Do not default state_changed to false just because it looks safer.",
-    "The numbers and boolean shown below are shape examples only, and must not be copied blindly.",
-    '"confirmed_memory_candidates" is required and must be an array.',
-    "Official shape:",
-    "{",
-    '  "hopy_confirmed_payload": {',
-    '    "reply": "main reply",',
-    '    "state": {',
-    '      "current_phase": 1,',
-    '      "state_level": 1,',
-    '      "prev_phase": 1,',
-    '      "prev_state_level": 1,',
-    '      "state_changed": false',
-    "    }",
-    "  },",
-    '  "confirmed_memory_candidates": []',
-    "}",
-  ].join("\n");
-}
-
-function buildStateMeaningSystem(args: {
-  uiLang: Lang;
-}): string {
-  if (args.uiLang === "ja") {
-    return [
-      "状態確定ルール:",
-      "hopy_confirmed_payload.state は、この回のユーザー入力と、この回に自分が確定した最終返答の意味から決めること。",
-      "prev_phase / prev_state_level は入力前の参考状態である。",
-      "current_phase / state_level は今回ターン後の確定状態である。",
-      "入力前状態をそのまま current に持ち込んではならない。",
-      "current と prev の意味が異なるなら state_changed=true にすること。",
-      "current と prev の意味が同じときだけ state_changed=false にしてよい。",
-      "『整理できた』『やることが見えてきた』『次の一歩が見えた』『方向が定まった』など前進意味なのに、prev=1 / current=1 / state_changed=false の固定コピーで逃げてはならない。",
-      "下流は再判定しないため、このターンで自分が確定した真値をそのまま返すこと。",
-    ].join("\n");
-  }
-
-  return [
-    "State decision rule:",
-    "Decide hopy_confirmed_payload.state from the meaning of this turn's user input and this turn's final reply that you have confirmed.",
-    "prev_phase and prev_state_level are the reference state before this turn.",
-    "current_phase and state_level are the confirmed state after this turn.",
-    "Do not carry the pre-turn state into current unchanged by default.",
-    "If current and prev differ in meaning, set state_changed=true.",
-    "Set state_changed=false only when current and prev truly mean the same state.",
-    'Do not escape with a copied prev=1 / current=1 / state_changed=false pattern when the reply clearly means progress such as "things became clearer", "the next step became visible", or "direction was found".',
-    "Downstream will not re-judge this, so return the truth you confirmed in this turn.",
-  ].join("\n");
-}
-
-function buildCompassStructureSystem(args: {
-  uiLang: Lang;
-  resolvedPlan: ResolvedPlanLike;
-}): string {
-  const plan = normalizeResolvedPlan(args.resolvedPlan);
-
-  if (plan === "free") {
-    if (args.uiLang === "ja") {
-      return [
-        "Compassルール:",
-        "Free では Compass を出してはならない。",
-        "state_changed=true でも hopy_confirmed_payload.compass を付けてはならない。",
-        "Compass をトップレベルへ置いてはならない。",
-        "reply と state は必ず hopy_confirmed_payload 内に返すこと。",
-      ].join("\n");
-    }
-
-    return [
-      "Compass rule:",
-      "Do not output Compass on Free.",
-      'Even when state_changed=true, do not include "hopy_confirmed_payload.compass".',
-      "Never place Compass at the top level.",
-      'Always return reply and state inside "hopy_confirmed_payload".',
-    ].join("\n");
-  }
-
-  if (args.uiLang === "ja") {
-    return [
-      "Compassルール:",
-      "Plus / Pro では HOPY回答○ と Compass を分離してはならない。",
-      "hopy_confirmed_payload.state.state_changed=false のときは hopy_confirmed_payload.compass を付けてはならない。",
-      "hopy_confirmed_payload.state.state_changed=true のときは hopy_confirmed_payload.compass を必ず付けること。",
-      "その場合、hopy_confirmed_payload.compass.text は必ず非空で返すこと。",
-      "その場合、hopy_confirmed_payload.compass.prompt も必ず非空で返すこと。",
-      "Compass をトップレベルへ置いてはならない。",
-      "本文から Compass を推測したり、fallback 文字列でごまかしたりしてはならない。",
-      'reply と state を "hopy_confirmed_payload" の外へ出してはならない。',
-    ].join("\n");
-  }
-
-  return [
-    "Compass rule:",
-    "On Plus / Pro, never separate the HOPY reply badge truth and Compass truth.",
-    'When "hopy_confirmed_payload.state.state_changed" is false, omit "hopy_confirmed_payload.compass" entirely.',
-    'When "hopy_confirmed_payload.state.state_changed" is true, you must include "hopy_confirmed_payload.compass".',
-    '"hopy_confirmed_payload.compass.text" must be non-empty in that case.',
-    '"hopy_confirmed_payload.compass.prompt" must also be non-empty in that case.',
-    "Never place Compass at the top level.",
-    "Do not infer Compass from reply wording, and do not fake it with fallback text.",
-    'Never place reply or state outside "hopy_confirmed_payload".',
-  ].join("\n");
-}
-
-function buildEmptyJsonRetrySystem(args: {
-  uiLang: Lang;
-}): string {
-  if (args.uiLang === "ja") {
-    return [
-      "再出力指示:",
-      "直前の出力は空でした。",
-      "今回は空文字を返してはいけません。",
-      "必ず JSON object 1個だけを非空で返してください。",
-      '最小でも "hopy_confirmed_payload" / "confirmed_memory_candidates" を含めてください。',
-      '"hopy_confirmed_payload.reply" は 1文字以上必須です。',
-      '"hopy_confirmed_payload.state" は必須です。',
-      '"confirmed_memory_candidates" は空配列でもよいので必ず返してください。',
-      "top-level の reply / state / compassText / compassPrompt は禁止です。",
-      "state_changed を false に固定して逃げてはいけません。",
-    ].join("\n");
-  }
-
-  return [
-    "Retry instruction:",
-    "The previous output was empty.",
-    "Do not return an empty string this time.",
-    "Return exactly one non-empty JSON object.",
-    'At minimum include "hopy_confirmed_payload" and "confirmed_memory_candidates".',
-    '"hopy_confirmed_payload.reply" must contain at least 1 character.',
-    '"hopy_confirmed_payload.state" is required.',
-    '"confirmed_memory_candidates" may be empty but must be present.',
-    "Top-level reply, state, compassText, and compassPrompt are forbidden.",
-    "Do not escape by defaulting state_changed to false.",
-  ].join("\n");
-}
-
-function buildContractRetrySystem(args: {
-  uiLang: Lang;
-}): string {
-  if (args.uiLang === "ja") {
-    return [
-      "再出力指示:",
-      "直前の JSON は HOPY の正式契約に違反していました。",
-      "今回は hopy_confirmed_payload 正式shape を厳守してください。",
-      "トップレベルキーは hopy_confirmed_payload / confirmed_memory_candidates のみです。",
-      "top-level の reply / state / assistant_state / compassText / compassPrompt / compass は禁止です。",
-      "hopy_confirmed_payload.state.current_phase / state_level / prev_phase / prev_state_level は 1|2|3|4|5 の整数必須です。",
-      "hopy_confirmed_payload.state.state_changed は boolean 必須です。",
-      "state_changed を false に固定してはなりません。",
-      "Free では hopy_confirmed_payload.compass を付けてはなりません。",
-      "Plus / Pro では state_changed=true の回に hopy_confirmed_payload.compass.text を必ず非空で返してください。",
-      "Plus / Pro では state_changed=true の回に hopy_confirmed_payload.compass.prompt も必ず非空で返してください。",
-      "空文字や省略や fallback でごまかしてはいけません。",
-      "必ず JSON object 1個だけを返してください。",
-    ].join("\n");
-  }
-
-  return [
-    "Retry instruction:",
-    "The previous JSON violated the HOPY contract.",
-    "Return the official hopy_confirmed_payload shape exactly this time.",
-    'The top-level keys must be only "hopy_confirmed_payload" and "confirmed_memory_candidates".',
-    "Top-level reply, state, assistant_state, compassText, compassPrompt, and compass are forbidden.",
-    "hopy_confirmed_payload.state.current_phase, state_level, prev_phase, and prev_state_level must be integers in 1|2|3|4|5.",
-    "hopy_confirmed_payload.state.state_changed must be a boolean.",
-    "Do not hard-code state_changed to false.",
-    'On Free, do not return "hopy_confirmed_payload.compass".',
-    'On Plus / Pro, when state_changed=true, "hopy_confirmed_payload.compass.text" must be non-empty.',
-    'On Plus / Pro, when state_changed=true, "hopy_confirmed_payload.compass.prompt" must also be non-empty.',
-    "Do not fake compliance with empty strings, omissions, or fallback text.",
-    "Return exactly one JSON object.",
-  ].join("\n");
-}
 
 export function withTimeout<T>(
   p: Promise<T>,
@@ -818,18 +596,18 @@ export async function createPlainCompletion(params: {
 このファイルの正式役割:
 OpenAI へ渡す messages の組み立てと、
 OpenAI completion 実行時の timeout / 一時失敗制御を担うファイル。
-HOPY唯一の正に従う confirmed payload の shape を OpenAI 実行層でも強制し、
+HOPY唯一の正に従う confirmed payload の契約検証を OpenAI 実行層で強制し、
 promptBundle と history から最終 messages を構成し、
 completion 実行を安定して OpenAI 呼び出し層へ渡す責務を持つ。
+HOPY JSON 契約プロンプト文言の本体は、
+/app/api/chat/_lib/hopy/prompt/hopyOpenAIJsonContractPrompt.ts から読み込む。
 */
 
 /*
 【今回このファイルで修正したこと】
-- buildStateMeaningSystem(...) を追加し、今回ターンのユーザー入力と今回ターンの最終返答の意味から current / prev / state_changed を確定する明示指示を OpenAI 実行層で強制するようにしました。
-- buildOpenAIMessages(...) に stateMeaningSystem を追加し、通常実行時の messages にも state 意味確定ルールを載せるようにしました。
-- createJsonForcedCompletion(...) の retryMessages 最後に stateMeaningSystem を追加し、retry 時に shape 契約だけが強く残って state 意味指示が薄まる状態を止めました。
-- 既存の timeout、single retry、plain completion、contract 検証ロジックそのものには触っていません。
+- HOPY JSON 契約プロンプト文言の生成責務を /app/api/chat/_lib/hopy/prompt/hopyOpenAIJsonContractPrompt.ts へ移し、このファイルでは import して使うだけにしました。
+- buildStateStructureSystem(...) / buildStateMeaningSystem(...) / buildCompassStructureSystem(...) / buildEmptyJsonRetrySystem(...) / buildContractRetrySystem(...) の本体をこのファイルから削除しました。
+- OpenAI 実行、timeout、single retry、plain completion、JSON契約検証ロジック、state値 1..5、Compass契約条件は変更していません。
 */
 
 /* /app/api/chat/_lib/route/openaiExecution.ts */
-// このファイルの正式役割: OpenAI 実行層で confirmed payload の契約を強制するファイル
