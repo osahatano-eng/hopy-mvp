@@ -8,6 +8,12 @@ import {
   hasHopyExplicitForwardCommitment,
   isHopyLowSignalInput,
 } from "./hopyInputSignalResolver";
+import {
+  buildHopyRegressionAnswerStructureSection,
+  buildHopyRegressionGenerationRulesSection,
+  buildHopyRegressionStateDensitySection,
+  buildHopyRegressionTransitionSection,
+} from "./hopyStateRegressionDrivenPromptSections";
 
 export type HopyStateDrivenResolvedPlan = "free" | "plus" | "pro";
 
@@ -95,6 +101,11 @@ export function buildHopyTransitionSection(args: {
   const explicitForwardCommitment = hasHopyExplicitForwardCommitment(
     args.userInput,
   );
+  const regressionSection = buildHopyRegressionTransitionSection(args);
+
+  if (regressionSection) {
+    return regressionSection;
+  }
 
   if (explicitForwardCommitment) {
     return [
@@ -148,6 +159,12 @@ export function buildHopyAnswerStructureSection(userInput: string): string {
   const lowSignal = isHopyLowSignalInput(userInput);
   const explicitForwardCommitment =
     hasHopyExplicitForwardCommitment(userInput);
+  const regressionSection =
+    buildHopyRegressionAnswerStructureSection(userInput);
+
+  if (regressionSection) {
+    return regressionSection;
+  }
 
   if (explicitForwardCommitment) {
     return [
@@ -194,6 +211,11 @@ export function buildHopyStateDensitySection(
   const lowSignal = isHopyLowSignalInput(userInput);
   const explicitForwardCommitment =
     hasHopyExplicitForwardCommitment(userInput);
+  const regressionSection = buildHopyRegressionStateDensitySection(userInput);
+
+  if (regressionSection) {
+    return regressionSection;
+  }
 
   if (explicitForwardCommitment) {
     return [
@@ -268,6 +290,10 @@ export function buildHopyGenerationRulesSection(
   const lowSignal = isHopyLowSignalInput(userInput);
   const explicitForwardCommitment =
     hasHopyExplicitForwardCommitment(userInput);
+  const regressionSection = buildHopyRegressionGenerationRulesSection({
+    resolvedPlan,
+    userInput,
+  });
 
   const planSpecificRules =
     resolvedPlan === "pro"
@@ -281,6 +307,10 @@ export function buildHopyGenerationRulesSection(
         : [
             "- Free でも共感だけで終わらず、シンプルな方向提示まで到達すること",
           ];
+
+  if (regressionSection) {
+    return regressionSection;
+  }
 
   if (explicitForwardCommitment) {
     return [
@@ -366,18 +396,17 @@ export function buildHopyGenerationRulesSection(
 【このファイルの正式役割】
 HOPYの状態依存の回答制御セクション群をまとめる専用ファイル。
 低シグナル入口入力、前進表明、状態遷移、本文密度、回答生成ルールなど、状態や入力の意味に応じて変化する prompt section 文言だけを担当する。
+下降専用の詳細ルールは別ファイルへ分離し、このファイルは前進・低シグナル・通常ルールの管理と、下降専用ファイルの受け取りに責務を絞る。
 DB取得、DB保存、state_changed生成、Compass生成、○表示、messages取得、回答保存処理、最終組み立て順の決定は担当しない。
 
 【今回このファイルで修正したこと】
-- hopyPromptSections.ts から切り出す受け皿として新規作成した。
-- buildHopyPolicySection(...) をこのファイルへ移した。
-- buildHopyExplicitForwardCommitmentSection(...) をこのファイルへ移した。
-- buildHopyTransitionSection(...) をこのファイルへ移した。
-- buildHopyAnswerStructureSection(...) をこのファイルへ移した。
-- buildHopyStateDensitySection(...) をこのファイルへ移した。
-- buildHopyGenerationRulesSection(...) をこのファイルへ移した。
-- これらに必要な HopyReplyPolicy / HopyStateLevel / 入力シグナル判定 import をこのファイル内に閉じた。
-- prompt全体の最終組み立て、JSON契約、HOPY唯一の正、Compass条件、DBやUIには触れていない。
+- hopyStateRegressionDrivenPromptSections.ts から下降専用セクション群を import するようにした。
+- buildHopyTransitionSection(...) で下降専用セクションを先に受け取り、存在する場合はそれを返すようにした。
+- buildHopyAnswerStructureSection(...) で下降専用セクションを先に受け取り、存在する場合はそれを返すようにした。
+- buildHopyStateDensitySection(...) で下降専用セクションを先に受け取り、存在する場合はそれを返すようにした。
+- buildHopyGenerationRulesSection(...) で下降専用セクションを先に受け取り、存在する場合はそれを返すようにした。
+- このファイル自体には下降専用文言を増やさず、責務を分離した。
+- DB、UI、Compass表示処理、Future Chain保存処理、他ファイルには触れていない。
 
 /app/api/chat/_lib/hopy/prompt/hopyStateDrivenPromptSections.ts
 */
