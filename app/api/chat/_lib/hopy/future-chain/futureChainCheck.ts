@@ -172,10 +172,10 @@ export function checkFutureChainSavePreconditions(params: {
     toStateLevel,
   });
 
-  if (transitionKind !== "upward") {
+  if (transitionKind === "same_level") {
     return {
       decision: "skip",
-      reason: "v1 は upward のみ保存候補にする",
+      reason: "same_level は保存候補にしない",
       status: "none",
     };
   }
@@ -207,10 +207,9 @@ hopy_confirmed_payload を唯一の起点として受け取り、保存処理へ
 このファイルは candidate生成、DB insert、state_changed再判定、state_level再判定、current_phase再判定、Compass再判定を担当しない。
 
 【今回このファイルで修正したこと】
-- Future Chain 専用フォルダ内に、保存前チェック専用ファイルを新規作成した。
-- hopy_confirmed_payload の存在、state存在、state_changed=true、状態値1..5、開発テスト除外、新規チャット1発話目除外、upward限定、reply存在を順番に確認する一本道ロジックを作成した。
-- Future Chain側で state_changed / state_level / current_phase を再判定せず、受け取った確定値の確認だけにした。
-- candidate生成とDB保存はまだ実装していない。
+- Future Chain 保存前チェックの遷移条件を、upward限定から same_level除外へ変更した。
+- これにより、state_changed=true の downward 遷移も保存候補として先へ進めるようにした。
+- 開発テスト除外、新規チャット1発話目除外、state_changed確認、状態値1..5確認、reply確認には触れていない。
 
-/app/api/chat/_lib/hopy/future-chain/futureChainCheck.ts
+ /app/api/chat/_lib/hopy/future-chain/futureChainCheck.ts
 */
