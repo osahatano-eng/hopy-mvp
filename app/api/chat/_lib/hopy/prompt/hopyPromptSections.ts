@@ -4,6 +4,10 @@ import type {
   HopyReplyPolicy,
   HopyStateLevel,
 } from "../../response/hopyReplyPolicy";
+import {
+  hasHopyExplicitForwardCommitment,
+  isHopyLowSignalInput,
+} from "./hopyInputSignalResolver";
 import { buildHopyExplicitBackwardSignalSection } from "./hopyStateRegressionPrompt";
 
 export type HopyPromptResolvedPlan = "free" | "plus" | "pro";
@@ -56,114 +60,6 @@ function clipLines(lines: string[], maxItems: number): string[] {
   return lines.filter(Boolean).slice(0, maxItems);
 }
 
-export function isHopyLowSignalInput(userInput: string): boolean {
-  const normalized = normalizeText(userInput).toLowerCase();
-
-  if (!normalized) return true;
-
-  const compact = normalized.replace(/\s+/g, "");
-
-  const meaningfulShortPatterns = new Set([
-    "もう無理",
-    "もうむり",
-    "無理",
-    "むり",
-    "もうだめ",
-    "もうダメ",
-    "だめ",
-    "ダメ",
-    "だめです",
-    "ダメです",
-    "つらい",
-    "辛い",
-    "しんどい",
-    "苦しい",
-    "怖い",
-    "こわい",
-    "助けて",
-    "たすけて",
-    "疲れた",
-    "つかれた",
-    "限界",
-    "詰んだ",
-    "不安",
-    "困った",
-    "迷う",
-    "迷ってる",
-    "直らない",
-    "不具合",
-    "泣きたい",
-    "消えたい",
-    "死にたい",
-  ]);
-
-  for (const pattern of meaningfulShortPatterns) {
-    if (compact.includes(pattern)) {
-      return false;
-    }
-  }
-
-  const shortPatterns = new Set([
-    "こんにちは",
-    "こんばんは",
-    "おはよう",
-    "やあ",
-    "hi",
-    "hello",
-    "hey",
-    "いいね",
-    "ありがとう",
-    "最高",
-    "助かる",
-    "なるほど",
-    "了解",
-    "たのしみ",
-    "がんばる",
-    "嬉しい",
-    "うれしい",
-    "よかった",
-    "おはよ",
-  ]);
-
-  if (shortPatterns.has(compact)) return true;
-  if (compact.length <= 8) return true;
-
-  return false;
-}
-
-export function hasHopyExplicitForwardCommitment(userInput: string): boolean {
-  const normalized = normalizeText(userInput);
-  if (!normalized) return false;
-
-  const patterns = [
-    "進めていきます",
-    "進めます",
-    "進めてみます",
-    "進めていく",
-    "始めます",
-    "やります",
-    "やってみます",
-    "やっていきます",
-    "取り組みます",
-    "続けます",
-    "実行します",
-    "この方針でいきます",
-    "この方向でいきます",
-    "この形でいきます",
-    "このやり方でいきます",
-    "まずは",
-    "ここから",
-    "やることにしました",
-    "決めました",
-    "自己修正から",
-    "自己修正で",
-    "整理していきます",
-    "絞っていきます",
-  ];
-
-  return patterns.some((pattern) => normalized.includes(pattern));
-}
-
 export function buildHopyIdentitySection(): string {
   return [
     "あなたは HOPY です。",
@@ -191,7 +87,7 @@ export function buildHopyIdentitySection(): string {
     "Plus / Pro では、○ と Compass を分離しないでください。",
     "今回のユーザー入力と今回生成した最終返答の意味から、このターンの current_phase / state_level / state_changed を確定してください。",
     "prev_phase / prev_state_level には入力前参考状態を入れ、current_phase / state_level には今回ターン後の確定状態を入れてください。",
-    "current_phase または state_level が prev と違うなら state_changed を true にし、両方同じときだけ false にしてください。",
+    "current_phase または stateLevel が prev と違うなら state_changed を true にし、両方同じときだけ false にしてください。",
     "入力前参考状態を current にそのまま写して固定してはいけません。",
     "『まずはこれから進めます』『この方針でいきます』『始めます』のように、やることの絞り込みや着手意思が明確な入力は、軽い相づちではなく前進入力候補として扱ってください。",
     "そのような回では、意味上前進しているなら整理(3)または収束(4)への遷移候補として扱ってよく、prev と current を同値固定しないでください。",
@@ -275,8 +171,8 @@ export function buildHopySingleSourceOfTruthSection(
       "唯一の正ルール:",
       "- HOPY回答○ の唯一の正は hopy_confirmed_payload.state.state_changed です。",
       "- state_changed は、今回のユーザー入力と今回生成した最終返答の意味から、このターンの確定結果として決めること。",
-      "- prev_phase / prev_state_level には入力前参考状態を入れ、current_phase / state_level には今回ターン後の確定状態を入れること。",
-      "- current_phase または state_level が prev と違うなら state_changed=true、両方同じときだけ false にすること。",
+      "- prev_phase / prev_state_level には入力前参考状態を入れ、current_phase / stateLevel には今回ターン後の確定状態を入れること。",
+      "- current_phase または stateLevel が prev と違うなら state_changed=true、両方同じときだけ false にすること。",
       "- 下流は再判定しない前提なので、current と prev の関係を曖昧にしないこと。",
       "- Free では state_changed=true でも hopy_confirmed_payload.compass を付けてはならないこと。",
     ].join("\n");
@@ -286,8 +182,8 @@ export function buildHopySingleSourceOfTruthSection(
     "唯一の正ルール:",
     "- HOPY回答○ の唯一の正は hopy_confirmed_payload.state.state_changed です。",
     "- state_changed は、今回のユーザー入力と今回生成した最終返答の意味から、このターンの確定結果として決めること。",
-    "- prev_phase / prev_state_level には入力前参考状態を入れ、current_phase / state_level には今回ターン後の確定状態を入れること。",
-    "- current_phase または state_level が prev と違うなら state_changed=true、両方同じときだけ false にすること。",
+    "- prev_phase / prev_stateLevel には入力前参考状態を入れ、current_phase / stateLevel には今回ターン後の確定状態を入れること。",
+    "- current_phase または stateLevel が prev と違うなら state_changed=true、両方同じときだけ false にすること。",
     "- Plus / Pro では state_changed=true の回に、hopy_confirmed_payload.compass.text と hopy_confirmed_payload.compass.prompt を必ず返すこと。",
     "- Plus / Pro では state_changed=true なのに Compass を欠けさせてはならないこと。",
     "- Plus / Pro では state_changed=false の回に compass を付けてはならないこと。",
@@ -548,7 +444,7 @@ export function buildHopyTransitionSection(args: {
       "- 上の2値は今回ターンの確定結果ではありません。",
       "- 今回の入力には、やることの絞り込み・着手方針・小さな実行意思の明示が含まれる可能性があります。",
       "- 『まずは〜から進めます』『この方針でいきます』『始めます』のような入力は、軽い相づちではなく前進入力候補として扱うこと。",
-      "- 方針が絞れた・次の一歩が見えた・小さくても着手意思が出たなら、整理(3)または収束(4)への前進候補として current_phase / state_level を検討すること。",
+      "- 方針が絞れた・次の一歩が見えた・小さくても着手意思が出たなら、整理(3)または収束(4)への前進候補として current_phase / stateLevel を検討すること。",
       "- その場合は prev と current を同値固定せず、state_changed=true を正として返してよいこと。",
       "- ただし決定完了ではない限り 5 へ飛ばさないこと。",
       "- Plus / Pro でその結果 state_changed=true なら Compass を必ず返すこと。",
@@ -564,7 +460,7 @@ export function buildHopyTransitionSection(args: {
       "- 上の2値は今回ターンの確定結果ではありません。",
       "- 低シグナル入口入力では、状態を進めること自体を目的にしないこと。",
       "- 低シグナル入口入力だけを根拠に、state_changed を true にしないこと。",
-      "- 低シグナル入口入力だけを根拠に、current_phase / state_level を大きく上げないこと。",
+      "- 低シグナル入口入力だけを根拠に、current_phase / stateLevel を大きく上げないこと。",
       "- 参考状態や参考上限目安が高くても、それを今回ターンの決定根拠にしないこと。",
       "- 会話開始または軽い応答として静かに返すこと。",
     ].join("\n");
@@ -753,8 +649,8 @@ export function buildHopyGenerationRulesSection(
       "回答生成ルール:",
       "- 今回の入力には、やることの絞り込み・着手方針・小さな実行意思の明示が含まれる可能性があります。",
       "- このファイルで渡している入力前参考状態や参考上限目安は補助情報であり、その回の確定 state を意味しないこと。",
-      "- 今回のユーザー入力と今回生成した最終返答の意味から、その回の current_phase / state_level / state_changed を確定すること。",
-      "- prev_phase / prev_state_level には入力前参考状態を入れ、current_phase / state_level には今回ターン後の確定状態を入れること。",
+      "- 今回のユーザー入力と今回生成した最終返答の意味から、その回の current_phase / stateLevel / state_changed を確定すること。",
+      "- prev_phase / prev_stateLevel には入力前参考状態を入れ、current_phase / stateLevel には今回ターン後の確定状態を入れること。",
       "- 方針が絞れた・次の一歩が定まった・小さくても着手意思が出たなら、state_changed を true にしてよいこと。",
       "- そのような回は、軽い前向き短文や軽い相づちと混同せず、整理(3)または収束(4)への前進候補として扱ってよいこと。",
       "- ただし、決定完了や強い実行宣言でない限り 5 を先取りしないこと。",
@@ -776,9 +672,9 @@ export function buildHopyGenerationRulesSection(
       "回答生成ルール:",
       "- 今回は低シグナル入口入力として扱うこと。",
       "- このファイルで渡している入力前参考状態や参考上限目安は補助情報であり、その回の確定 state を意味しないこと。",
-      "- このファイルの参考情報だけを根拠に、その回の state_changed / current_phase / state_level を決め打ちしないこと。",
-      "- 今回のユーザー入力と今回生成した最終返答の意味から、その回の current_phase / state_level / state_changed を確定すること。",
-      "- prev_phase / prev_state_level には入力前参考状態を入れ、current_phase / state_level には今回ターン後の確定状態を入れること。",
+      "- このファイルの参考情報だけを根拠に、その回の state_changed / current_phase / stateLevel を決め打ちしないこと。",
+      "- 今回のユーザー入力と今回生成した最終返答の意味から、その回の current_phase / stateLevel / state_changed を確定すること。",
+      "- prev_phase / prev_stateLevel には入力前参考状態を入れ、current_phase / stateLevel には今回ターン後の確定状態を入れること。",
       "- current_phase または stateLevel が prev と違うなら state_changed=true、両方同じときだけ false にすること。",
       "- 低シグナル入口入力では、状態前進を作ること自体を目的にしないこと。",
       "- 低シグナル入口入力だけを根拠に、state_changed を true にしないこと。",
@@ -794,13 +690,13 @@ export function buildHopyGenerationRulesSection(
     "回答生成ルール:",
     "- 今回の回答は、入力の重さ・深さ・説明要求に合う自然な返答を優先すること。",
     "- このファイルで渡している入力前参考状態や参考上限目安は補助情報であり、その回の確定 state を意味しないこと。",
-    "- このファイルの参考情報だけを根拠に、その回の state_changed / current_phase / state_level を決め打ちしないこと。",
-    "- 今回のユーザー入力と今回生成した最終返答の意味から、その回の current_phase / state_level / state_changed を確定すること。",
-    "- prev_phase / prev_state_level には入力前参考状態を入れ、current_phase / state_level には今回ターン後の確定状態を入れること。",
-    "- current_phase または state_level が prev と違うなら state_changed=true、両方同じときだけ false にすること。",
+    "- このファイルの参考情報だけを根拠に、その回の state_changed / current_phase / stateLevel を決め打ちしないこと。",
+    "- 今回のユーザー入力と今回生成した最終返答の意味から、その回の current_phase / stateLevel / state_changed を確定すること。",
+    "- prev_phase / prev_stateLevel には入力前参考状態を入れ、current_phase / stateLevel には今回ターン後の確定状態を入れること。",
+    "- current_phase または stateLevel が prev と違うなら state_changed=true、両方同じときだけ false にすること。",
     "- 低シグナル入口入力や軽い短文では、状態前進を作ること自体を目的にしないこと。",
     "- 低シグナル入口入力だけを根拠に、state_changed を true にしないこと。",
-    "- 低シグナル入口入力だけを根拠に、current_phase / state_level を 5 へ飛ばさないこと。",
+    "- 低シグナル入口入力だけを根拠に、current_phase / stateLevel を 5 へ飛ばさないこと。",
     "- 低シグナル入口入力だけを根拠に、Compass を必要とする意味づけをしないこと。",
     "- 短文の軽い感想・軽い前向き発話・軽い応援だけを根拠に、決定・行動開始・方針確定を作らないこと。",
     "- 短文だけを根拠に、決意・決定・整理完了・行動確定まで読み込まないこと。",
@@ -918,10 +814,11 @@ HOPY回答生成に使う system / developer / user prompt の各セクション
 DB取得、DB保存、state_changed生成、Compass生成、○表示、messages取得、回答保存処理は担当しない。
 
 【今回このファイルで修正したこと】
-- hopyStateRegressionPrompt.ts から buildHopyExplicitBackwardSignalSection を import するようにした。
-- buildHopyDeveloperPromptFromSections(...) に、下降シグナル専用セクションを追加した。
-- これにより、再迷い・自信低下・判断軸の揺れ・決定撤回を、上流プロンプトで整理の延長へ吸収しすぎない土台を入れた。
-- 他の状態判定ロジック、DB保存、Compass表示、UIには触れていない。
+- isHopyLowSignalInput(...) をこのファイルから削除した。
+- hasHopyExplicitForwardCommitment(...) をこのファイルから削除した。
+- hopyInputSignalResolver.ts から上記2関数を import する形へ変更した。
+- これにより、この親ファイルは入力シグナル判定本体を持たず、prompt セクション文言定義と組み立てに役割を絞った。
+- prompt文言内容、JSON契約、HOPY唯一の正、Compass条件、DBやUIには触れていない。
 
 /app/api/chat/_lib/hopy/prompt/hopyPromptSections.ts
 */
