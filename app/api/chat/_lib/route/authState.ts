@@ -133,12 +133,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
-function resolvePhaseFromStateUpdate(
-  value: unknown,
-  fallback: 1 | 2 | 3 | 4 | 5,
-): 1 | 2 | 3 | 4 | 5 {
-  if (!isRecord(value)) return fallback;
-
+function readPhaseCandidateFromRecord(
+  value: Record<string, unknown>,
+): 1 | 2 | 3 | 4 | 5 | null {
   const candidates: unknown[] = [
     value.current_phase,
     value.currentPhase,
@@ -158,6 +155,45 @@ function resolvePhaseFromStateUpdate(
     const n = Number(candidate);
     if (Number.isFinite(n)) {
       return normalizePhase(n);
+    }
+  }
+
+  return null;
+}
+
+function resolvePhaseFromStateUpdate(
+  value: unknown,
+  fallback: 1 | 2 | 3 | 4 | 5,
+): 1 | 2 | 3 | 4 | 5 {
+  if (!isRecord(value)) return fallback;
+
+  const queue: Array<Record<string, unknown>> = [value];
+  const seen = new Set<Record<string, unknown>>();
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current || seen.has(current)) continue;
+    seen.add(current);
+
+    const directPhase = readPhaseCandidateFromRecord(current);
+    if (directPhase !== null) {
+      return directPhase;
+    }
+
+    const nestedCandidates: unknown[] = [
+      current.data,
+      current.state,
+      current.result,
+      current.payload,
+      current.update,
+      current.user_state,
+      current.userState,
+    ];
+
+    for (const nested of nestedCandidates) {
+      if (isRecord(nested)) {
+        queue.push(nested);
+      }
     }
   }
 
@@ -303,21 +339,18 @@ export async function resolveConversationState(params: {
 }
 
 /*
-このファイルの正式役割：
+【このファイルの正式役割】
 会話ごとの直近 assistant 状態を読み取り、
 今回ターンで使う会話状態の前後差分を正規化して返す前段層。
 この層は DB保存済みの直近 assistant 状態と
 updateUserStateFromMessage(...) の結果を受け取り、
 確定意味ペイロードへ渡す state の土台を整える。
 ただし HOPY回答○ の唯一の正そのものは作らない。
-*/
 
-/*
 【今回このファイルで修正したこと】
-- resolveConversationState(...) で currentPhase/currentStateLevel/stateChanged を prev 固定にしていた処理をやめました。
-- updateUserStateFromMessage(...) の返り値から prompt 用の暫定 phase を読む helper を追加しました。
-- ただし conversations.state_level の先回り更新は再開せず、回答確定前の DB 更新は引き続き止めています。
-- HOPY回答○ の唯一の正そのものは、引き続き回答確定後の hopy_confirmed_payload.state.state_changed に委ねています。
-*/
+- updateUserStateFromMessage(...) の返り値から phase を読む処理を、トップレベルだけでなくネストした object まで辿れる形へ修正した。
+- current_phase / state_level / phase_after / after_state_level / next_phase / next_state_level を、wrapper配下でも拾えるようにした。
+- resolveConversationState(...) の入出力構造、DB更新停止方針、HOPY回答○ の唯一の正には触れていない。
 
-/* /app/api/chat/_lib/route/authState.ts */
+/app/api/chat/_lib/route/authState.ts
+*/
