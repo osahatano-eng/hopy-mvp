@@ -87,7 +87,7 @@ export function buildHopyPrompt(
   const transitionTargetLevel = normalizeStateLevel(
     params.transitionTargetLevel ?? stateLevel,
   );
-  const policy = getHopyReplyPolicy(stateLevel);
+  const policy = getHopyReplyPolicy(transitionTargetLevel);
   const resolvedPlan = normalizeResolvedPlan(params.resolvedPlan);
 
   return {
@@ -110,19 +110,16 @@ export function buildHopyPrompt(
 }
 
 /*
-このファイルの正式役割
+【このファイルの正式役割】
 HOPY回答の核になる system / developer / user prompt を組み立てる入口ファイル。
 prompt section 文言そのものは /app/api/chat/_lib/hopy/prompt/hopyPromptSections.ts に集約し、このファイルは入力値の正規化、policy取得、prompt section の呼び出し、BuiltHopyPrompt の返却だけを担当する。
 DB取得、DB保存、state_changed生成、Compass生成、○表示、messages取得、回答保存処理は担当しない。
-*/
 
-/*
 【今回このファイルで修正したこと】
-- hopyPromptBuilder.ts 内に直書きされていた prompt section 文言と抑制ルールを削除した。
-- /app/api/chat/_lib/hopy/prompt/hopyPromptSections.ts から buildHopyIdentitySection / buildHopyDeveloperPromptFromSections / buildHopyUserInputSection を読み込む形へ変更した。
-- developerPrompt の組み立てを hopyPromptSections.ts 側へ委譲し、強いHOPYの回答順序をプロンプト集合ファイル側で管理できるようにした。
-- このファイルは、型・入力正規化・stateLevel正規化・policy取得・prompt呼び出しだけを担当する入口へ戻した。
+- policy取得を stateLevel 基準から transitionTargetLevel 基準へ変更した。
+- これにより、下降や上昇など遷移目標が渡っている場合、状態別 policy も遷移先に合わせて組み立てるようにした。
+- stateLevel の正規化、transitionTargetLevel の正規化、prompt section 呼び出し以外には触れていない。
 - state_changed・Compass・○表示・DB保存復元・回答保存処理には触れていない。
-*/
 
-/* /app/api/chat/_lib/response/hopyPromptBuilder.ts */
+ /app/api/chat/_lib/response/hopyPromptBuilder.ts
+*/
