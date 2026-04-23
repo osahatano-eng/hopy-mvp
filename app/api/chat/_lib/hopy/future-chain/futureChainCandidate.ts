@@ -2,6 +2,15 @@
 
 import type { HopyFutureChainPrecheckResult } from "./futureChainCheck";
 import {
+  buildDownwardAbstractContext,
+  buildDownwardBridgeSummary,
+  buildDownwardEffectiveSupport,
+  buildDownwardFutureSupportHint,
+  buildDownwardTransitionReason,
+  buildDownwardUserProgressSignal,
+  type FutureChainBridgeSummary,
+} from "./futureChainDownwardCandidate";
+import {
   HOPY_FUTURE_CHAIN_GENERATION_VERSION,
   type HopyFutureChainCandidate,
   type HopyFutureChainConfirmedPayload,
@@ -20,12 +29,7 @@ const STATE_LABELS: Record<HopyFutureChainStateLevel, string> = {
   5: "決定",
 };
 
-type BridgeSummary = {
-  insight: string;
-  hint: string;
-  flow: string;
-  reason: string;
-};
+type BridgeSummary = FutureChainBridgeSummary;
 
 function normalizeText(value: unknown): string {
   if (typeof value !== "string") return "";
@@ -117,7 +121,7 @@ function buildFutureSupportHint(params: {
   fromStateLevel: HopyFutureChainStateLevel;
   toStateLevel: HopyFutureChainStateLevel;
 }): string {
-  return `似た状態のユーザーには、まず現在地を言語化し、次に進む方向を一つに絞る支援が有効な候補になる。`;
+  return "似た状態のユーザーには、まず現在地を言語化し、次に進む方向を一つに絞る支援が有効な候補になる。";
 }
 
 function buildBridgeInsight(params: {
@@ -241,10 +245,18 @@ export function buildFutureChainCandidate(params: {
   const fromStateLevel = precheck.fromStateLevel;
   const toStateLevel = precheck.toStateLevel;
   const transitionKind = precheck.transitionKind;
-  const bridgeSummary = buildBridgeSummary({
-    fromStateLevel,
-    toStateLevel,
-  });
+
+  const isDownward = transitionKind === "downward";
+
+  const bridgeSummary = isDownward
+    ? buildDownwardBridgeSummary({
+        fromStateLevel,
+        toStateLevel,
+      })
+    : buildBridgeSummary({
+        fromStateLevel,
+        toStateLevel,
+      });
 
   const candidate: HopyFutureChainCandidate = {
     pattern_key: buildPatternKey({
@@ -256,25 +268,48 @@ export function buildFutureChainCandidate(params: {
     from_state_level: fromStateLevel,
     to_state_level: toStateLevel,
     transition_kind: transitionKind,
-    abstract_context: buildAbstractContext({
-      fromStateLevel,
-      toStateLevel,
-    }),
-    transition_reason: buildTransitionReason({
-      fromStateLevel,
-      toStateLevel,
-    }),
-    effective_support: buildEffectiveSupport({
-      toStateLevel,
-    }),
-    user_progress_signal: buildUserProgressSignal({
-      fromStateLevel,
-      toStateLevel,
-    }),
-    future_support_hint: buildFutureSupportHint({
-      fromStateLevel,
-      toStateLevel,
-    }),
+    abstract_context: isDownward
+      ? buildDownwardAbstractContext({
+          fromStateLevel,
+          toStateLevel,
+        })
+      : buildAbstractContext({
+          fromStateLevel,
+          toStateLevel,
+        }),
+    transition_reason: isDownward
+      ? buildDownwardTransitionReason({
+          fromStateLevel,
+          toStateLevel,
+        })
+      : buildTransitionReason({
+          fromStateLevel,
+          toStateLevel,
+        }),
+    effective_support: isDownward
+      ? buildDownwardEffectiveSupport({
+          toStateLevel,
+        })
+      : buildEffectiveSupport({
+          toStateLevel,
+        }),
+    user_progress_signal: isDownward
+      ? buildDownwardUserProgressSignal({
+          fromStateLevel,
+          toStateLevel,
+        })
+      : buildUserProgressSignal({
+          fromStateLevel,
+          toStateLevel,
+        }),
+    future_support_hint: isDownward
+      ? buildDownwardFutureSupportHint({
+          toStateLevel,
+        })
+      : buildFutureSupportHint({
+          fromStateLevel,
+          toStateLevel,
+        }),
     bridge_summary: bridgeSummary,
     compass_basis: resolveCompassBasis(payload),
     safety_notes:
@@ -310,11 +345,10 @@ HOPY Future Chain DB の保存候補 candidate 生成だけを担当する。
 このファイルは保存前チェック、DB insert、state_changed再判定、state_level再判定、current_phase再判定、Compass再判定を担当しない。
 
 【今回このファイルで修正したこと】
-- bridge_summary の 4項目 insight / hint / flow / reason を生成する処理を追加した。
-- 4項目生成は candidate生成責務の中に閉じ、check や service や repository へ混ぜていない。
-- 既存の abstract_context / transition_reason / effective_support / user_progress_signal / future_support_hint は残しつつ、bridge_summary を追加した。
-- 生ログ、個人情報、企業機密を保存しない方針は維持し、reply本文やCompass本文そのものを4項目へ混ぜていない。
-- DB insert、重複確認、既存Learning処理への接続はまだ実装していない。
+- downward 専用新規ファイル futureChainDownwardCandidate.ts を import した。
+- transitionKind === "downward" のときだけ、abstract_context / transition_reason / effective_support / user_progress_signal / future_support_hint / bridge_summary を下降専用文言生成へ分岐するようにした。
+- upward 側の既存生成関数は残し、upward 文言責務はこのファイルのまま維持した。
+- pattern_key、保存前チェック、DB insert、Compass基準、metadata には触れていない。
 
 【このファイルの正式役割】
 HOPY Future Chain DB の保存候補 candidate 生成だけを担当する。
