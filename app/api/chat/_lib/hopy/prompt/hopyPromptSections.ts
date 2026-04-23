@@ -4,6 +4,7 @@ import type {
   HopyReplyPolicy,
   HopyStateLevel,
 } from "../../response/hopyReplyPolicy";
+import { buildHopyExplicitBackwardSignalSection } from "./hopyStateRegressionPrompt";
 
 export type HopyPromptResolvedPlan = "free" | "plus" | "pro";
 
@@ -891,6 +892,8 @@ export function buildHopyDeveloperPromptFromSections(
     "",
     buildHopyExplicitForwardCommitmentSection(args.userInput),
     "",
+    buildHopyExplicitBackwardSignalSection(args.userInput),
+    "",
     buildHopyTransitionSection({
       currentStateLevel: args.stateLevel,
       transitionTargetLevel: args.transitionTargetLevel,
@@ -910,18 +913,15 @@ export function buildHopyDeveloperPromptFromSections(
 }
 
 /*
-このファイルの正式役割
+【このファイルの正式役割】
 HOPY回答生成に使う system / developer / user prompt の各セクション文言を定義し、強いHOPYの回答順序で組み立てるプロンプト集合ファイル。
 DB取得、DB保存、state_changed生成、Compass生成、○表示、messages取得、回答保存処理は担当しない。
-*/
 
-/*
 【今回このファイルで修正したこと】
-- buildHopyGenerationRulesSection の文言を強め、低シグナル入力以外では『HOPYはこう考えます』に相当する見立てを必須にした。
-- 未来予測・方針相談・具体提案要求では、HOPYとしての見立て、理由、今やることを必ず本文に入れる方針を追加した。
-- 『1年後どうなるか』『今やるべきこと』『具体的に教えて』のような入力を、一般論ではなくHOPYの推測・根拠・具体行動として返すよう明記した。
-- buildHopyUserInputSection にも同じ方針を追加し、今回入力の解釈段階でも弱い一般論へ逃げにくくした。
-- state_changed・Compass・○表示・DB保存復元・回答保存処理には触れていない。
-*/
+- hopyStateRegressionPrompt.ts から buildHopyExplicitBackwardSignalSection を import するようにした。
+- buildHopyDeveloperPromptFromSections(...) に、下降シグナル専用セクションを追加した。
+- これにより、再迷い・自信低下・判断軸の揺れ・決定撤回を、上流プロンプトで整理の延長へ吸収しすぎない土台を入れた。
+- 他の状態判定ロジック、DB保存、Compass表示、UIには触れていない。
 
-/* /app/api/chat/_lib/hopy/prompt/hopyPromptSections.ts */
+/app/api/chat/_lib/hopy/prompt/hopyPromptSections.ts
+*/
