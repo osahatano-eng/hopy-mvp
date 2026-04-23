@@ -36,6 +36,7 @@ function buildFutureChainInsertPayload(
     effective_support: candidate.effective_support,
     user_progress_signal: candidate.user_progress_signal,
     future_support_hint: candidate.future_support_hint,
+    bridge_summary: candidate.bridge_summary ?? null,
     compass_basis: normalizeNullableText(candidate.compass_basis),
     safety_notes: normalizeNullableText(candidate.safety_notes),
     avoidance_notes: normalizeNullableText(candidate.avoidance_notes),
@@ -87,11 +88,9 @@ HOPY Future Chain DB の DB insert だけを担当する。
 このファイルは保存前チェック、candidate生成、state_changed再判定、state_level再判定、current_phase再判定、Compass再判定を担当しない。
 
 【今回このファイルで修正したこと】
-- Future Chain 専用フォルダ内に、DB insert 専用 repository ファイルを新規作成した。
-- hopy_future_chain_patterns へ candidate を insert し、保存後の id を返す処理を作成した。
-- nullable でよい text 系カラムは空文字を null に寄せるようにした。
-- source_transition_signal_id は v1 では null のまま保存できる構造にした。
-- 保存前チェック、candidate生成、既存Learning処理への接続はまだ実装していない。
+- buildFutureChainInsertPayload(...) に bridge_summary を追加した。
+- candidate で生成済みの 4項目 insight / hint / flow / reason を hopy_future_chain_patterns.bridge_summary へ保存できる形にした。
+- このファイルでは DB insert の責務だけに留め、保存前チェックや candidate 生成には触れていない。
 
 /app/api/chat/_lib/hopy/future-chain/futureChainRepository.ts
 */
