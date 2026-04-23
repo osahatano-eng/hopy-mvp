@@ -58,6 +58,34 @@ export type HopyFutureChainSourceContext = {
   isDevelopmentTest?: boolean;
 };
 
+export type HopyFutureChainBridgeSummary = {
+  insight: string;
+  hint: string;
+  flow: string;
+  reason: string;
+};
+
+export type HopyFutureChainReceiverBridgeSummaryItems = Pick<
+  HopyFutureChainBridgeSummary,
+  "insight" | "hint" | "flow"
+>;
+
+export type HopyFutureChainOwnerBridgeSummaryView = {
+  type: "bridge_summary_for_owner";
+  title: string;
+  subtitle: string;
+  note: string;
+  items: HopyFutureChainBridgeSummary;
+};
+
+export type HopyFutureChainReceiverBridgeSummaryView = {
+  type: "bridge_summary_for_receiver";
+  title: string;
+  subtitle: string;
+  note: string;
+  items: HopyFutureChainReceiverBridgeSummaryItems;
+};
+
 export type HopyFutureChainCandidateMetadata = {
   source: "hopy_confirmed_payload";
   version: typeof HOPY_FUTURE_CHAIN_GENERATION_VERSION;
@@ -74,6 +102,7 @@ export type HopyFutureChainCandidate = {
   effective_support: string;
   user_progress_signal: string;
   future_support_hint: string;
+  bridge_summary?: HopyFutureChainBridgeSummary | null;
   compass_basis: string | null;
   safety_notes: string | null;
   avoidance_notes: string | null;
@@ -115,16 +144,16 @@ export type HopyFutureChainInsertResult =
 /*
 【このファイルの正式役割】
 HOPY Future Chain DB 用の型定義だけを担当する。
-hopy_confirmed_payload を起点にした保存可否チェック、candidate生成、DB保存で共通利用する型を定義する。
+hopy_confirmed_payload を起点にした保存可否チェック、candidate生成、DB保存、本人表示、受け取り側表示で共通利用する型を定義する。
 このファイルは保存可否判定、candidate生成、DB insert、state_changed再判定、state_level再判定、Compass再判定を担当しない。
 
 【今回このファイルで修正したこと】
-- Future Chain 専用フォルダの最初の新規ファイルとして、型定義だけを作成した。
-- 状態値は 1..5 に固定し、0..4 前提を入れていない。
-- transition_kind は Future Chain 用の upward / same_level / downward に固定した。
-- hopy_confirmed_payload を起点にするための confirmed payload 型と source context 型を定義した。
-- 保存候補、保存可否チェック結果、DB insert 結果の型を定義した。
-- 保存可否判定、candidate生成、DB保存処理はまだ実装していない。
+- Future Chain 4項目セットの正式型 HopyFutureChainBridgeSummary を追加した。
+- 本人表示用型 HopyFutureChainOwnerBridgeSummaryView を追加した。
+- 受け取り側表示用型 HopyFutureChainReceiverBridgeSummaryView を追加した。
+- HopyFutureChainCandidate に bridge_summary フィールドを追加した。
+- ただし既存ファイルを壊さないため、bridge_summary は現段階では optional にしている。
+- candidate生成、DB保存、表示UIはまだこのファイルでは触っていない。
 
 /app/api/chat/_lib/hopy/future-chain/futureChainTypes.ts
 */
