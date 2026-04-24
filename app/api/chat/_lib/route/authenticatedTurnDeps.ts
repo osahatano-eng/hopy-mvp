@@ -14,6 +14,11 @@ import type { Lang } from "../router/simpleRouter";
 import type { NotificationState } from "../state/notification";
 import { buildAuthenticatedTurnResult } from "./authenticatedTurnResult";
 import {
+  buildFutureChainTurnPersistResult,
+  buildSkippedFutureChainTurnPersistResult,
+  type FutureChainTurnPersistResult,
+} from "./futureChainTurnPersistResult";
+import {
   saveFutureChainFromConfirmedPayload,
   type HopyFutureChainConfirmedPayload,
 } from "../hopy/future-chain";
@@ -28,6 +33,7 @@ type RunHopyTurnBuiltResult = {
   turnRecord?: unknown;
   hopy_confirmed_payload?: unknown;
   speed_audit?: unknown;
+  future_chain_persist?: FutureChainTurnPersistResult;
   [key: string]: unknown;
 };
 
@@ -505,6 +511,7 @@ export function createAuthenticatedTurnDeps(params: {
             speed_audit?: unknown;
           }).speed_audit,
         ),
+        future_chain_persist: buildSkippedFutureChainTurnPersistResult(null),
       };
     },
 
@@ -545,7 +552,7 @@ export function createAuthenticatedTurnDeps(params: {
       });
 
       if (confirmedPayload) {
-        await saveFutureChainFromConfirmedPayload({
+        result.future_chain_persist = await saveFutureChainFromConfirmedPayload({
           supabase: params.internalWriteSupabase,
           sourceContext: {
             userId: params.authedUserId,
@@ -560,7 +567,15 @@ export function createAuthenticatedTurnDeps(params: {
               params.body,
             ),
           },
-        }).catch(() => null);
+        })
+          .then((futureChainPersistResult) =>
+            buildFutureChainTurnPersistResult(futureChainPersistResult),
+          )
+          .catch(() =>
+            buildSkippedFutureChainTurnPersistResult(
+              "future_chain_persist_failed",
+            ),
+          );
       }
 
       const learningLogsOutcome = await saveAssistantLearningLogs({
@@ -588,7 +603,7 @@ export function createAuthenticatedTurnDeps(params: {
 }
 
 /*
-このファイルの正式役割
+【このファイルの正式役割】
 authenticated 経路の runHopyTurn 用 deps 作成ファイル。
 具体的には、
 1. context を loadContext で渡す
@@ -601,16 +616,15 @@ authenticated 経路の runHopyTurn 用 deps 作成ファイル。
 このファイルは confirmedTurn を新規解釈しない。
 confirmedTurn は hopy_confirmed_payload からのみ復元する。
 turnRecord は唯一の正の fallback に使わない。
-*/
 
-/*
 【今回このファイルで修正したこと】
-- Future Chain 専用フォルダの入口 saveFutureChainFromConfirmedPayload(...) を import した。
-- persistTurn 内で assistant message 保存後に、Future Chain service を1回だけ呼ぶようにした。
-- Future Chain 呼び出しは hopy_confirmed_payload を起点にし、state_changed / state_level / current_phase / Compass をこのファイルで再判定していない。
-- Future Chain 保存に失敗しても既存の assistant 保存、Learning logs 保存、チャット返却を壊さないように、呼び出し結果は既存フローへ影響させない。
-- 開発テスト除外用の最小フラグ解決だけを追加した。
-- HOPY回答○、Compass、Learning既存保存条件、state_transition_signals 保存処理そのものには触れていない。
-*/
+- futureChainTurnPersistResult.ts を import し、Future Chain 保存結果の最小中継型を受けられるようにした。
+- RunHopyTurnBuiltResult に future_chain_persist を追加した。
+- buildTurnResult で future_chain_persist の初期値を skip として載せるようにした。
+- persistTurn で saveFutureChainFromConfirmedPayload(...) の戻り値を握りつぶさず、buildFutureChainTurnPersistResult(...) を通して result.future_chain_persist に載せるようにした。
+- Future Chain 保存失敗時だけ、buildSkippedFutureChainTurnPersistResult("future_chain_persist_failed") を入れるようにした。
+- state_changed / state_level / current_phase / Compass はこのファイルで再判定していない。
+- UI文言決定、通知表示、保存前チェック、候補生成、DB定義には触っていない。
 
-/* /app/api/chat/_lib/route/authenticatedTurnDeps.ts */
+/app/api/chat/_lib/route/authenticatedTurnDeps.ts
+*/
