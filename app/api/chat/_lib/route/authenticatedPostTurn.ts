@@ -7,11 +7,11 @@ import type { insertInterventionLog } from "../db/interventionLog";
 import type { Lang } from "../router/simpleRouter";
 import type { NotificationState } from "../state/notification";
 import type { ConfirmedMemoryCandidate } from "./authenticatedHelpers";
-import { createDefaultMemoryWriteDebug } from "./authenticatedHelpers";
 import { resolveConfirmedCompassArtifacts } from "./authenticatedPostTurnCompass";
 import { resolveAuthenticatedPostTurnConfirmedTurn } from "./authenticatedPostTurnConfirmedTurn";
 import { resolveAuthenticatedPostTurnConfirmedTurnWithCompass } from "./authenticatedPostTurnConfirmedTurnWithCompass";
 import { resolveAuthenticatedPostTurnFailure } from "./authenticatedPostTurnFailure";
+import { createAuthenticatedPostTurnFailureResult } from "./authenticatedPostTurnFailureResult";
 import {
   resolveAuthenticatedPostTurnLearningSave,
   startAuthenticatedPostTurnLearningSave,
@@ -164,24 +164,11 @@ export async function finalizeAuthenticatedPostTurn(
     runTurnResult: params.runTurnResult,
   });
   if (postTurnFailure !== null) {
-    return {
-      payload: {
-        ok: false,
-        error: postTurnFailure,
-      },
-      memoryWrite: createDefaultMemoryWriteDebug("not_attempted"),
-      confirmedMemoryCandidates: [],
+    return createAuthenticatedPostTurnFailureResult({
+      error: postTurnFailure,
       usedHeuristicConfirmedMemoryCandidates:
         params.usedHeuristicConfirmedMemoryCandidates,
-      learning_save_attempted: null,
-      learning_save_inserted: null,
-      learning_save_reason: null,
-      learning_save_error: null,
-      mem_write_ok: null,
-      mem_write_error: null,
-      audit_ok: null,
-      audit_error: null,
-    };
+    });
   }
 
   const syncedConfirmedTurn = resolveAuthenticatedPostTurnConfirmedTurn({
@@ -203,24 +190,11 @@ export async function finalizeAuthenticatedPostTurn(
     });
 
   if (stateCompassInvariantError !== null) {
-    return {
-      payload: {
-        ok: false,
-        error: stateCompassInvariantError,
-      },
-      memoryWrite: createDefaultMemoryWriteDebug("not_attempted"),
-      confirmedMemoryCandidates: [],
+    return createAuthenticatedPostTurnFailureResult({
+      error: stateCompassInvariantError,
       usedHeuristicConfirmedMemoryCandidates:
         params.usedHeuristicConfirmedMemoryCandidates,
-      learning_save_attempted: null,
-      learning_save_inserted: null,
-      learning_save_reason: null,
-      learning_save_error: null,
-      mem_write_ok: null,
-      mem_write_error: null,
-      audit_ok: null,
-      audit_error: null,
-    };
+    });
   }
 
   const latestReplyAt = new Date().toISOString();
@@ -419,6 +393,8 @@ confirmed memory candidates 解決責務は
 authenticatedPostTurnMemoryCandidates.ts に分離し、
 postTurn failure 判定責務は
 authenticatedPostTurnFailure.ts に分離し、
+postTurn失敗結果作成責務は
+authenticatedPostTurnFailureResult.ts に分離し、
 state_changed と Compass の整合検証責務は
 authenticatedPostTurnStateCompassInvariant.ts に分離し、
 confirmedTurn 同期責務は
@@ -434,20 +410,18 @@ authenticatedPostTurnPayloadFinalizeFlow.ts に分離し、
 このファイルでは分離先関数を呼び出すだけにする。
 
 【今回このファイルで修正したこと】
-- 最終payload組み立てフロー責務を
-  /app/api/chat/_lib/route/authenticatedPostTurnPayloadFinalizeFlow.ts へ分離接続した。
-- finalizeAuthenticatedPostTurnPayloadFlow の import を追加した。
-- buildAuthenticatedResponsePayload と buildFinalizedTurnArtifacts の import を削除した。
-- attachFutureChainPersistToPayload の import を削除した。
-- finalizeAuthenticatedPostTurn(...) 内から finalizedTurnArtifacts 作成本体を削除した。
-- finalizeAuthenticatedPostTurn(...) 内から payload 作成本体を削除した。
-- finalizeAuthenticatedPostTurn(...) 内から Future Chain persist payload 中継本体を削除した。
-- finalizeAuthenticatedPostTurn(...) 内から thread_summary 保存debug付与本体を削除した。
+- postTurn失敗結果作成責務を
+  /app/api/chat/_lib/route/authenticatedPostTurnFailureResult.ts へ分離接続した。
+- createAuthenticatedPostTurnFailureResult の import を追加した。
+- createDefaultMemoryWriteDebug の import を削除した。
+- postTurnFailure 発生時の失敗 result 作成本体を削除した。
+- stateCompassInvariantError 発生時の失敗 result 作成本体を削除した。
 - finalizeAuthenticatedPostTurn(...) 内では、
-  finalizeAuthenticatedPostTurnPayloadFlow(...) を呼び出し、
-  返ってきた payload を戻り値へ渡すだけにした。
+  createAuthenticatedPostTurnFailureResult(...) を呼び出し、
+  返ってきた失敗 result をそのまま return するだけにした。
 - state_changed の唯一の正、Compass 生成、HOPY回答○、Memory 書き込み、
-  Learning 保存、thread_summary 保存、audit、thread title、Future Chain 保存仕様そのものには触れていない。
+  Learning 保存、thread_summary、audit、thread title、payload 生成、
+  Future Chain には触れていない。
 
 /app/api/chat/_lib/route/authenticatedPostTurn.ts
 */
