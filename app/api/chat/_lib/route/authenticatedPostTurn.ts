@@ -4,14 +4,10 @@ import type OpenAI from "openai";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { insertInterventionLog } from "../db/interventionLog";
-import { errorText } from "../infra/text";
 import type { Lang } from "../router/simpleRouter";
 import type { NotificationState } from "../state/notification";
 import type { ConfirmedMemoryCandidate } from "./authenticatedHelpers";
-import {
-  createDefaultMemoryWriteDebug,
-  saveConfirmedAssistantLearningEntry,
-} from "./authenticatedHelpers";
+import { createDefaultMemoryWriteDebug } from "./authenticatedHelpers";
 import {
   buildAuthenticatedResponsePayload,
   buildFinalizedTurnArtifacts,
@@ -21,6 +17,10 @@ import { resolveAuthenticatedPostTurnConfirmedTurn } from "./authenticatedPostTu
 import { resolveAuthenticatedPostTurnConfirmedTurnWithCompass } from "./authenticatedPostTurnConfirmedTurnWithCompass";
 import { resolveAuthenticatedPostTurnFailure } from "./authenticatedPostTurnFailure";
 import { attachFutureChainPersistToPayload } from "./authenticatedPostTurnFutureChainPayload";
+import {
+  resolveAuthenticatedPostTurnLearningSave,
+  startAuthenticatedPostTurnLearningSave,
+} from "./authenticatedPostTurnLearningSave";
 import { resolveConfirmedMemoryCandidatesWithTimeout } from "./authenticatedPostTurnMemoryCandidates";
 import { executeAuthenticatedPostTurnMemoryWrite } from "./authenticatedPostTurnMemoryWrite";
 import { resolveAuthenticatedPostTurnStateCompassInvariant } from "./authenticatedPostTurnStateCompassInvariant";
@@ -307,12 +307,7 @@ export async function finalizeAuthenticatedPostTurn(
     params.usedHeuristicConfirmedMemoryCandidates ||
     resolvedFinalConfirmedMemories.usedHeuristicConfirmedMemoryCandidates;
 
-  let learning_save_attempted: boolean | null = null;
-  let learning_save_inserted: number | null = null;
-  let learning_save_reason: string | null = null;
-  let learning_save_error: string | null = null;
-
-  const learningSavePromise = saveConfirmedAssistantLearningEntry({
+  const learningSavePromise = startAuthenticatedPostTurnLearningSave({
     supabase: params.internalWriteSupabase,
     authedUserId: params.authedUserId,
     resolvedConversationId: params.resolvedConversationId,
@@ -349,18 +344,12 @@ export async function finalizeAuthenticatedPostTurn(
     confirmedMemoryCandidates,
   });
 
-  try {
-    const learningSave = await learningSavePromise;
-    learning_save_attempted = learningSave.attempted;
-    learning_save_inserted = learningSave.inserted;
-    learning_save_reason = learningSave.reason;
-    learning_save_error = learningSave.error;
-  } catch (e: any) {
-    learning_save_attempted = true;
-    learning_save_inserted = 0;
-    learning_save_reason = "exception";
-    learning_save_error = errorText(e) || String(e?.message ?? e);
-  }
+  const {
+    learning_save_attempted,
+    learning_save_inserted,
+    learning_save_reason,
+    learning_save_error,
+  } = await resolveAuthenticatedPostTurnLearningSave(learningSavePromise);
 
   const auditSave = await saveAuthenticatedPostTurnAudit({
     supabase: params.supabase,
@@ -485,21 +474,27 @@ Compass付き confirmedTurn 整形責務は
 authenticatedPostTurnConfirmedTurnWithCompass.ts に分離し、
 Memory 書き込み実行責務は
 authenticatedPostTurnMemoryWrite.ts に分離し、
+Learning 保存開始・結果解決責務は
+authenticatedPostTurnLearningSave.ts に分離し、
 このファイルでは分離先関数を呼び出すだけにする。
 
 【今回このファイルで修正したこと】
-- Memory 書き込み実行責務を
-  /app/api/chat/_lib/route/authenticatedPostTurnMemoryWrite.ts へ分離接続した。
-- executeAuthenticatedPostTurnMemoryWrite の import を追加した。
-- handleMemoryWrite の import を削除した。
-- finalizeAuthenticatedPostTurn(...) 内から Memory 書き込み try/catch 本体を削除した。
+- Learning 保存開始・結果解決責務を
+  /app/api/chat/_lib/route/authenticatedPostTurnLearningSave.ts へ分離接続した。
+- startAuthenticatedPostTurnLearningSave と
+  resolveAuthenticatedPostTurnLearningSave の import を追加した。
+- saveConfirmedAssistantLearningEntry の import を削除した。
+- errorText の import を削除した。
+- finalizeAuthenticatedPostTurn(...) 内から learningSavePromise 開始本体を削除した。
+- finalizeAuthenticatedPostTurn(...) 内から learning 保存結果解決 try/catch 本体を削除した。
 - finalizeAuthenticatedPostTurn(...) 内では、
-  executeAuthenticatedPostTurnMemoryWrite(...) を呼び出し、
-  返ってきた memoryWrite / mem_write_ok / mem_write_error を
-  buildFinalizedTurnArtifacts(...) と戻り値へ渡すだけにした。
+  startAuthenticatedPostTurnLearningSave(...) で Promise を開始し、
+  Memory 書き込み後に resolveAuthenticatedPostTurnLearningSave(...) で結果を受け取り、
+  learning_save_attempted / learning_save_inserted / learning_save_reason /
+  learning_save_error を戻り値へ渡すだけにした。
 - learningSavePromise の開始位置は維持し、Memory 書き込み実行中に learning 保存 Promise が進む既存の流れを変えていない。
-- state_changed の唯一の正、Compass 生成、HOPY回答○、Future Chain、thread_summary、
-  audit、thread title、learning 保存処理本体、payload 生成本体には触れていない。
+- state_changed の唯一の正、Compass 生成、HOPY回答○、Memory 書き込み、
+  Future Chain、thread_summary、audit、thread title、payload 生成本体には触れていない。
 
 /app/api/chat/_lib/route/authenticatedPostTurn.ts
 */
