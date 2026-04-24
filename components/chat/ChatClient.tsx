@@ -15,6 +15,7 @@ import { useThreadSwitch } from "./lib/useThreadSwitch";
 import { useTranslateCache } from "./lib/useTranslateCache";
 import { useChatSend, type FailedSend } from "./lib/useChatSend";
 import { loadMessages } from "./lib/threadApi";
+import type { ChatSendFutureChainPersist } from "./lib/chatSendRequestExecution";
 
 import { normalizeHopyState, type HopyState } from "./lib/stateBadge";
 import {
@@ -72,6 +73,8 @@ export default function ChatClient() {
   const [railOpen, setRailOpen] = useState(false);
 
   const [lastFailed, setLastFailed] = useState<FailedSend | null>(null);
+  const [futureChainPersist, setFutureChainPersist] =
+    useState<ChatSendFutureChainPersist | null>(null);
 
   const [userState, setUserState] = useState<HopyState | null>(null);
   const [userStateErr, setUserStateErr] = useState<string | null>(null);
@@ -443,6 +446,7 @@ export default function ChatClient() {
     ensureThreadId,
     onThreadIdResolved,
     onThreadRenamed: handleThreadRenamed,
+    onFutureChainPersist: setFutureChainPersist,
     input,
     setInput,
     loading,
@@ -501,6 +505,7 @@ export default function ChatClient() {
       email={viewLoggedIn ? email : ""}
       uiLang={uiLang}
       ui={ui}
+      futureChainPersist={futureChainPersist}
       input={input}
       setInput={setInput}
       messages={viewMessages}
@@ -557,21 +562,19 @@ export default function ChatClient() {
 }
 
 /*
-このファイルの正式役割
+【このファイルの正式役割】
 チャット画面の親本体ファイル。
 state / ref / hook 呼び出し / 値の受け渡しをまとめ、
 ChatClientView へ表示用の値を接続する。
 親は読むだけ・つなぐだけに寄せる。
-*/
+このファイルは HOPY唯一の正、state_changed、Compass、HOPY回答○、Future Chain保存可否を再判定しない。
 
-/*
 【今回このファイルで修正したこと】
-1. railOpen の初期値を window.matchMedia() 依存から false 固定に変更しました。
-2. SSR と client 初回描画で railOpen が一致するようにしました。
-3. 未使用になった isPcRailViewport() を削除しました。
-4. viewLoggedIn 後に PC 幅なら railOpen を同期する既存 effect は維持しました。
-5. profile / plan / messages / threads の取得本体、送信、MEMORIES には触っていません。
-6. HOPY唯一の正、confirmed payload、state_changed、HOPY回答○、Compass、状態値 1..5 / 5段階、DB保存・復元には触れていません。
-*/
+- ChatSendFutureChainPersist 型を読み込んだ。
+- futureChainPersist state を追加した。
+- useChatSend(...) の onFutureChainPersist で Future Chain 保存結果を受け取るようにした。
+- ChatClientView へ futureChainPersist を props として渡すようにした。
+- Future Chain の保存可否、state_changed、state_level、Compass、HOPY回答○、DB保存、MEMORIES、DASHBOARD は再判定していない。
 
-/* /components/chat/ChatClient.tsx */
+/components/chat/ChatClient.tsx
+*/
