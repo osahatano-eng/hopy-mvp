@@ -24,11 +24,8 @@ import {
 import { resolveConfirmedMemoryCandidatesWithTimeout } from "./authenticatedPostTurnMemoryCandidates";
 import { executeAuthenticatedPostTurnMemoryWrite } from "./authenticatedPostTurnMemoryWrite";
 import { resolveAuthenticatedPostTurnStateCompassInvariant } from "./authenticatedPostTurnStateCompassInvariant";
-import {
-  attachThreadSummarySaveDebugToPayload,
-  createDefaultThreadSummarySaveDebug,
-  saveConfirmedThreadSummary,
-} from "./authenticatedPostTurnThreadSummarySave";
+import { attachThreadSummarySaveDebugToPayload } from "./authenticatedPostTurnThreadSummarySave";
+import { executeAuthenticatedPostTurnThreadSummarySaveFlow } from "./authenticatedPostTurnThreadSummarySaveFlow";
 import { resolveAuthenticatedPostTurnThreadSummary } from "./authenticatedPostTurnThreadSummaryResolve";
 import { saveAuthenticatedPostTurnAudit } from "./authenticatedPostTurnAuditSave";
 import { resolveAuthenticatedPostTurnThreadTitle } from "./authenticatedPostTurnThreadTitle";
@@ -242,50 +239,23 @@ export async function finalizeAuthenticatedPostTurn(
     autoTitleUpdated: params.auto_title_updated,
   });
 
-  let threadSummarySaveDebug = createDefaultThreadSummarySaveDebug({
-    confirmedThreadSummary,
-  });
-
-  if (confirmedThreadSummary !== null) {
-    const threadSummarySave = await saveConfirmedThreadSummary({
+  const threadSummarySaveFlow =
+    await executeAuthenticatedPostTurnThreadSummarySaveFlow({
       internalWriteSupabase: params.internalWriteSupabase,
       supabase: params.supabase,
       resolvedConversationId: params.resolvedConversationId,
       authedUserId: params.authedUserId,
       confirmedThreadSummary,
+      debugSave: params.debugSave,
+      usedHeuristicConfirmedMemoryCandidates:
+        params.usedHeuristicConfirmedMemoryCandidates,
     });
 
-    threadSummarySaveDebug = threadSummarySave.debug;
-
-    if (!threadSummarySave.ok) {
-      const failurePayload = attachThreadSummarySaveDebugToPayload({
-        payload: {
-          ok: false,
-          error:
-            threadSummarySave.error ??
-            "authenticatedPostTurn: thread_summary_save_failed:update_failed",
-        },
-        debugSave: params.debugSave,
-        threadSummarySaveDebug,
-      });
-
-      return {
-        payload: failurePayload,
-        memoryWrite: createDefaultMemoryWriteDebug("not_attempted"),
-        confirmedMemoryCandidates: [],
-        usedHeuristicConfirmedMemoryCandidates:
-          params.usedHeuristicConfirmedMemoryCandidates,
-        learning_save_attempted: null,
-        learning_save_inserted: null,
-        learning_save_reason: null,
-        learning_save_error: null,
-        mem_write_ok: null,
-        mem_write_error: null,
-        audit_ok: null,
-        audit_error: null,
-      };
-    }
+  if (threadSummarySaveFlow.failureResult !== null) {
+    return threadSummarySaveFlow.failureResult;
   }
+
+  const { threadSummarySaveDebug } = threadSummarySaveFlow;
 
   const resolvedFinalConfirmedMemories =
     await resolveConfirmedMemoryCandidatesWithTimeout({
@@ -460,6 +430,8 @@ thread_summary 保存・保存debug付与責務は
 authenticatedPostTurnThreadSummarySave.ts に分離し、
 thread_summary 解決責務は
 authenticatedPostTurnThreadSummaryResolve.ts に分離し、
+thread_summary 保存フロー責務は
+authenticatedPostTurnThreadSummarySaveFlow.ts に分離し、
 audit 保存責務は authenticatedPostTurnAuditSave.ts に分離し、
 thread title 解決責務は authenticatedPostTurnThreadTitle.ts に分離し、
 confirmed memory candidates 解決責務は
@@ -479,22 +451,17 @@ authenticatedPostTurnLearningSave.ts に分離し、
 このファイルでは分離先関数を呼び出すだけにする。
 
 【今回このファイルで修正したこと】
-- Learning 保存開始・結果解決責務を
-  /app/api/chat/_lib/route/authenticatedPostTurnLearningSave.ts へ分離接続した。
-- startAuthenticatedPostTurnLearningSave と
-  resolveAuthenticatedPostTurnLearningSave の import を追加した。
-- saveConfirmedAssistantLearningEntry の import を削除した。
-- errorText の import を削除した。
-- finalizeAuthenticatedPostTurn(...) 内から learningSavePromise 開始本体を削除した。
-- finalizeAuthenticatedPostTurn(...) 内から learning 保存結果解決 try/catch 本体を削除した。
+- thread_summary 保存フロー責務を
+  /app/api/chat/_lib/route/authenticatedPostTurnThreadSummarySaveFlow.ts へ分離接続した。
+- executeAuthenticatedPostTurnThreadSummarySaveFlow の import を追加した。
+- createDefaultThreadSummarySaveDebug と saveConfirmedThreadSummary の import を削除した。
+- finalizeAuthenticatedPostTurn(...) 内から thread_summary 保存フロー本体を削除した。
 - finalizeAuthenticatedPostTurn(...) 内では、
-  startAuthenticatedPostTurnLearningSave(...) で Promise を開始し、
-  Memory 書き込み後に resolveAuthenticatedPostTurnLearningSave(...) で結果を受け取り、
-  learning_save_attempted / learning_save_inserted / learning_save_reason /
-  learning_save_error を戻り値へ渡すだけにした。
-- learningSavePromise の開始位置は維持し、Memory 書き込み実行中に learning 保存 Promise が進む既存の流れを変えていない。
+  executeAuthenticatedPostTurnThreadSummarySaveFlow(...) を呼び出し、
+  failureResult があればそのまま return し、
+  成功時は threadSummarySaveDebug を受け取って final payload debug 付与へ渡すだけにした。
 - state_changed の唯一の正、Compass 生成、HOPY回答○、Memory 書き込み、
-  Future Chain、thread_summary、audit、thread title、payload 生成本体には触れていない。
+  Learning 保存、Future Chain、audit、thread title、payload 生成本体には触れていない。
 
 /app/api/chat/_lib/route/authenticatedPostTurn.ts
 */
