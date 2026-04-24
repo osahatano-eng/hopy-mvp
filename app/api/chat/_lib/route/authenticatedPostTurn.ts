@@ -8,23 +8,18 @@ import type { Lang } from "../router/simpleRouter";
 import type { NotificationState } from "../state/notification";
 import type { ConfirmedMemoryCandidate } from "./authenticatedHelpers";
 import { createDefaultMemoryWriteDebug } from "./authenticatedHelpers";
-import {
-  buildAuthenticatedResponsePayload,
-  buildFinalizedTurnArtifacts,
-} from "./authenticatedFinalize";
 import { resolveConfirmedCompassArtifacts } from "./authenticatedPostTurnCompass";
 import { resolveAuthenticatedPostTurnConfirmedTurn } from "./authenticatedPostTurnConfirmedTurn";
 import { resolveAuthenticatedPostTurnConfirmedTurnWithCompass } from "./authenticatedPostTurnConfirmedTurnWithCompass";
 import { resolveAuthenticatedPostTurnFailure } from "./authenticatedPostTurnFailure";
-import { attachFutureChainPersistToPayload } from "./authenticatedPostTurnFutureChainPayload";
 import {
   resolveAuthenticatedPostTurnLearningSave,
   startAuthenticatedPostTurnLearningSave,
 } from "./authenticatedPostTurnLearningSave";
 import { resolveConfirmedMemoryCandidatesWithTimeout } from "./authenticatedPostTurnMemoryCandidates";
 import { executeAuthenticatedPostTurnMemoryWrite } from "./authenticatedPostTurnMemoryWrite";
+import { finalizeAuthenticatedPostTurnPayloadFlow } from "./authenticatedPostTurnPayloadFinalizeFlow";
 import { resolveAuthenticatedPostTurnStateCompassInvariant } from "./authenticatedPostTurnStateCompassInvariant";
-import { attachThreadSummarySaveDebugToPayload } from "./authenticatedPostTurnThreadSummarySave";
 import { executeAuthenticatedPostTurnThreadSummarySaveFlow } from "./authenticatedPostTurnThreadSummarySaveFlow";
 import { resolveAuthenticatedPostTurnThreadSummary } from "./authenticatedPostTurnThreadSummaryResolve";
 import { saveAuthenticatedPostTurnAudit } from "./authenticatedPostTurnAuditSave";
@@ -361,7 +356,7 @@ export async function finalizeAuthenticatedPostTurn(
     resolvedCompass,
   });
 
-  const finalizedTurnArtifacts = buildFinalizedTurnArtifacts({
+  const { payload } = finalizeAuthenticatedPostTurnPayloadFlow({
     confirmedTurn: confirmedTurnWithCompass,
     notification: params.notification,
     resolvedConversationId: params.resolvedConversationId,
@@ -372,11 +367,6 @@ export async function finalizeAuthenticatedPostTurn(
     confirmedMemoryCandidates,
     compassText,
     compassPrompt,
-  });
-
-  const payload = buildAuthenticatedResponsePayload({
-    finalizedTurnArtifacts,
-    resolvedConversationId: params.resolvedConversationId,
     threadTitleForPayload,
     stateUpdateOk: params.stateUpdateOk,
     stateUpdateError: params.stateUpdateError,
@@ -385,21 +375,12 @@ export async function finalizeAuthenticatedPostTurn(
     server_created_client_request_id: params.server_created_client_request_id,
     cleanTrigger: params.cleanTrigger,
     memory_clean: params.memory_clean,
-  });
-
-  const payloadWithFutureChainPersist = attachFutureChainPersistToPayload({
-    payload,
     runTurnResult: params.runTurnResult,
-  });
-
-  const payloadWithThreadSummaryDebug = attachThreadSummarySaveDebugToPayload({
-    payload: payloadWithFutureChainPersist,
-    debugSave: params.debugSave,
     threadSummarySaveDebug,
   });
 
   return {
-    payload: payloadWithThreadSummaryDebug,
+    payload,
     memoryWrite,
     confirmedMemoryCandidates,
     usedHeuristicConfirmedMemoryCandidates,
@@ -448,20 +429,25 @@ Memory 書き込み実行責務は
 authenticatedPostTurnMemoryWrite.ts に分離し、
 Learning 保存開始・結果解決責務は
 authenticatedPostTurnLearningSave.ts に分離し、
+最終payload組み立てフロー責務は
+authenticatedPostTurnPayloadFinalizeFlow.ts に分離し、
 このファイルでは分離先関数を呼び出すだけにする。
 
 【今回このファイルで修正したこと】
-- thread_summary 保存フロー責務を
-  /app/api/chat/_lib/route/authenticatedPostTurnThreadSummarySaveFlow.ts へ分離接続した。
-- executeAuthenticatedPostTurnThreadSummarySaveFlow の import を追加した。
-- createDefaultThreadSummarySaveDebug と saveConfirmedThreadSummary の import を削除した。
-- finalizeAuthenticatedPostTurn(...) 内から thread_summary 保存フロー本体を削除した。
+- 最終payload組み立てフロー責務を
+  /app/api/chat/_lib/route/authenticatedPostTurnPayloadFinalizeFlow.ts へ分離接続した。
+- finalizeAuthenticatedPostTurnPayloadFlow の import を追加した。
+- buildAuthenticatedResponsePayload と buildFinalizedTurnArtifacts の import を削除した。
+- attachFutureChainPersistToPayload の import を削除した。
+- finalizeAuthenticatedPostTurn(...) 内から finalizedTurnArtifacts 作成本体を削除した。
+- finalizeAuthenticatedPostTurn(...) 内から payload 作成本体を削除した。
+- finalizeAuthenticatedPostTurn(...) 内から Future Chain persist payload 中継本体を削除した。
+- finalizeAuthenticatedPostTurn(...) 内から thread_summary 保存debug付与本体を削除した。
 - finalizeAuthenticatedPostTurn(...) 内では、
-  executeAuthenticatedPostTurnThreadSummarySaveFlow(...) を呼び出し、
-  failureResult があればそのまま return し、
-  成功時は threadSummarySaveDebug を受け取って final payload debug 付与へ渡すだけにした。
+  finalizeAuthenticatedPostTurnPayloadFlow(...) を呼び出し、
+  返ってきた payload を戻り値へ渡すだけにした。
 - state_changed の唯一の正、Compass 生成、HOPY回答○、Memory 書き込み、
-  Learning 保存、Future Chain、audit、thread title、payload 生成本体には触れていない。
+  Learning 保存、thread_summary 保存、audit、thread title、Future Chain 保存仕様そのものには触れていない。
 
 /app/api/chat/_lib/route/authenticatedPostTurn.ts
 */
