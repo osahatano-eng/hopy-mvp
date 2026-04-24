@@ -20,14 +20,15 @@ import {
 import { resolveConfirmedCompassArtifacts } from "./authenticatedPostTurnCompass";
 import { resolveAuthenticatedPostTurnFailure } from "./authenticatedPostTurnFailure";
 import { attachFutureChainPersistToPayload } from "./authenticatedPostTurnFutureChainPayload";
+import { resolveConfirmedMemoryCandidatesWithTimeout } from "./authenticatedPostTurnMemoryCandidates";
 import {
   attachThreadSummarySaveDebugToPayload,
   createDefaultThreadSummarySaveDebug,
   saveConfirmedThreadSummary,
 } from "./authenticatedPostTurnThreadSummarySave";
+import { resolveAuthenticatedPostTurnThreadSummary } from "./authenticatedPostTurnThreadSummaryResolve";
 import { saveAuthenticatedPostTurnAudit } from "./authenticatedPostTurnAuditSave";
 import { resolveAuthenticatedPostTurnThreadTitle } from "./authenticatedPostTurnThreadTitle";
-import { resolveConfirmedMemoryCandidatesWithTimeout } from "./authenticatedPostTurnMemoryCandidates";
 
 type RunHopyTurnBuiltResult = Record<string, any>;
 type ResolvedPlan = "free" | "plus" | "pro";
@@ -246,64 +247,6 @@ function normalizeCompassPrompt(value: unknown): string | null {
   return normalized.length > 0 ? normalized : null;
 }
 
-function buildCanonicalThreadSummaryRecord(params: {
-  resolvedConversationId: string;
-  assistantMessageId: string;
-  latestReplyAt: string;
-  confirmedTurn: ConfirmedAssistantTurn;
-  autoTitleUpdated: boolean;
-}): Record<string, unknown> {
-  return {
-    thread_id: params.resolvedConversationId,
-    latest_reply_id: params.assistantMessageId,
-    latest_reply_at: params.latestReplyAt,
-    latest_confirmed_state: {
-      state_level: params.confirmedTurn.currentStateLevel,
-      current_phase: params.confirmedTurn.currentPhase,
-      prev_state_level: params.confirmedTurn.prevStateLevel,
-      prev_phase: params.confirmedTurn.prevPhase,
-      state_changed: params.confirmedTurn.stateChanged,
-    },
-    title_candidate_updated: params.autoTitleUpdated,
-  };
-}
-
-function resolveConfirmedThreadSummary(params: {
-  runTurnResult: RunHopyTurnBuiltResult | null | undefined;
-  confirmedTurn: ConfirmedAssistantTurn;
-  resolvedConversationId: string;
-  assistantMessageId: string;
-  latestReplyAt: string;
-  autoTitleUpdated: boolean;
-}): string | null {
-  const confirmedTurnSummary = normalizeThreadSummary(
-    params.confirmedTurn.threadSummary ?? params.confirmedTurn.thread_summary,
-  );
-  if (confirmedTurnSummary !== null) {
-    return confirmedTurnSummary;
-  }
-
-  const resultRecord = asRecord(params.runTurnResult ?? null);
-  const confirmedPayload = asRecord(resultRecord?.hopy_confirmed_payload);
-
-  const confirmedPayloadSummary = normalizeThreadSummary(
-    confirmedPayload?.thread_summary ?? confirmedPayload?.threadSummary,
-  );
-  if (confirmedPayloadSummary !== null) {
-    return confirmedPayloadSummary;
-  }
-
-  return normalizeThreadSummary(
-    buildCanonicalThreadSummaryRecord({
-      resolvedConversationId: params.resolvedConversationId,
-      assistantMessageId: params.assistantMessageId,
-      latestReplyAt: params.latestReplyAt,
-      confirmedTurn: params.confirmedTurn,
-      autoTitleUpdated: params.autoTitleUpdated,
-    }),
-  );
-}
-
 function resolveConfirmedTurnFromRunTurnResult(params: {
   runTurnResult: RunHopyTurnBuiltResult | null | undefined;
   confirmedTurn: ConfirmedAssistantTurn;
@@ -482,7 +425,7 @@ export async function finalizeAuthenticatedPostTurn(
 
   const latestReplyAt = new Date().toISOString();
 
-  const confirmedThreadSummary = resolveConfirmedThreadSummary({
+  const confirmedThreadSummary = resolveAuthenticatedPostTurnThreadSummary({
     runTurnResult: params.runTurnResult,
     confirmedTurn: syncedConfirmedTurn,
     resolvedConversationId: params.resolvedConversationId,
@@ -758,6 +701,8 @@ Future Chain 保存結果の payload 中継責務は
 authenticatedPostTurnFutureChainPayload.ts に分離し、
 thread_summary 保存・保存debug付与責務は
 authenticatedPostTurnThreadSummarySave.ts に分離し、
+thread_summary 解決責務は
+authenticatedPostTurnThreadSummaryResolve.ts に分離し、
 audit 保存責務は authenticatedPostTurnAuditSave.ts に分離し、
 thread title 解決責務は authenticatedPostTurnThreadTitle.ts に分離し、
 confirmed memory candidates 解決責務は
@@ -767,16 +712,17 @@ authenticatedPostTurnFailure.ts に分離し、
 このファイルでは分離先関数を呼び出すだけにする。
 
 【今回このファイルで修正したこと】
-- postTurn failure 判定責務を
-  /app/api/chat/_lib/route/authenticatedPostTurnFailure.ts へ分離接続した。
-- resolveAuthenticatedPostTurnFailure の import を追加した。
-- resolvePostTurnFailure(...) の本体を親ファイルから削除した。
+- thread_summary 解決責務を
+  /app/api/chat/_lib/route/authenticatedPostTurnThreadSummaryResolve.ts へ分離接続した。
+- resolveAuthenticatedPostTurnThreadSummary の import を追加した。
+- buildCanonicalThreadSummaryRecord(...) と
+  resolveConfirmedThreadSummary(...) の本体を親ファイルから削除した。
 - finalizeAuthenticatedPostTurn(...) 内では、
-  resolveAuthenticatedPostTurnFailure(...) を呼び出すだけにした。
-- 既存の失敗時 early return の形、エラー payload、memoryWrite 初期値、
-  learning / memory / audit の null 返却は変えていない。
+  resolveAuthenticatedPostTurnThreadSummary(...) を呼び出すだけにした。
+- normalizeThreadSummary(...) は resolveConfirmedTurnFromRunTurnResult(...) 内でも
+  まだ使用されているため、この親ファイルに残した。
 - state_changed の唯一の正、Compass 条件、memory 書き込み実行、learning、
-  audit、thread_summary、thread title、Future Chain、payload 生成本体には触れていない。
+  audit、thread title、Future Chain、payload 生成本体には触れていない。
 
 /app/api/chat/_lib/route/authenticatedPostTurn.ts
 */
