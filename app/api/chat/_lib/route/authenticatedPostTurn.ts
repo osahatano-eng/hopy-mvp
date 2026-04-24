@@ -3,9 +3,8 @@
 import type OpenAI from "openai";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { insertInterventionLog } from "../db/interventionLog";
+import type { insertInterventionLog } from "../db/interventionLog";
 import { errorText } from "../infra/text";
-import { systemCoreDigest, systemCorePrompt } from "../system/system";
 import type { Lang } from "../router/simpleRouter";
 import { resolveThreadTitleForPayload } from "./threadTitle";
 import { handleMemoryWrite } from "./memoryWrite";
@@ -27,6 +26,7 @@ import {
   createDefaultThreadSummarySaveDebug,
   saveConfirmedThreadSummary,
 } from "./authenticatedPostTurnThreadSummarySave";
+import { saveAuthenticatedPostTurnAudit } from "./authenticatedPostTurnAuditSave";
 
 type RunHopyTurnBuiltResult = Record<string, any>;
 type ResolvedPlan = "free" | "plus" | "pro";
@@ -826,45 +826,23 @@ export async function finalizeAuthenticatedPostTurn(
     learning_save_error = errorText(e) || String(e?.message ?? e);
   }
 
-  let audit_ok: boolean | null = null;
-  let audit_error: string | null = null;
+  const auditSave = await saveAuthenticatedPostTurnAudit({
+    supabase: params.supabase,
+    authedUserId: params.authedUserId,
+    resolvedConversationId: params.resolvedConversationId,
+    userText: params.userText,
+    uiLang: params.uiLang,
+    routed: params.routed,
+    selectedStrategy: params.selectedStrategy,
+    modelName: params.modelName,
+    buildSig: params.buildSig,
+    confirmedTurn: syncedConfirmedTurn,
+    stateBefore: params.stateBefore,
+    st: params.st,
+  });
 
-  try {
-    const turn_key = `${params.resolvedConversationId}:${Date.now()}`;
-
-    const res = await insertInterventionLog({
-      supabase: params.supabase,
-      user_id: params.authedUserId,
-      thread_id: params.resolvedConversationId,
-      turn_key,
-      user_input: params.userText,
-      input_lang: params.uiLang,
-      input_tone: params.routed.tone,
-      input_intensity: params.routed.intensity,
-      selected_strategy: params.selectedStrategy,
-      style_id: 1,
-      hopy_output: syncedConfirmedTurn.assistantText,
-      avoid_phrases: [],
-      model: params.modelName,
-      system_digest: params.buildSig,
-      system_core_digest: systemCoreDigest(),
-      build_sig: params.buildSig,
-      system_core_prompt: systemCorePrompt,
-      phase_before: syncedConfirmedTurn.prevPhase,
-      phase_after: syncedConfirmedTurn.currentPhase,
-      score_before: params.stateBefore?.stability_score ?? 0,
-      score_after:
-        params.st?.applied?.nextScore ?? params.stateBefore?.stability_score ?? 0,
-    });
-
-    audit_ok = res.ok;
-    if (!res.ok) {
-      audit_error = errorText((res as any)?.error) || "insert_failed";
-    }
-  } catch (e: any) {
-    audit_ok = false;
-    audit_error = errorText(e) || String(e?.message ?? e);
-  }
+  const audit_ok = auditSave.audit_ok;
+  const audit_error = auditSave.audit_error;
 
   const fallbackThreadTitleForPayload = getFallbackThreadTitleForPayload({
     auto_title_updated: params.auto_title_updated,
@@ -980,18 +958,17 @@ Future Chain 保存結果の payload 中継責務は
 authenticatedPostTurnFutureChainPayload.ts に分離し、
 thread_summary 保存・保存debug付与責務は
 authenticatedPostTurnThreadSummarySave.ts に分離し、
+audit 保存責務は authenticatedPostTurnAuditSave.ts に分離し、
 このファイルでは分離先関数を呼び出すだけにする。
 
 【今回このファイルで修正したこと】
-- thread_summary 保存・保存debug付与責務を
-  /app/api/chat/_lib/route/authenticatedPostTurnThreadSummarySave.ts へ分離した。
-- ThreadSummarySaveAttemptResult / ThreadSummarySaveDebug の型定義を親ファイルから削除した。
-- createDefaultThreadSummarySaveDebug(...)、attachThreadSummarySaveDebugToPayload(...)、
-  saveThreadSummaryAttempt(...)、saveConfirmedThreadSummary(...) の本体を親ファイルから削除した。
-- 親ファイルでは createDefaultThreadSummarySaveDebug(...)、
-  saveConfirmedThreadSummary(...)、attachThreadSummarySaveDebugToPayload(...) を
-  import して呼び出すだけにした。
-- state_changed の唯一の正、Compass 条件、memory、learning、audit、title 解決、
+- audit 保存責務を
+  /app/api/chat/_lib/route/authenticatedPostTurnAuditSave.ts へ分離した。
+- insertInterventionLog の値 import を type import に変更した。
+- systemCoreDigest / systemCorePrompt の import を削除した。
+- insertInterventionLog(...) の try/catch と audit_ok / audit_error 整形本体を親ファイルから削除した。
+- 親ファイルでは saveAuthenticatedPostTurnAudit(...) を import して呼び出すだけにした。
+- state_changed の唯一の正、Compass 条件、memory、learning、thread_summary、title 解決、
   Future Chain 保存結果の payload 中継には触れていない。
 
 /app/api/chat/_lib/route/authenticatedPostTurn.ts
