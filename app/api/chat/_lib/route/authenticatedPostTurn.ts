@@ -13,7 +13,6 @@ import {
   createDefaultMemoryWriteDebug,
   saveConfirmedAssistantLearningEntry,
 } from "./authenticatedHelpers";
-import { resolveFinalConfirmedMemoryCandidates } from "./authenticatedMemoryCandidates";
 import {
   buildAuthenticatedResponsePayload,
   buildFinalizedTurnArtifacts,
@@ -27,6 +26,7 @@ import {
 } from "./authenticatedPostTurnThreadSummarySave";
 import { saveAuthenticatedPostTurnAudit } from "./authenticatedPostTurnAuditSave";
 import { resolveAuthenticatedPostTurnThreadTitle } from "./authenticatedPostTurnThreadTitle";
+import { resolveConfirmedMemoryCandidatesWithTimeout } from "./authenticatedPostTurnMemoryCandidates";
 
 type RunHopyTurnBuiltResult = Record<string, any>;
 type ResolvedPlan = "free" | "plus" | "pro";
@@ -446,134 +446,6 @@ function resolvePostTurnStateCompassInvariant(params: {
   return null;
 }
 
-function toConfirmedMemoryCandidates(
-  value: unknown,
-): ConfirmedMemoryCandidate[] {
-  if (!Array.isArray(value)) return [];
-
-  return value.filter((item) => {
-    if (!item || typeof item !== "object" || Array.isArray(item)) return false;
-    const record = item as Record<string, unknown>;
-    const content =
-      typeof record.content === "string"
-        ? record.content.trim()
-        : typeof record.body === "string"
-          ? record.body.trim()
-          : "";
-    return content.length > 0;
-  }) as ConfirmedMemoryCandidate[];
-}
-
-function resolveBuiltResultConfirmedMemoryCandidates(
-  runTurnResult: RunHopyTurnBuiltResult | null | undefined,
-): ConfirmedMemoryCandidate[] {
-  const topLevelConfirmed = toConfirmedMemoryCandidates(
-    runTurnResult?.confirmed_memory_candidates,
-  );
-  if (topLevelConfirmed.length > 0) {
-    return topLevelConfirmed;
-  }
-
-  const topLevelMemory = toConfirmedMemoryCandidates(
-    runTurnResult?.memory_candidates,
-  );
-  if (topLevelMemory.length > 0) {
-    return topLevelMemory;
-  }
-
-  const confirmedPayload = asRecord(runTurnResult?.hopy_confirmed_payload);
-  if (!confirmedPayload) {
-    return [];
-  }
-
-  const payloadConfirmed = toConfirmedMemoryCandidates(
-    confirmedPayload.confirmed_memory_candidates,
-  );
-  if (payloadConfirmed.length > 0) {
-    return payloadConfirmed;
-  }
-
-  const payloadMemory = toConfirmedMemoryCandidates(
-    confirmedPayload.memory_candidates,
-  );
-  if (payloadMemory.length > 0) {
-    return payloadMemory;
-  }
-
-  return [];
-}
-
-async function resolveConfirmedMemoryCandidatesWithTimeout(params: {
-  runTurnResult: RunHopyTurnBuiltResult | null | undefined;
-  resolvedPlan: ResolvedPlan;
-  userText: string;
-  confirmedTurn: ConfirmedAssistantTurn;
-  uiLang: Lang;
-  resolvedConversationId: string;
-  assistantMessageId: string;
-  usedHeuristicConfirmedMemoryCandidates: boolean;
-  timeoutMs: number;
-}): Promise<{
-  confirmedMemoryCandidates: ConfirmedMemoryCandidate[];
-  usedHeuristicConfirmedMemoryCandidates: boolean;
-}> {
-  const builtResultConfirmedMemoryCandidates =
-    resolveBuiltResultConfirmedMemoryCandidates(params.runTurnResult);
-
-  if (builtResultConfirmedMemoryCandidates.length > 0) {
-    return {
-      confirmedMemoryCandidates: builtResultConfirmedMemoryCandidates,
-      usedHeuristicConfirmedMemoryCandidates:
-        params.usedHeuristicConfirmedMemoryCandidates,
-    };
-  }
-
-  const safeTimeoutMs =
-    Number.isFinite(params.timeoutMs) && params.timeoutMs > 0
-      ? Math.floor(params.timeoutMs)
-      : 1500;
-
-  let timer: ReturnType<typeof setTimeout> | null = null;
-
-  try {
-    const resolved = await Promise.race([
-      resolveFinalConfirmedMemoryCandidates({
-        result: params.runTurnResult,
-        resolvedPlan: params.resolvedPlan,
-        userText: params.userText,
-        confirmedTurn: params.confirmedTurn,
-        uiLang: params.uiLang,
-        resolvedConversationId: params.resolvedConversationId,
-        assistantMessageId: params.assistantMessageId,
-      }),
-      new Promise<{
-        confirmedMemoryCandidates: ConfirmedMemoryCandidate[];
-        usedHeuristicConfirmedMemoryCandidates: boolean;
-      }>((resolve) => {
-        timer = setTimeout(() => {
-          resolve({
-            confirmedMemoryCandidates: [],
-            usedHeuristicConfirmedMemoryCandidates:
-              params.usedHeuristicConfirmedMemoryCandidates,
-          });
-        }, safeTimeoutMs);
-      }),
-    ]);
-
-    return resolved;
-  } catch {
-    return {
-      confirmedMemoryCandidates: [],
-      usedHeuristicConfirmedMemoryCandidates:
-        params.usedHeuristicConfirmedMemoryCandidates,
-    };
-  } finally {
-    if (timer) {
-      clearTimeout(timer);
-    }
-  }
-}
-
 export async function finalizeAuthenticatedPostTurn(
   params: AuthenticatedPostTurnParams,
 ): Promise<AuthenticatedPostTurnResult> {
@@ -907,27 +779,34 @@ authenticated 経路の postTurn 最終化ファイル。
 runTurnResult と confirmedTurn を受け取り、
 memory 書き込み、learning 保存、audit 保存、thread title 解決、
 Compass を含む最終 turn artifacts 作成、
-最終 payload 作成までを行う。
+最終 payload 作成までを接続する。
 この層は state_changed を再計算せず、
 受け取った唯一の正と Compass の整合だけを検証する。
+
 Future Chain 保存結果の payload 中継責務は
 authenticatedPostTurnFutureChainPayload.ts に分離し、
 thread_summary 保存・保存debug付与責務は
 authenticatedPostTurnThreadSummarySave.ts に分離し、
 audit 保存責務は authenticatedPostTurnAuditSave.ts に分離し、
 thread title 解決責務は authenticatedPostTurnThreadTitle.ts に分離し、
+confirmed memory candidates 解決責務は
+authenticatedPostTurnMemoryCandidates.ts に分離し、
 このファイルでは分離先関数を呼び出すだけにする。
 
 【今回このファイルで修正したこと】
-- thread title 解決責務を
-  /app/api/chat/_lib/route/authenticatedPostTurnThreadTitle.ts へ分離した。
-- resolveThreadTitleForPayload の import を削除した。
-- getFallbackThreadTitleForPayload(...) の本体を親ファイルから削除した。
-- fallbackThreadTitleForPayload / threadTitleForPayload の決定処理と
-  resolveThreadTitleForPayload(...) の try/catch を親ファイルから削除した。
-- 親ファイルでは resolveAuthenticatedPostTurnThreadTitle(...) を import して呼び出すだけにした。
-- state_changed の唯一の正、Compass 条件、memory、learning、audit、thread_summary、
-  Future Chain 保存結果の payload 中継には触れていない。
+- コード本体では、confirmed memory candidates 解決責務がすでに
+  /app/api/chat/_lib/route/authenticatedPostTurnMemoryCandidates.ts へ分離されていることを確認した。
+- resolveFinalConfirmedMemoryCandidates の import、
+  toConfirmedMemoryCandidates(...)、
+  resolveBuiltResultConfirmedMemoryCandidates(...)、
+  resolveConfirmedMemoryCandidatesWithTimeout(...) の本体は、
+  この親ファイル内には残っていなかった。
+- 親ファイルでは resolveConfirmedMemoryCandidatesWithTimeout(...) を
+  authenticatedPostTurnMemoryCandidates.ts から import して呼び出すだけになっている。
+- 今回はコード本体の挙動を変えず、最下部コメントの正式役割と修正内容だけを
+  confirmed memory candidates 分離後の現状に合わせた。
+- state_changed の唯一の正、Compass 条件、memory 書き込み実行、learning、
+  audit、thread_summary、thread title、Future Chain、payload 生成本体には触れていない。
 
 /app/api/chat/_lib/route/authenticatedPostTurn.ts
 */
