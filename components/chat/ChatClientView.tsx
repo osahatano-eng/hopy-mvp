@@ -11,6 +11,10 @@ import { ChatLayout } from "./view/ChatLayout";
 import { ChatOverlays } from "./view/ChatOverlays";
 import { ChatMessagePane } from "./view/ChatMessagePane";
 import { ChatComposerSection } from "./view/ChatComposerSection";
+import {
+  ChatFutureChainNotice,
+  type ChatFutureChainPersist,
+} from "./view/ChatFutureChainNotice";
 
 import type { ChatClientViewProps } from "./view/chatClientViewTypes";
 import { useChatViewportController } from "./view/hooks/useChatViewportController";
@@ -20,6 +24,7 @@ import { useChatClientViewMessagePaneProps } from "./view/hooks/useChatClientVie
 import { useChatClientViewComposerSectionProps } from "./view/hooks/useChatClientViewComposerSectionProps";
 
 type ChatClientViewExtendedProps = ChatClientViewProps & {
+  futureChainPersist?: ChatFutureChainPersist | null;
   railOpen: boolean;
   onOpenRail: () => void;
   onCloseRail: () => void;
@@ -42,6 +47,7 @@ export default function ChatClientView(props: ChatClientViewExtendedProps) {
     email,
     uiLang,
     ui,
+    futureChainPersist = null,
 
     input,
     setInput,
@@ -349,6 +355,7 @@ export default function ChatClientView(props: ChatClientViewExtendedProps) {
         onChangeLang={onChangeLang}
       >
         <ChatMessagePane {...messagePanePropsForRender} />
+        <ChatFutureChainNotice futureChainPersist={futureChainPersist} />
         <ChatComposerSection {...composerSectionProps} />
       </ChatLayout>
     </main>
@@ -356,22 +363,20 @@ export default function ChatClientView(props: ChatClientViewExtendedProps) {
 }
 
 /*
-このファイルの正式役割:
+【このファイルの正式役割】
 Chat画面の親表示統合ファイル。
 親は、全体レイアウトに必要な上位状態と中継ハンドラを束ね、
 子へ渡すことに専念する。
 このファイルは状態や Compass を再判定する場所ではなく、
 本文採用の唯一の正を作る場所でもなく、
 子コンポーネントへ必要な値を渡す親責務だけを持つ。
-*/
 
-/*
 【今回このファイルで修正したこと】
-1. jumpボタンの表示条件から busy 依存を外しました。
-2. shouldShowJump は !atBottom のみで ChatMessagePane へ渡すようにしました。
-3. busy が残っているだけで jumpボタンが消える状態を避けました。
-4. 未使用になる busy の受け取りを削除しました。
-5. 新規チャットの disableNewChat、送信の canSend、threadBusy、本文採用、confirmed payload、state_changed、HOPY回答○、Compass、DB保存・復元、1..5 の唯一の正には触っていません。
-*/
+- Future Chain 保存成功通知の表示部品 ChatFutureChainNotice を読み込んだ。
+- futureChainPersist を任意propsとして受け取れるようにした。
+- ChatLayout 内で ChatFutureChainNotice を配置した。
+- このファイルでは Future Chain の保存可否、state_changed、state_level、Compass、HOPY回答○、DB保存、MEMORIES、DASHBOARD は再判定していない。
+- まだ ChatClient.tsx 側から futureChainPersist を渡す処理には触れていない。
 
-/* /components/chat/ChatClientView.tsx */
+/components/chat/ChatClientView.tsx
+*/
