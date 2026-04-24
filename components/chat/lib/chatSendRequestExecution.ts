@@ -36,12 +36,20 @@ export type ChatSendRequestExecutionUiStrings = {
   emptyReply: string;
 };
 
+export type ChatSendFutureChainPersist = {
+  ok?: boolean;
+  decision?: string | null;
+  reason?: string | null;
+  patternId?: string | null;
+};
+
 export type ChatSendRequestExecutionApiResponse<TState> =
   ConfirmedAssistantApiResponse<TState> & {
     thread?: ApiThread;
     thread_id?: string;
     conversation_id?: string;
     conversationId?: string;
+    future_chain_persist?: ChatSendFutureChainPersist | null;
   };
 
 type ConfirmedPayloadLike<TState> = NonNullable<
@@ -53,6 +61,7 @@ export type ChatSendRequestExecutionResult<TState> = {
   conversationId: string;
   payload: ChatSendRequestExecutionApiResponse<TState>;
   confirmedPayload: ConfirmedPayloadLike<TState> | null;
+  futureChainPersist: ChatSendFutureChainPersist | null;
   reply: string;
   normalizedAssistantState: unknown;
   confirmedThreadSummary: ConfirmedPayloadLike<TState>["thread_summary"] | null;
@@ -189,6 +198,7 @@ export async function runChatSendRequestExecution<TState>(args: {
     }
 
     const confirmedPayload = payload.hopy_confirmed_payload ?? null;
+    const futureChainPersist = payload.future_chain_persist ?? null;
 
     const reply = String(
       confirmedPayload?.reply ?? payload.reply ?? payload.text ?? ""
@@ -272,6 +282,7 @@ export async function runChatSendRequestExecution<TState>(args: {
       conversationId: cid,
       payload,
       confirmedPayload,
+      futureChainPersist,
       reply,
       normalizedAssistantState,
       confirmedThreadSummary,
@@ -291,20 +302,19 @@ export async function runChatSendRequestExecution<TState>(args: {
 }
 
 /*
-このファイルの正式役割
+【このファイルの正式役割】
 useChatSend 親ファイルから分離した、API送信実行責務の子ファイル。
 認証解決、送信リクエスト組み立て、fetch 実行、payload 検証、reply 解決、
 threadId 解決、confirmed assistant message の生成前提をまとめて返す。
 UI反映、messages 反映、loading 制御、retry入口制御は持たない。
 HOPY唯一の正を再判定せず、受け取った confirmed payload をそのまま使う。
-*/
 
-/*
 【今回このファイルで修正したこと】
-1. useChatSend.ts に残っていた API送信実行責務を、この新規子ファイルへ受け皿として切り出しました。
-2. resolveAuthContextForSendWithTimeout をこの子へ移し、認証タイムアウト責務を親から外せる形にしました。
-3. auth 解決、endpoint / headers / body 組み立て、fetch、payload 検証、reply 解決、threadId 解決をこの子へ集約しました。
-4. confirmed payload / state_changed / Compass / 1..5 の意味判定は再生成せず、そのまま受け取って返す形に固定しました。
-*/
+- API返却JSONの future_chain_persist を型に追加した。
+- runChatSendRequestExecution(...) の返却結果に futureChainPersist を追加した。
+- future_chain_persist を再判定せず、payload から受け取った値をそのまま UI 側へ渡せる形にした。
+- useChatSend.ts、ChatClient.tsx、ChatClientView.tsx、ChatFutureChainNotice.tsx には触れていない。
+- HOPY唯一の正、confirmed payload、state_changed、Compass、HOPY回答○、DB保存、MEMORIES、DASHBOARD は再判定していない。
 
-/* /components/chat/lib/chatSendRequestExecution.ts */
+/components/chat/lib/chatSendRequestExecution.ts
+*/
