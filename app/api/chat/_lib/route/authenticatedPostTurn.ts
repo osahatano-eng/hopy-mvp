@@ -21,6 +21,10 @@ import {
   buildFinalizedTurnArtifacts,
 } from "./authenticatedFinalize";
 import { resolveConfirmedCompassArtifacts } from "./authenticatedPostTurnCompass";
+import {
+  buildFutureChainTurnPersistResult,
+  type FutureChainTurnPersistResult,
+} from "./futureChainTurnPersistResult";
 
 type RunHopyTurnBuiltResult = Record<string, any>;
 type ResolvedPlan = "free" | "plus" | "pro";
@@ -315,6 +319,41 @@ function attachThreadSummarySaveDebugToPayload(params: {
     thread_summary_save: params.threadSummarySaveDebug,
   };
 
+  return params.payload;
+}
+
+function resolveFutureChainPersistFromRunTurnResult(
+  runTurnResult: RunHopyTurnBuiltResult | null | undefined,
+): FutureChainTurnPersistResult | null {
+  const resultRecord = asRecord(runTurnResult ?? null);
+  if (!resultRecord) {
+    return null;
+  }
+
+  if (!Object.prototype.hasOwnProperty.call(resultRecord, "future_chain_persist")) {
+    return null;
+  }
+
+  return buildFutureChainTurnPersistResult(resultRecord.future_chain_persist);
+}
+
+function attachFutureChainPersistToPayload(params: {
+  payload: any;
+  runTurnResult: RunHopyTurnBuiltResult | null | undefined;
+}): any {
+  const payloadRecord = asRecord(params.payload);
+  if (!payloadRecord) {
+    return params.payload;
+  }
+
+  const futureChainPersist = resolveFutureChainPersistFromRunTurnResult(
+    params.runTurnResult,
+  );
+  if (futureChainPersist === null) {
+    return params.payload;
+  }
+
+  payloadRecord.future_chain_persist = futureChainPersist;
   return params.payload;
 }
 
@@ -1199,8 +1238,13 @@ export async function finalizeAuthenticatedPostTurn(
     memory_clean: params.memory_clean,
   });
 
-  const payloadWithThreadSummaryDebug = attachThreadSummarySaveDebugToPayload({
+  const payloadWithFutureChainPersist = attachFutureChainPersistToPayload({
     payload,
+    runTurnResult: params.runTurnResult,
+  });
+
+  const payloadWithThreadSummaryDebug = attachThreadSummarySaveDebugToPayload({
+    payload: payloadWithFutureChainPersist,
     debugSave: params.debugSave,
     threadSummarySaveDebug,
   });
@@ -1222,7 +1266,7 @@ export async function finalizeAuthenticatedPostTurn(
 }
 
 /*
-このファイルの正式役割
+【このファイルの正式役割】
 authenticated 経路の postTurn 最終化ファイル。
 runTurnResult と confirmedTurn を受け取り、
 memory 書き込み、learning 保存、audit 保存、thread title 解決、
@@ -1230,15 +1274,13 @@ Compass を含む最終 turn artifacts 作成、
 最終 payload 作成までを行う。
 この層は state_changed を再計算せず、
 受け取った唯一の正と Compass の整合だけを検証する。
-*/
 
-/*
 【今回このファイルで修正したこと】
-- thread_summary 保存判定が上流入力の有無だけに依存していたため、上流に thread_summary が無い場合でも、このファイルで確定済み情報から canonical な thread_summary を組み立てられる helper を追加しました。
-- latestReplyAt を 1回だけ先に確定し、DB保存用 thread_summary と最終レスポンスの thread_summary で同じ時刻を使うようにしました。
-- resolveConfirmedThreadSummary(...) に、resolvedConversationId / assistantMessageId / latestReplyAt / autoTitleUpdated を渡し、上流に thread_summary が無い場合は canonical thread_summary を生成して保存へ回すようにしました。
-- state_changed の唯一の正、Compass 条件、memory、audit、title 解決の既存ロジックには触れていません。
-*/
+- futureChainTurnPersistResult.ts を import し、Future Chain 保存結果の最小中継型をこのファイルでも受け取れるようにした。
+- runTurnResult.future_chain_persist を正規化して読む resolveFutureChainPersistFromRunTurnResult(...) を追加した。
+- buildAuthenticatedResponsePayload(...) で作った最終 payload に、future_chain_persist を載せる attachFutureChainPersistToPayload(...) を追加した。
+- これにより、DB保存済みの Future Chain 結果が最終 JSON で落ちずに返るようにした。
+- state_changed の唯一の正、Compass 条件、memory、audit、title 解決、thread_summary 保存ロジックには触れていない。
 
-/* /app/api/chat/_lib/route/authenticatedPostTurn.ts */
-// このファイルの正式役割: authenticated 経路の postTurn 最終化ファイル
+/app/api/chat/_lib/route/authenticatedPostTurn.ts
+*/
