@@ -6,7 +6,6 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { insertInterventionLog } from "../db/interventionLog";
 import { errorText } from "../infra/text";
 import type { Lang } from "../router/simpleRouter";
-import { resolveThreadTitleForPayload } from "./threadTitle";
 import { handleMemoryWrite } from "./memoryWrite";
 import type { NotificationState } from "../state/notification";
 import type { ConfirmedMemoryCandidate } from "./authenticatedHelpers";
@@ -27,6 +26,7 @@ import {
   saveConfirmedThreadSummary,
 } from "./authenticatedPostTurnThreadSummarySave";
 import { saveAuthenticatedPostTurnAudit } from "./authenticatedPostTurnAuditSave";
+import { resolveAuthenticatedPostTurnThreadTitle } from "./authenticatedPostTurnThreadTitle";
 
 type RunHopyTurnBuiltResult = Record<string, any>;
 type ResolvedPlan = "free" | "plus" | "pro";
@@ -157,33 +157,6 @@ export type AuthenticatedPostTurnResult = {
   audit_ok: boolean | null;
   audit_error: string | null;
 };
-
-function getFallbackThreadTitleForPayload(params: {
-  auto_title_updated: boolean;
-  auto_title_title: string | null;
-  server_reused_recent_thread: boolean;
-  server_reused_recent_thread_title: string | null;
-  server_created_thread: boolean;
-  server_created_thread_title: string | null;
-  uiLang: Lang;
-}): string {
-  if (params.auto_title_updated && params.auto_title_title) {
-    return params.auto_title_title;
-  }
-
-  if (
-    params.server_reused_recent_thread &&
-    params.server_reused_recent_thread_title
-  ) {
-    return params.server_reused_recent_thread_title;
-  }
-
-  if (params.server_created_thread && params.server_created_thread_title) {
-    return params.server_created_thread_title;
-  }
-
-  return params.uiLang === "ja" ? "新規チャット" : "New chat";
-}
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -844,35 +817,18 @@ export async function finalizeAuthenticatedPostTurn(
   const audit_ok = auditSave.audit_ok;
   const audit_error = auditSave.audit_error;
 
-  const fallbackThreadTitleForPayload = getFallbackThreadTitleForPayload({
-    auto_title_updated: params.auto_title_updated,
-    auto_title_title: params.auto_title_title,
+  const threadTitleForPayload = await resolveAuthenticatedPostTurnThreadTitle({
+    supabase: params.supabase,
+    uiLang: params.uiLang,
+    resolvedConversationId: params.resolvedConversationId,
+    server_created_thread: params.server_created_thread,
+    server_created_thread_title: params.server_created_thread_title,
     server_reused_recent_thread: params.server_reused_recent_thread,
     server_reused_recent_thread_title:
       params.server_reused_recent_thread_title,
-    server_created_thread: params.server_created_thread,
-    server_created_thread_title: params.server_created_thread_title,
-    uiLang: params.uiLang,
+    auto_title_updated: params.auto_title_updated,
+    auto_title_title: params.auto_title_title,
   });
-
-  let threadTitleForPayload = fallbackThreadTitleForPayload;
-
-  try {
-    const resolvedTitle = await resolveThreadTitleForPayload({
-      supabase: params.supabase,
-      uiLang: params.uiLang,
-      conversationId: params.resolvedConversationId,
-      server_created_thread: params.server_created_thread,
-      server_created_thread_title: params.server_created_thread_title,
-      server_reused_recent_thread: params.server_reused_recent_thread,
-      server_reused_recent_thread_title:
-        params.server_reused_recent_thread_title,
-      auto_title_updated: params.auto_title_updated,
-      auto_title_title: params.auto_title_title,
-    });
-    threadTitleForPayload =
-      String(resolvedTitle ?? "").trim() || fallbackThreadTitleForPayload;
-  } catch {}
 
   const confirmedTurnWithCompass = {
     ...syncedConfirmedTurn,
@@ -959,16 +915,18 @@ authenticatedPostTurnFutureChainPayload.ts に分離し、
 thread_summary 保存・保存debug付与責務は
 authenticatedPostTurnThreadSummarySave.ts に分離し、
 audit 保存責務は authenticatedPostTurnAuditSave.ts に分離し、
+thread title 解決責務は authenticatedPostTurnThreadTitle.ts に分離し、
 このファイルでは分離先関数を呼び出すだけにする。
 
 【今回このファイルで修正したこと】
-- audit 保存責務を
-  /app/api/chat/_lib/route/authenticatedPostTurnAuditSave.ts へ分離した。
-- insertInterventionLog の値 import を type import に変更した。
-- systemCoreDigest / systemCorePrompt の import を削除した。
-- insertInterventionLog(...) の try/catch と audit_ok / audit_error 整形本体を親ファイルから削除した。
-- 親ファイルでは saveAuthenticatedPostTurnAudit(...) を import して呼び出すだけにした。
-- state_changed の唯一の正、Compass 条件、memory、learning、thread_summary、title 解決、
+- thread title 解決責務を
+  /app/api/chat/_lib/route/authenticatedPostTurnThreadTitle.ts へ分離した。
+- resolveThreadTitleForPayload の import を削除した。
+- getFallbackThreadTitleForPayload(...) の本体を親ファイルから削除した。
+- fallbackThreadTitleForPayload / threadTitleForPayload の決定処理と
+  resolveThreadTitleForPayload(...) の try/catch を親ファイルから削除した。
+- 親ファイルでは resolveAuthenticatedPostTurnThreadTitle(...) を import して呼び出すだけにした。
+- state_changed の唯一の正、Compass 条件、memory、learning、audit、thread_summary、
   Future Chain 保存結果の payload 中継には触れていない。
 
 /app/api/chat/_lib/route/authenticatedPostTurn.ts
