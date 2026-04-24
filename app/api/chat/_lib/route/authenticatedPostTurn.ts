@@ -6,7 +6,6 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { insertInterventionLog } from "../db/interventionLog";
 import { errorText } from "../infra/text";
 import type { Lang } from "../router/simpleRouter";
-import { handleMemoryWrite } from "./memoryWrite";
 import type { NotificationState } from "../state/notification";
 import type { ConfirmedMemoryCandidate } from "./authenticatedHelpers";
 import {
@@ -23,6 +22,7 @@ import { resolveAuthenticatedPostTurnConfirmedTurnWithCompass } from "./authenti
 import { resolveAuthenticatedPostTurnFailure } from "./authenticatedPostTurnFailure";
 import { attachFutureChainPersistToPayload } from "./authenticatedPostTurnFutureChainPayload";
 import { resolveConfirmedMemoryCandidatesWithTimeout } from "./authenticatedPostTurnMemoryCandidates";
+import { executeAuthenticatedPostTurnMemoryWrite } from "./authenticatedPostTurnMemoryWrite";
 import { resolveAuthenticatedPostTurnStateCompassInvariant } from "./authenticatedPostTurnStateCompassInvariant";
 import {
   attachThreadSummarySaveDebugToPayload,
@@ -301,14 +301,11 @@ export async function finalizeAuthenticatedPostTurn(
       timeoutMs: params.memoryExtractTimeoutMs,
     });
 
-  let confirmedMemoryCandidates =
+  const confirmedMemoryCandidates =
     resolvedFinalConfirmedMemories.confirmedMemoryCandidates;
   const usedHeuristicConfirmedMemoryCandidates =
     params.usedHeuristicConfirmedMemoryCandidates ||
     resolvedFinalConfirmedMemories.usedHeuristicConfirmedMemoryCandidates;
-
-  let memoryWrite: MemoryWriteDebug =
-    createDefaultMemoryWriteDebug("not_attempted");
 
   let learning_save_attempted: boolean | null = null;
   let learning_save_inserted: number | null = null;
@@ -326,59 +323,31 @@ export async function finalizeAuthenticatedPostTurn(
     uiLang: params.uiLang,
   });
 
-  let mem_write_ok: boolean | null = null;
-  let mem_write_error: string | null = null;
-
-  try {
-    if (confirmedMemoryCandidates.length <= 0) {
-      memoryWrite = {
-        ...createDefaultMemoryWriteDebug("no_confirmed_memory_candidates"),
-        mem_write_attempted: true,
-        mem_write_allowed: true,
-        mem_parse_ok: true,
-        mem_items_count: 0,
-        mem_used_heuristic: usedHeuristicConfirmedMemoryCandidates,
-      };
-      mem_write_ok = true;
-    } else {
-      memoryWrite = await handleMemoryWrite({
-        openai: params.openai,
-        modelName: params.modelName,
-        memoryExtractTimeoutMs: params.memoryExtractTimeoutMs,
-        memoryMinIntervalSec: params.memoryMinIntervalSec,
-        debugSave: params.debugSave,
-        supabase: params.supabase,
-        userId: params.authedUserId,
-        sourceMessageId: params.assistantMessageId,
-        sourceThreadId: params.resolvedConversationId,
-        uiLang: params.uiLang,
-        userText: "",
-        assistantText: "",
-        routedTone: params.routed.tone,
-        routedIntensity: params.routed.intensity,
-        usedHeuristicConfirmedMemoryCandidates,
-        stateLevel: syncedConfirmedTurn.currentStateLevel,
-        currentPhase: syncedConfirmedTurn.currentPhase,
-        stateChanged: syncedConfirmedTurn.stateChanged,
-        confirmedMemoryCandidates,
-      });
-      memoryWrite = {
-        ...memoryWrite,
-        mem_used_heuristic:
-          usedHeuristicConfirmedMemoryCandidates ||
-          memoryWrite.mem_used_heuristic,
-      };
-      mem_write_ok = true;
-    }
-  } catch (e: any) {
-    mem_write_ok = false;
-    mem_write_error = String(e?.message ?? e);
-    memoryWrite = {
-      ...createDefaultMemoryWriteDebug("exception"),
-      mem_write_attempted: true,
-      mem_used_heuristic: usedHeuristicConfirmedMemoryCandidates,
-    };
-  }
+  const {
+    memoryWrite,
+    mem_write_ok,
+    mem_write_error,
+  } = await executeAuthenticatedPostTurnMemoryWrite({
+    openai: params.openai,
+    modelName: params.modelName,
+    memoryExtractTimeoutMs: params.memoryExtractTimeoutMs,
+    memoryMinIntervalSec: params.memoryMinIntervalSec,
+    debugSave: params.debugSave,
+    supabase: params.supabase,
+    authedUserId: params.authedUserId,
+    assistantMessageId: params.assistantMessageId,
+    resolvedConversationId: params.resolvedConversationId,
+    uiLang: params.uiLang,
+    routed: {
+      tone: params.routed.tone,
+      intensity: params.routed.intensity,
+    },
+    usedHeuristicConfirmedMemoryCandidates,
+    currentStateLevel: syncedConfirmedTurn.currentStateLevel,
+    currentPhase: syncedConfirmedTurn.currentPhase,
+    stateChanged: syncedConfirmedTurn.stateChanged,
+    confirmedMemoryCandidates,
+  });
 
   try {
     const learningSave = await learningSavePromise;
@@ -514,20 +483,23 @@ confirmedTurn 同期責務は
 authenticatedPostTurnConfirmedTurn.ts に分離し、
 Compass付き confirmedTurn 整形責務は
 authenticatedPostTurnConfirmedTurnWithCompass.ts に分離し、
+Memory 書き込み実行責務は
+authenticatedPostTurnMemoryWrite.ts に分離し、
 このファイルでは分離先関数を呼び出すだけにする。
 
 【今回このファイルで修正したこと】
-- Compass付き confirmedTurn 整形責務を
-  /app/api/chat/_lib/route/authenticatedPostTurnConfirmedTurnWithCompass.ts へ分離接続した。
-- resolveAuthenticatedPostTurnConfirmedTurnWithCompass の import を追加した。
-- normalizeCompassText(...) と normalizeCompassPrompt(...) を親ファイルから削除した。
-- confirmedTurnWithCompass 作成本体を親ファイルから削除した。
+- Memory 書き込み実行責務を
+  /app/api/chat/_lib/route/authenticatedPostTurnMemoryWrite.ts へ分離接続した。
+- executeAuthenticatedPostTurnMemoryWrite の import を追加した。
+- handleMemoryWrite の import を削除した。
+- finalizeAuthenticatedPostTurn(...) 内から Memory 書き込み try/catch 本体を削除した。
 - finalizeAuthenticatedPostTurn(...) 内では、
-  resolveAuthenticatedPostTurnConfirmedTurnWithCompass(...) を呼び出し、
-  返ってきた confirmedTurnWithCompass / compassText / compassPrompt を
-  buildFinalizedTurnArtifacts(...) へ渡すだけにした。
-- state_changed の唯一の正、Compass 生成、HOPY回答○、memory 書き込み実行、
-  learning、thread_summary、audit、thread title、Future Chain、payload 生成本体には触れていない。
+  executeAuthenticatedPostTurnMemoryWrite(...) を呼び出し、
+  返ってきた memoryWrite / mem_write_ok / mem_write_error を
+  buildFinalizedTurnArtifacts(...) と戻り値へ渡すだけにした。
+- learningSavePromise の開始位置は維持し、Memory 書き込み実行中に learning 保存 Promise が進む既存の流れを変えていない。
+- state_changed の唯一の正、Compass 生成、HOPY回答○、Future Chain、thread_summary、
+  audit、thread title、learning 保存処理本体、payload 生成本体には触れていない。
 
 /app/api/chat/_lib/route/authenticatedPostTurn.ts
 */
