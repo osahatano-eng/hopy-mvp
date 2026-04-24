@@ -18,6 +18,7 @@ import {
   buildFinalizedTurnArtifacts,
 } from "./authenticatedFinalize";
 import { resolveConfirmedCompassArtifacts } from "./authenticatedPostTurnCompass";
+import { resolveAuthenticatedPostTurnFailure } from "./authenticatedPostTurnFailure";
 import { attachFutureChainPersistToPayload } from "./authenticatedPostTurnFutureChainPayload";
 import {
   attachThreadSummarySaveDebugToPayload,
@@ -233,40 +234,6 @@ function normalizeThreadSummary(value: unknown): string | null {
   return null;
 }
 
-function resolvePostTurnFailure(
-  params: AuthenticatedPostTurnParams,
-): string | null {
-  if (params.openai_ok !== true) {
-    const resolvedError = String(params.openai_error ?? "").trim();
-    return resolvedError || "authenticatedPostTurn: upstream model failure";
-  }
-
-  const resultRecord = asRecord(params.runTurnResult ?? null);
-  if (!resultRecord) {
-    return "authenticatedPostTurn: runTurnResult is required";
-  }
-
-  const confirmedPayload = asRecord(resultRecord.hopy_confirmed_payload);
-  if (!confirmedPayload) {
-    return "authenticatedPostTurn: runTurnResult.hopy_confirmed_payload is required";
-  }
-
-  const confirmedState = asRecord(confirmedPayload.state);
-  if (!confirmedState) {
-    return "authenticatedPostTurn: runTurnResult.hopy_confirmed_payload.state is required";
-  }
-
-  const confirmedReply =
-    typeof confirmedPayload.reply === "string"
-      ? confirmedPayload.reply.trim()
-      : "";
-  if (!confirmedReply) {
-    return "authenticatedPostTurn: runTurnResult.hopy_confirmed_payload.reply is required";
-  }
-
-  return null;
-}
-
 function normalizeCompassText(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const normalized = value.trim();
@@ -449,7 +416,11 @@ function resolvePostTurnStateCompassInvariant(params: {
 export async function finalizeAuthenticatedPostTurn(
   params: AuthenticatedPostTurnParams,
 ): Promise<AuthenticatedPostTurnResult> {
-  const postTurnFailure = resolvePostTurnFailure(params);
+  const postTurnFailure = resolveAuthenticatedPostTurnFailure({
+    openai_ok: params.openai_ok,
+    openai_error: params.openai_error,
+    runTurnResult: params.runTurnResult,
+  });
   if (postTurnFailure !== null) {
     return {
       payload: {
@@ -791,20 +762,19 @@ audit 保存責務は authenticatedPostTurnAuditSave.ts に分離し、
 thread title 解決責務は authenticatedPostTurnThreadTitle.ts に分離し、
 confirmed memory candidates 解決責務は
 authenticatedPostTurnMemoryCandidates.ts に分離し、
+postTurn failure 判定責務は
+authenticatedPostTurnFailure.ts に分離し、
 このファイルでは分離先関数を呼び出すだけにする。
 
 【今回このファイルで修正したこと】
-- コード本体では、confirmed memory candidates 解決責務がすでに
-  /app/api/chat/_lib/route/authenticatedPostTurnMemoryCandidates.ts へ分離されていることを確認した。
-- resolveFinalConfirmedMemoryCandidates の import、
-  toConfirmedMemoryCandidates(...)、
-  resolveBuiltResultConfirmedMemoryCandidates(...)、
-  resolveConfirmedMemoryCandidatesWithTimeout(...) の本体は、
-  この親ファイル内には残っていなかった。
-- 親ファイルでは resolveConfirmedMemoryCandidatesWithTimeout(...) を
-  authenticatedPostTurnMemoryCandidates.ts から import して呼び出すだけになっている。
-- 今回はコード本体の挙動を変えず、最下部コメントの正式役割と修正内容だけを
-  confirmed memory candidates 分離後の現状に合わせた。
+- postTurn failure 判定責務を
+  /app/api/chat/_lib/route/authenticatedPostTurnFailure.ts へ分離接続した。
+- resolveAuthenticatedPostTurnFailure の import を追加した。
+- resolvePostTurnFailure(...) の本体を親ファイルから削除した。
+- finalizeAuthenticatedPostTurn(...) 内では、
+  resolveAuthenticatedPostTurnFailure(...) を呼び出すだけにした。
+- 既存の失敗時 early return の形、エラー payload、memoryWrite 初期値、
+  learning / memory / audit の null 返却は変えていない。
 - state_changed の唯一の正、Compass 条件、memory 書き込み実行、learning、
   audit、thread_summary、thread title、Future Chain、payload 生成本体には触れていない。
 
