@@ -19,6 +19,7 @@ import {
 } from "./authenticatedFinalize";
 import { resolveConfirmedCompassArtifacts } from "./authenticatedPostTurnCompass";
 import { resolveAuthenticatedPostTurnConfirmedTurn } from "./authenticatedPostTurnConfirmedTurn";
+import { resolveAuthenticatedPostTurnConfirmedTurnWithCompass } from "./authenticatedPostTurnConfirmedTurnWithCompass";
 import { resolveAuthenticatedPostTurnFailure } from "./authenticatedPostTurnFailure";
 import { attachFutureChainPersistToPayload } from "./authenticatedPostTurnFutureChainPayload";
 import { resolveConfirmedMemoryCandidatesWithTimeout } from "./authenticatedPostTurnMemoryCandidates";
@@ -161,18 +162,6 @@ export type AuthenticatedPostTurnResult = {
   audit_ok: boolean | null;
   audit_error: string | null;
 };
-
-function normalizeCompassText(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  const normalized = value.trim();
-  return normalized.length > 0 ? normalized : null;
-}
-
-function normalizeCompassPrompt(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  const normalized = value.trim();
-  return normalized.length > 0 ? normalized : null;
-}
 
 export async function finalizeAuthenticatedPostTurn(
   params: AuthenticatedPostTurnParams,
@@ -435,23 +424,14 @@ export async function finalizeAuthenticatedPostTurn(
     auto_title_title: params.auto_title_title,
   });
 
-  const confirmedTurnWithCompass = {
-    ...syncedConfirmedTurn,
-    compassText: normalizeCompassText(resolvedCompass.compassText) ?? undefined,
-    compassPrompt:
-      normalizeCompassPrompt(resolvedCompass.compassPrompt) ?? undefined,
-    compass:
-      normalizeCompassText(resolvedCompass.compassText) !== null
-        ? {
-            text: normalizeCompassText(resolvedCompass.compassText)!,
-            prompt: normalizeCompassPrompt(resolvedCompass.compassPrompt),
-          }
-        : undefined,
-    canonicalAssistantState: {
-      ...syncedConfirmedTurn.canonicalAssistantState,
-      state_changed: syncedConfirmedTurn.stateChanged,
-    },
-  } as ConfirmedAssistantTurn;
+  const {
+    confirmedTurnWithCompass,
+    compassText,
+    compassPrompt,
+  } = resolveAuthenticatedPostTurnConfirmedTurnWithCompass({
+    confirmedTurn: syncedConfirmedTurn,
+    resolvedCompass,
+  });
 
   const finalizedTurnArtifacts = buildFinalizedTurnArtifacts({
     confirmedTurn: confirmedTurnWithCompass,
@@ -462,8 +442,8 @@ export async function finalizeAuthenticatedPostTurn(
     autoTitleUpdated: params.auto_title_updated,
     memoryWrite,
     confirmedMemoryCandidates,
-    compassText: normalizeCompassText(resolvedCompass.compassText),
-    compassPrompt: normalizeCompassPrompt(resolvedCompass.compassPrompt),
+    compassText,
+    compassPrompt,
   });
 
   const payload = buildAuthenticatedResponsePayload({
@@ -532,23 +512,20 @@ state_changed と Compass の整合検証責務は
 authenticatedPostTurnStateCompassInvariant.ts に分離し、
 confirmedTurn 同期責務は
 authenticatedPostTurnConfirmedTurn.ts に分離し、
+Compass付き confirmedTurn 整形責務は
+authenticatedPostTurnConfirmedTurnWithCompass.ts に分離し、
 このファイルでは分離先関数を呼び出すだけにする。
 
 【今回このファイルで修正したこと】
-- confirmedTurn 同期責務を
-  /app/api/chat/_lib/route/authenticatedPostTurnConfirmedTurn.ts へ分離接続した。
-- resolveAuthenticatedPostTurnConfirmedTurn の import を追加した。
-- asRecord(...)、
-  normalizeStateLevel(...)、
-  normalizeBoolean(...)、
-  normalizeNonEmptyString(...)、
-  normalizeThreadSummary(...)、
-  resolveConfirmedTurnFromRunTurnResult(...) の本体を親ファイルから削除した。
+- Compass付き confirmedTurn 整形責務を
+  /app/api/chat/_lib/route/authenticatedPostTurnConfirmedTurnWithCompass.ts へ分離接続した。
+- resolveAuthenticatedPostTurnConfirmedTurnWithCompass の import を追加した。
+- normalizeCompassText(...) と normalizeCompassPrompt(...) を親ファイルから削除した。
+- confirmedTurnWithCompass 作成本体を親ファイルから削除した。
 - finalizeAuthenticatedPostTurn(...) 内では、
-  resolveAuthenticatedPostTurnConfirmedTurn(...) を呼び出すだけにした。
-- normalizeCompassText(...) と normalizeCompassPrompt(...) は
-  confirmedTurnWithCompass 作成と finalizedTurnArtifacts 作成でまだ使用されているため、
-  この親ファイルに残した。
+  resolveAuthenticatedPostTurnConfirmedTurnWithCompass(...) を呼び出し、
+  返ってきた confirmedTurnWithCompass / compassText / compassPrompt を
+  buildFinalizedTurnArtifacts(...) へ渡すだけにした。
 - state_changed の唯一の正、Compass 生成、HOPY回答○、memory 書き込み実行、
   learning、thread_summary、audit、thread title、Future Chain、payload 生成本体には触れていない。
 
