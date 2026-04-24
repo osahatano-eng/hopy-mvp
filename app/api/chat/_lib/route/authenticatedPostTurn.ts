@@ -21,10 +21,12 @@ import {
   buildFinalizedTurnArtifacts,
 } from "./authenticatedFinalize";
 import { resolveConfirmedCompassArtifacts } from "./authenticatedPostTurnCompass";
+import { attachFutureChainPersistToPayload } from "./authenticatedPostTurnFutureChainPayload";
 import {
-  buildFutureChainTurnPersistResult,
-  type FutureChainTurnPersistResult,
-} from "./futureChainTurnPersistResult";
+  attachThreadSummarySaveDebugToPayload,
+  createDefaultThreadSummarySaveDebug,
+  saveConfirmedThreadSummary,
+} from "./authenticatedPostTurnThreadSummarySave";
 
 type RunHopyTurnBuiltResult = Record<string, any>;
 type ResolvedPlan = "free" | "plus" | "pro";
@@ -67,32 +69,6 @@ type MemoryWriteDebug = {
   mem_items_count?: number | null;
   mem_used_heuristic?: boolean | null;
   [key: string]: any;
-};
-
-type ThreadSummarySaveAttemptResult = {
-  step:
-    | "primary_internal_with_user_id"
-    | "fallback_supabase_with_user_id"
-    | "final_internal_without_user_id";
-  client_name: "internalWriteSupabase" | "supabase";
-  scoped_by_user_id: boolean;
-  ok: boolean;
-  matched: boolean;
-  error: string | null;
-};
-
-type ThreadSummarySaveDebug = {
-  attempted: boolean;
-  confirmed_thread_summary_present: boolean;
-  confirmed_thread_summary_length: number | null;
-  ok: boolean | null;
-  error: string | null;
-  matched_step:
-    | "primary_internal_with_user_id"
-    | "fallback_supabase_with_user_id"
-    | "final_internal_without_user_id"
-    | null;
-  attempts: ThreadSummarySaveAttemptResult[];
 };
 
 export type AuthenticatedPostTurnParams = {
@@ -282,280 +258,6 @@ function normalizeThreadSummary(value: unknown): string | null {
   }
 
   return null;
-}
-
-function createDefaultThreadSummarySaveDebug(params: {
-  confirmedThreadSummary: string | null;
-}): ThreadSummarySaveDebug {
-  return {
-    attempted: false,
-    confirmed_thread_summary_present: params.confirmedThreadSummary !== null,
-    confirmed_thread_summary_length:
-      params.confirmedThreadSummary?.length ?? null,
-    ok: null,
-    error: null,
-    matched_step: null,
-    attempts: [],
-  };
-}
-
-function attachThreadSummarySaveDebugToPayload(params: {
-  payload: any;
-  debugSave: boolean;
-  threadSummarySaveDebug: ThreadSummarySaveDebug;
-}): any {
-  if (!params.debugSave) {
-    return params.payload;
-  }
-
-  const payloadRecord = asRecord(params.payload);
-  if (!payloadRecord) {
-    return params.payload;
-  }
-
-  const existingDebug = asRecord(payloadRecord.debug) ?? {};
-  payloadRecord.debug = {
-    ...existingDebug,
-    thread_summary_save: params.threadSummarySaveDebug,
-  };
-
-  return params.payload;
-}
-
-function resolveFutureChainPersistFromRunTurnResult(
-  runTurnResult: RunHopyTurnBuiltResult | null | undefined,
-): FutureChainTurnPersistResult | null {
-  const resultRecord = asRecord(runTurnResult ?? null);
-  if (!resultRecord) {
-    return null;
-  }
-
-  if (!Object.prototype.hasOwnProperty.call(resultRecord, "future_chain_persist")) {
-    return null;
-  }
-
-  return buildFutureChainTurnPersistResult(resultRecord.future_chain_persist);
-}
-
-function attachFutureChainPersistToPayload(params: {
-  payload: any;
-  runTurnResult: RunHopyTurnBuiltResult | null | undefined;
-}): any {
-  const payloadRecord = asRecord(params.payload);
-  if (!payloadRecord) {
-    return params.payload;
-  }
-
-  const futureChainPersist = resolveFutureChainPersistFromRunTurnResult(
-    params.runTurnResult,
-  );
-  if (futureChainPersist === null) {
-    return params.payload;
-  }
-
-  payloadRecord.future_chain_persist = futureChainPersist;
-  return params.payload;
-}
-
-async function saveThreadSummaryAttempt(params: {
-  step: ThreadSummarySaveAttemptResult["step"];
-  clientName: ThreadSummarySaveAttemptResult["client_name"];
-  client: SupabaseClient;
-  resolvedConversationId: string;
-  authedUserId?: string;
-  confirmedThreadSummary: string;
-}): Promise<ThreadSummarySaveAttemptResult> {
-  const scopedByUserId =
-    typeof params.authedUserId === "string" &&
-    params.authedUserId.trim().length > 0;
-
-  const query = params.client
-    .from("conversations")
-    .update({
-      thread_summary: params.confirmedThreadSummary,
-    })
-    .eq("id", params.resolvedConversationId);
-
-  const scopedQuery = scopedByUserId
-    ? query.eq("user_id", params.authedUserId as string)
-    : query;
-
-  const { data, error } = await scopedQuery.select("id").maybeSingle();
-
-  if (error) {
-    return {
-      step: params.step,
-      client_name: params.clientName,
-      scoped_by_user_id: scopedByUserId,
-      ok: false,
-      matched: false,
-      error: errorText(error) || "update_failed",
-    };
-  }
-
-  return {
-    step: params.step,
-    client_name: params.clientName,
-    scoped_by_user_id: scopedByUserId,
-    ok: true,
-    matched: Boolean(data?.id),
-    error: null,
-  };
-}
-
-async function saveConfirmedThreadSummary(params: {
-  internalWriteSupabase: SupabaseClient;
-  supabase: SupabaseClient;
-  resolvedConversationId: string;
-  authedUserId: string;
-  confirmedThreadSummary: string;
-}): Promise<{
-  ok: boolean;
-  error: string | null;
-  debug: ThreadSummarySaveDebug;
-}> {
-  const attempts: ThreadSummarySaveAttemptResult[] = [];
-
-  const primaryAttempt = await saveThreadSummaryAttempt({
-    step: "primary_internal_with_user_id",
-    clientName: "internalWriteSupabase",
-    client: params.internalWriteSupabase,
-    resolvedConversationId: params.resolvedConversationId,
-    authedUserId: params.authedUserId,
-    confirmedThreadSummary: params.confirmedThreadSummary,
-  });
-  attempts.push(primaryAttempt);
-
-  if (!primaryAttempt.ok) {
-    return {
-      ok: false,
-      error: `authenticatedPostTurn: thread_summary_save_failed:${primaryAttempt.error ?? "update_failed"}`,
-      debug: {
-        attempted: true,
-        confirmed_thread_summary_present: true,
-        confirmed_thread_summary_length: params.confirmedThreadSummary.length,
-        ok: false,
-        error: `authenticatedPostTurn: thread_summary_save_failed:${primaryAttempt.error ?? "update_failed"}`,
-        matched_step: null,
-        attempts,
-      },
-    };
-  }
-
-  if (primaryAttempt.matched) {
-    return {
-      ok: true,
-      error: null,
-      debug: {
-        attempted: true,
-        confirmed_thread_summary_present: true,
-        confirmed_thread_summary_length: params.confirmedThreadSummary.length,
-        ok: true,
-        error: null,
-        matched_step: primaryAttempt.step,
-        attempts,
-      },
-    };
-  }
-
-  if (params.supabase !== params.internalWriteSupabase) {
-    const fallbackAttempt = await saveThreadSummaryAttempt({
-      step: "fallback_supabase_with_user_id",
-      clientName: "supabase",
-      client: params.supabase,
-      resolvedConversationId: params.resolvedConversationId,
-      authedUserId: params.authedUserId,
-      confirmedThreadSummary: params.confirmedThreadSummary,
-    });
-    attempts.push(fallbackAttempt);
-
-    if (!fallbackAttempt.ok) {
-      return {
-        ok: false,
-        error: `authenticatedPostTurn: thread_summary_save_failed:${fallbackAttempt.error ?? "update_failed"}`,
-        debug: {
-          attempted: true,
-          confirmed_thread_summary_present: true,
-          confirmed_thread_summary_length: params.confirmedThreadSummary.length,
-          ok: false,
-          error: `authenticatedPostTurn: thread_summary_save_failed:${fallbackAttempt.error ?? "update_failed"}`,
-          matched_step: null,
-          attempts,
-        },
-      };
-    }
-
-    if (fallbackAttempt.matched) {
-      return {
-        ok: true,
-        error: null,
-        debug: {
-          attempted: true,
-          confirmed_thread_summary_present: true,
-          confirmed_thread_summary_length: params.confirmedThreadSummary.length,
-          ok: true,
-          error: null,
-          matched_step: fallbackAttempt.step,
-          attempts,
-        },
-      };
-    }
-  }
-
-  const finalAttempt = await saveThreadSummaryAttempt({
-    step: "final_internal_without_user_id",
-    clientName: "internalWriteSupabase",
-    client: params.internalWriteSupabase,
-    resolvedConversationId: params.resolvedConversationId,
-    confirmedThreadSummary: params.confirmedThreadSummary,
-  });
-  attempts.push(finalAttempt);
-
-  if (!finalAttempt.ok) {
-    return {
-      ok: false,
-      error: `authenticatedPostTurn: thread_summary_save_failed:${finalAttempt.error ?? "update_failed"}`,
-      debug: {
-        attempted: true,
-        confirmed_thread_summary_present: true,
-        confirmed_thread_summary_length: params.confirmedThreadSummary.length,
-        ok: false,
-        error: `authenticatedPostTurn: thread_summary_save_failed:${finalAttempt.error ?? "update_failed"}`,
-        matched_step: null,
-        attempts,
-      },
-    };
-  }
-
-  if (finalAttempt.matched) {
-    return {
-      ok: true,
-      error: null,
-      debug: {
-        attempted: true,
-        confirmed_thread_summary_present: true,
-        confirmed_thread_summary_length: params.confirmedThreadSummary.length,
-        ok: true,
-        error: null,
-        matched_step: finalAttempt.step,
-        attempts,
-      },
-    };
-  }
-
-  return {
-    ok: false,
-    error: "authenticatedPostTurn: thread_summary_save_target_not_found",
-    debug: {
-      attempted: true,
-      confirmed_thread_summary_present: true,
-      confirmed_thread_summary_length: params.confirmedThreadSummary.length,
-      ok: false,
-      error: "authenticatedPostTurn: thread_summary_save_target_not_found",
-      matched_step: null,
-      attempts,
-    },
-  };
 }
 
 function resolvePostTurnFailure(
@@ -1274,13 +976,23 @@ Compass を含む最終 turn artifacts 作成、
 最終 payload 作成までを行う。
 この層は state_changed を再計算せず、
 受け取った唯一の正と Compass の整合だけを検証する。
+Future Chain 保存結果の payload 中継責務は
+authenticatedPostTurnFutureChainPayload.ts に分離し、
+thread_summary 保存・保存debug付与責務は
+authenticatedPostTurnThreadSummarySave.ts に分離し、
+このファイルでは分離先関数を呼び出すだけにする。
 
 【今回このファイルで修正したこと】
-- futureChainTurnPersistResult.ts を import し、Future Chain 保存結果の最小中継型をこのファイルでも受け取れるようにした。
-- runTurnResult.future_chain_persist を正規化して読む resolveFutureChainPersistFromRunTurnResult(...) を追加した。
-- buildAuthenticatedResponsePayload(...) で作った最終 payload に、future_chain_persist を載せる attachFutureChainPersistToPayload(...) を追加した。
-- これにより、DB保存済みの Future Chain 結果が最終 JSON で落ちずに返るようにした。
-- state_changed の唯一の正、Compass 条件、memory、audit、title 解決、thread_summary 保存ロジックには触れていない。
+- thread_summary 保存・保存debug付与責務を
+  /app/api/chat/_lib/route/authenticatedPostTurnThreadSummarySave.ts へ分離した。
+- ThreadSummarySaveAttemptResult / ThreadSummarySaveDebug の型定義を親ファイルから削除した。
+- createDefaultThreadSummarySaveDebug(...)、attachThreadSummarySaveDebugToPayload(...)、
+  saveThreadSummaryAttempt(...)、saveConfirmedThreadSummary(...) の本体を親ファイルから削除した。
+- 親ファイルでは createDefaultThreadSummarySaveDebug(...)、
+  saveConfirmedThreadSummary(...)、attachThreadSummarySaveDebugToPayload(...) を
+  import して呼び出すだけにした。
+- state_changed の唯一の正、Compass 条件、memory、learning、audit、title 解決、
+  Future Chain 保存結果の payload 中継には触れていない。
 
 /app/api/chat/_lib/route/authenticatedPostTurn.ts
 */
