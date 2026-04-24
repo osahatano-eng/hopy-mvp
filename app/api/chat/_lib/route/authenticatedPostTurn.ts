@@ -21,6 +21,7 @@ import { resolveConfirmedCompassArtifacts } from "./authenticatedPostTurnCompass
 import { resolveAuthenticatedPostTurnFailure } from "./authenticatedPostTurnFailure";
 import { attachFutureChainPersistToPayload } from "./authenticatedPostTurnFutureChainPayload";
 import { resolveConfirmedMemoryCandidatesWithTimeout } from "./authenticatedPostTurnMemoryCandidates";
+import { resolveAuthenticatedPostTurnStateCompassInvariant } from "./authenticatedPostTurnStateCompassInvariant";
 import {
   attachThreadSummarySaveDebugToPayload,
   createDefaultThreadSummarySaveDebug,
@@ -332,30 +333,6 @@ function resolveConfirmedTurnFromRunTurnResult(params: {
   };
 }
 
-function resolvePostTurnStateCompassInvariant(params: {
-  resolvedPlan: ResolvedPlan;
-  confirmedTurn: ConfirmedAssistantTurn;
-  resolvedCompass: {
-    compassText: string | null;
-    compassPrompt: string | null;
-  };
-}): string | null {
-  const stateChanged = params.confirmedTurn.stateChanged === true;
-  const compassText = normalizeCompassText(params.resolvedCompass.compassText);
-  const isPaidPlan =
-    params.resolvedPlan === "plus" || params.resolvedPlan === "pro";
-
-  if (!stateChanged && compassText !== null) {
-    return "authenticatedPostTurn: compass_present_while_state_changed_false";
-  }
-
-  if (stateChanged && isPaidPlan && compassText === null) {
-    return "authenticatedPostTurn: plus_pro_requires_compass_when_state_changed_true";
-  }
-
-  return null;
-}
-
 export async function finalizeAuthenticatedPostTurn(
   params: AuthenticatedPostTurnParams,
 ): Promise<AuthenticatedPostTurnResult> {
@@ -396,11 +373,12 @@ export async function finalizeAuthenticatedPostTurn(
     confirmedTurn: syncedConfirmedTurn,
   });
 
-  const stateCompassInvariantError = resolvePostTurnStateCompassInvariant({
-    resolvedPlan: params.resolvedPlan,
-    confirmedTurn: syncedConfirmedTurn,
-    resolvedCompass,
-  });
+  const stateCompassInvariantError =
+    resolveAuthenticatedPostTurnStateCompassInvariant({
+      resolvedPlan: params.resolvedPlan,
+      confirmedTurn: syncedConfirmedTurn,
+      resolvedCompass,
+    });
 
   if (stateCompassInvariantError !== null) {
     return {
@@ -709,20 +687,23 @@ confirmed memory candidates 解決責務は
 authenticatedPostTurnMemoryCandidates.ts に分離し、
 postTurn failure 判定責務は
 authenticatedPostTurnFailure.ts に分離し、
+state_changed と Compass の整合検証責務は
+authenticatedPostTurnStateCompassInvariant.ts に分離し、
 このファイルでは分離先関数を呼び出すだけにする。
 
 【今回このファイルで修正したこと】
-- thread_summary 解決責務を
-  /app/api/chat/_lib/route/authenticatedPostTurnThreadSummaryResolve.ts へ分離接続した。
-- resolveAuthenticatedPostTurnThreadSummary の import を追加した。
-- buildCanonicalThreadSummaryRecord(...) と
-  resolveConfirmedThreadSummary(...) の本体を親ファイルから削除した。
+- state_changed と Compass の整合検証責務を
+  /app/api/chat/_lib/route/authenticatedPostTurnStateCompassInvariant.ts へ分離接続した。
+- resolveAuthenticatedPostTurnStateCompassInvariant の import を追加した。
+- resolvePostTurnStateCompassInvariant(...) の本体を親ファイルから削除した。
 - finalizeAuthenticatedPostTurn(...) 内では、
-  resolveAuthenticatedPostTurnThreadSummary(...) を呼び出すだけにした。
-- normalizeThreadSummary(...) は resolveConfirmedTurnFromRunTurnResult(...) 内でも
+  resolveAuthenticatedPostTurnStateCompassInvariant(...) を呼び出すだけにした。
+- 既存の stateCompassInvariantError の early return 形、
+  エラー payload、memoryWrite 初期値、learning / memory / audit の null 返却は変えていない。
+- normalizeCompassText(...) は confirmedTurnWithCompass 作成と finalizedTurnArtifacts 作成で
   まだ使用されているため、この親ファイルに残した。
-- state_changed の唯一の正、Compass 条件、memory 書き込み実行、learning、
-  audit、thread title、Future Chain、payload 生成本体には触れていない。
+- state_changed の唯一の正、Compass 生成、HOPY回答○、memory 書き込み実行、
+  learning、thread_summary、audit、thread title、Future Chain、payload 生成本体には触れていない。
 
 /app/api/chat/_lib/route/authenticatedPostTurn.ts
 */
