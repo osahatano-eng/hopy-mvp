@@ -55,10 +55,45 @@ function buildFutureChainInsertPayload(
   };
 }
 
+async function findExistingFutureChainPatternId(
+  params: InsertFutureChainPatternParams,
+): Promise<string | null> {
+  const { supabase, candidate } = params;
+
+  const { data, error } = await supabase
+    .from("hopy_future_chain_patterns")
+    .select("id")
+    .eq("pattern_key", candidate.pattern_key)
+    .eq("language", candidate.language)
+    .limit(1);
+
+  if (error) {
+    return null;
+  }
+
+  const rows = Array.isArray(data)
+    ? (data as FutureChainPatternInsertRow[])
+    : [];
+
+  return rows[0]?.id ?? null;
+}
+
 export async function insertFutureChainPattern(
   params: InsertFutureChainPatternParams,
 ): Promise<HopyFutureChainInsertResult> {
   const { supabase, candidate } = params;
+
+  const existingPatternId = await findExistingFutureChainPatternId({
+    supabase,
+    candidate,
+  });
+
+  if (existingPatternId) {
+    return {
+      ok: true,
+      patternId: existingPatternId,
+    };
+  }
 
   const payload = buildFutureChainInsertPayload(candidate);
 
@@ -69,6 +104,18 @@ export async function insertFutureChainPattern(
     .single<FutureChainPatternInsertRow>();
 
   if (error) {
+    const fallbackExistingPatternId = await findExistingFutureChainPatternId({
+      supabase,
+      candidate,
+    });
+
+    if (fallbackExistingPatternId) {
+      return {
+        ok: true,
+        patternId: fallbackExistingPatternId,
+      };
+    }
+
     return {
       ok: false,
       error,
@@ -83,14 +130,16 @@ export async function insertFutureChainPattern(
 
 /*
 【このファイルの正式役割】
-HOPY Future Chain DB の DB insert だけを担当する。
+HOPY Future Chain DB の保存処理だけを担当する。
 生成済みの Future Chain candidate を hopy_future_chain_patterns へ保存し、保存結果の id を返す。
+同じ pattern_key + language の既存行がある場合は、重複insertせず既存 id を返す。
 このファイルは保存前チェック、candidate生成、state_changed再判定、state_level再判定、current_phase再判定、Compass再判定を担当しない。
 
 【今回このファイルで修正したこと】
-- buildFutureChainInsertPayload(...) に bridge_summary を追加した。
-- candidate で生成済みの 4項目 insight / hint / flow / reason を hopy_future_chain_patterns.bridge_summary へ保存できる形にした。
-- このファイルでは DB insert の責務だけに留め、保存前チェックや candidate 生成には触れていない。
+- pattern_key + language の既存Future Chainパターンを確認する findExistingFutureChainPatternId(...) を追加した。
+- insert 前に同じ pattern_key + language が既にある場合は、DB保存失敗扱いにせず既存 patternId を返すようにした。
+- insert 失敗時にも既存行を再確認し、同一パターンが存在する場合は既存 patternId を返すようにした。
+- candidate生成、下降文言、保存前チェック、DB制約、UI、状態判定、Compass、HOPY回答○には触れていない。
 
 /app/api/chat/_lib/hopy/future-chain/futureChainRepository.ts
 */

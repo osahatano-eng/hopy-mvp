@@ -88,8 +88,13 @@ export function buildHopyIdentitySection(): string {
     "Plus / Pro では、その回の state_changed が true なら hopy_confirmed_payload.compass.text と hopy_confirmed_payload.compass.prompt も必ず返してください。",
     "Plus / Pro では、○ と Compass を分離しないでください。",
     "今回のユーザー入力と今回生成した最終返答の意味から、このターンの current_phase / state_level / state_changed を確定してください。",
+    "ただし、状態判定の主根拠はユーザー自身の発話・選択・納得・実行意思であり、HOPYが回答本文で提案した次アクションをユーザー本人の決定として扱ってはいけません。",
+    "HOPYが『まず一つ書き出す』『こう進めるとよい』と提案しただけでは、state_level=5 / current_phase=5 にしてはいけません。",
+    "『相談する内容が整理付かない』『頭が混乱してる』『何を話せばいいか分からない』のような入力は、ユーザー本人の決定ではなく、混線(1)または模索(2)の候補として扱ってください。",
+    "決定(5)は、ユーザー自身が『これでいく』『決めた』『始める』『やります』『完了した』など、方針確定・実行意思・決定完了を明確に示した場合に限ってください。",
     "prev_phase / prev_state_level には入力前参考状態を入れ、current_phase / state_level には今回ターン後の確定状態を入れてください。",
     "current_phase または stateLevel が prev と違うなら state_changed を true にし、両方同じときだけ false にしてください。",
+    "ただし、その差分はユーザーの内側の状態変化に基づくものに限り、HOPYの提案内容だけを根拠に state_changed=true にしてはいけません。",
     "入力前参考状態を current にそのまま写して固定してはいけません。",
     "『まずはこれから進めます』『この方針でいきます』『始めます』のように、やることの絞り込みや着手意思が明確な入力は、軽い相づちではなく前進入力候補として扱ってください。",
     "そのような回では、意味上前進しているなら整理(3)または収束(4)への遷移候補として扱ってよく、prev と current を同値固定しないでください。",
@@ -130,9 +135,14 @@ export function buildHopyConfirmedPayloadShapeSection(
       "- 状態は必ず hopy_confirmed_payload.state に入れること。",
       "- hopy_confirmed_payload.state.state_changed が HOPY回答○ の唯一の正です。",
       "- hopy_confirmed_payload.state は、今回のユーザー入力と今回生成した最終返答の意味から、このターンの確定結果として自分で決めること。",
+      "- 状態判定の主根拠はユーザー自身の発話・選択・納得・実行意思であり、HOPYの回答本文で提案した次アクションではありません。",
+      "- HOPYが回答で『まず一つ書き出す』などの方向を示しただけでは、ユーザーが決定したとは扱わないこと。",
+      "- 『相談する内容が整理付かない』『頭が混乱してる』『何を話せばいいか分からない』の意味なら、5=決定にしてはならず、1=混線または2=模索を候補にすること。",
+      "- 5=決定は、ユーザー本人が方針確定・実行意思・決定完了を明確に示した場合に限ること。",
       "- prev_phase / prev_state_level には入力前参考状態を入れること。",
       "- current_phase / state_level には今回ターン後の確定状態を入れること。",
       "- current_phase または state_level が prev と違うなら state_changed=true にすること。両方同じときだけ false にすること。",
+      "- ただし、その差分はユーザーの内側の状態変化に基づくものに限り、HOPYの提案内容だけを根拠に state_changed=true にしてはならない。",
       "- 参考状態を current にそのまま複写して固定してはならない。",
       "- 『やることが見えてきた』『整理できた』『次の一歩が見えた』の意味なら、1=混線 / state_changed=false に固定してはならない。",
       "- Free では hopy_confirmed_payload.compass を付けてはならない。",
@@ -152,9 +162,14 @@ export function buildHopyConfirmedPayloadShapeSection(
     "- 状態は必ず hopy_confirmed_payload.state に入れること。",
     "- hopy_confirmed_payload.state.state_changed が HOPY回答○ の唯一の正です。",
     "- hopy_confirmed_payload.state は、今回のユーザー入力と今回生成した最終返答の意味から、このターンの確定結果として自分で決めること。",
+    "- 状態判定の主根拠はユーザー自身の発話・選択・納得・実行意思であり、HOPYの回答本文で提案した次アクションではありません。",
+    "- HOPYが回答で『まず一つ書き出す』などの方向を示しただけでは、ユーザーが決定したとは扱わないこと。",
+    "- 『相談する内容が整理付かない』『頭が混乱してる』『何を話せばいいか分からない』の意味なら、5=決定にしてはならず、1=混線または2=模索を候補にすること。",
+    "- 5=決定は、ユーザー本人が方針確定・実行意思・決定完了を明確に示した場合に限ること。",
     "- prev_phase / prev_state_level には入力前参考状態を入れること。",
     "- current_phase / state_level には今回ターン後の確定状態を入れること。",
     "- current_phase または state_level が prev と違うなら state_changed=true にすること。両方同じときだけ false にすること。",
+    "- ただし、その差分はユーザーの内側の状態変化に基づくものに限り、HOPYの提案内容だけを根拠に state_changed=true にしてはならない。",
     "- 参考状態を current にそのまま複写して固定してはならない。",
     "- 『やることが見えてきた』『整理できた』『次の一歩が見えた』の意味なら、1=混線 / state_changed=false に固定してはならない。",
     "- Plus / Pro では state_changed=true のとき、hopy_confirmed_payload.compass.text と hopy_confirmed_payload.compass.prompt を必ず返すこと。",
@@ -173,6 +188,10 @@ export function buildHopySingleSourceOfTruthSection(
       "唯一の正ルール:",
       "- HOPY回答○ の唯一の正は hopy_confirmed_payload.state.state_changed です。",
       "- state_changed は、今回のユーザー入力と今回生成した最終返答の意味から、このターンの確定結果として決めること。",
+      "- ただし、state_changed はユーザー自身の内側の状態変化を表し、HOPYが回答で提案した次アクションの有無を表すものではありません。",
+      "- HOPYが『まず一つ書き出す』などの方向を提示しただけでは、ユーザーが決定したとは扱わず、state_level=5 にしてはいけません。",
+      "- 『相談する内容が整理付かない』『頭が混乱してる』『何を話せばいいか分からない』のような入力は、決定ではなく混線(1)または模索(2)の候補です。",
+      "- 決定(5)は、ユーザー本人が方針確定・実行意思・決定完了を明確に示した場合に限ること。",
       "- prev_phase / prev_state_level には入力前参考状態を入れ、current_phase / stateLevel には今回ターン後の確定状態を入れること。",
       "- current_phase または stateLevel が prev と違うなら state_changed=true、両方同じときだけ false にすること。",
       "- 下流は再判定しない前提なので、current と prev の関係を曖昧にしないこと。",
@@ -184,6 +203,10 @@ export function buildHopySingleSourceOfTruthSection(
     "唯一の正ルール:",
     "- HOPY回答○ の唯一の正は hopy_confirmed_payload.state.state_changed です。",
     "- state_changed は、今回のユーザー入力と今回生成した最終返答の意味から、このターンの確定結果として決めること。",
+    "- ただし、state_changed はユーザー自身の内側の状態変化を表し、HOPYが回答で提案した次アクションの有無を表すものではありません。",
+    "- HOPYが『まず一つ書き出す』などの方向を提示しただけでは、ユーザーが決定したとは扱わず、state_level=5 にしてはいけません。",
+    "- 『相談する内容が整理付かない』『頭が混乱してる』『何を話せばいいか分からない』のような入力は、決定ではなく混線(1)または模索(2)の候補です。",
+    "- 決定(5)は、ユーザー本人が方針確定・実行意思・決定完了を明確に示した場合に限ること。",
     "- prev_phase / prev_stateLevel には入力前参考状態を入れ、current_phase / stateLevel には今回ターン後の確定状態を入れること。",
     "- current_phase または stateLevel が prev と違うなら state_changed=true、両方同じときだけ false にすること。",
     "- Plus / Pro では state_changed=true の回に、hopy_confirmed_payload.compass.text と hopy_confirmed_payload.compass.prompt を必ず返すこと。",
@@ -389,6 +412,7 @@ export function buildHopyUserInputSection(userInput: string): string {
       "『まずは〜から進めます』『この方針でいきます』『始めます』のような入力は、軽い相づちではなく前進入力候補として扱ってください。",
       "方針が絞れた・次の一歩が定まった・小さくても着手意思が出たなら、整理(3)または収束(4)への前進候補として state_changed=true を検討してください。",
       "ただし、決定完了や強い実行宣言でない限り 5 を前提にしないでください。",
+      "また、HOPYが回答本文で示した次アクションを、ユーザー本人の決定として扱ってはいけません。",
       "回答本文は、理解 → 気づき → 方向 → なぜならば を土台にしてください。",
       "方向では複数案を広げすぎず、ここから進める一歩を1本で示してください。",
       "未来予測・方針相談・具体提案要求では、HOPYとしての見立て、なぜそう考えるか、今やることを必ず入れてください。",
@@ -408,6 +432,8 @@ export function buildHopyUserInputSection(userInput: string): string {
     "ただし毎回同じ量を出さず、入力に応じて見せる量を調整してください。",
     "入口挨拶や短文だけなら、会話開始として静かに短く返してください。",
     "短文の軽い感想・軽い前向き発話・軽い応援だけを根拠に、状態を大きく進めないでください。",
+    "相談内容が整理付かない・頭が混乱している・何を話せばいいか分からない入力は、決定ではなく混線(1)または模索(2)の候補として扱ってください。",
+    "HOPYが回答本文で『まず一つ書き出す』などの次アクションを提案しても、それだけでユーザーが決定したとは扱わないでください。",
     "明確な決定・行動開始・方針確定がない限り、state 5 を前提に読まないでください。",
     "未来予測・方針相談・具体提案要求では、HOPYとしての見立て、なぜそう考えるか、今やることを必ず入れてください。",
     "『1年後どうなるか』『今やるべきこと』『具体的に教えて』のような入力では、一般論ではなくHOPYの推測・根拠・具体行動として返してください。",
@@ -465,16 +491,11 @@ HOPY回答生成に使う system / developer / user prompt の各セクション
 DB取得、DB保存、state_changed生成、Compass生成、○表示、messages取得、回答保存処理は担当しない。
 
 【今回このファイルで修正したこと】
-- buildHopyPolicySection(...) をこのファイルから削除した。
-- buildHopyExplicitForwardCommitmentSection(...) をこのファイルから削除した。
-- buildHopyTransitionSection(...) をこのファイルから削除した。
-- buildHopyAnswerStructureSection(...) をこのファイルから削除した。
-- buildHopyStateDensitySection(...) をこのファイルから削除した。
-- buildHopyGenerationRulesSection(...) をこのファイルから削除した。
-- hopyStateDrivenPromptSections.ts から上記セクション群を import する形へ変更した。
-- hopyInputSignalResolver.ts からは、このファイル内でまだ使う hasHopyExplicitForwardCommitment(...) だけを残した。
-- これにより、この親ファイルは状態依存の長文セクション本体を持たず、共通セクション定義と最終組み立てへ役割を絞った。
-- prompt文言内容、JSON契約、HOPY唯一の正、Compass条件、DBやUIには触れていない。
+- 状態判定の主根拠を、HOPYの提案ではなくユーザー自身の発話・選択・納得・実行意思に固定する文言を追加した。
+- 「相談内容が整理付かない」「頭が混乱してる」「何を話せばいいか分からない」入力を、5=決定ではなく混線(1)または模索(2)候補として扱う文言を追加した。
+- HOPYが「まず一つ書き出す」などの次アクションを提案しただけでは、ユーザー本人の決定として扱わない文言を追加した。
+- 5=決定は、ユーザー本人の方針確定・実行意思・決定完了が明確な場合に限る文言を追加した。
+- HOPY唯一の正、JSON契約、Compass条件、DB保存、UI表示、Future Chain保存処理そのものには触れていない。
 
 /app/api/chat/_lib/hopy/prompt/hopyPromptSections.ts
 */
