@@ -271,15 +271,16 @@ export async function resolveConversationState(params: {
   });
 
   const stateBefore = conversationStateBefore;
+  const hasPreviousAssistantState = !!conversationStateBefore;
+
   let stateUpdateOk = true;
   let stateUpdateError: string | null = null;
 
-  const prevPhase = normalizePhase(
+  const previousConfirmedPhase = normalizePhase(
     conversationStateBefore?.current_phase ??
       conversationStateBefore?.state_level ??
       1,
   );
-  const prevStateLevel = prevPhase;
 
   const userStateUpdate = await updateUserStateFromMessage({
     supabase,
@@ -297,17 +298,33 @@ export async function resolveConversationState(params: {
 
   /**
    * HOPY回答○ の唯一の正は回答確定後の hopy_confirmed_payload.state.state_changed。
-   * ただし、この前段層で current/stateChanged を prev 固定にすると、
-   * prompt 側まで常に 1 / false の土台が流れやすくなる。
+   * ここは回答確定前の暫定文脈だけを整える層。
    *
-   * ここでは updateUserStateFromMessage(...) の結果を
-   * あくまで「回答確定前の暫定 state 文脈」としてだけ使い、
-   * DB保存済みの会話状態は先回り更新しない。
+   * 新規チャット1発話目では前回 assistant 状態が存在しないため、
+   * 仮置きの 1 と今回推定 current を比較して擬似差分を作ってはいけない。
+   * そのため初回は prev=current に揃え、stateChanged=false で固定する。
    */
-  const currentPhase = resolvePhaseFromStateUpdate(st, prevPhase);
-  const currentStateLevel = toConversationStateLevel(currentPhase);
-  const stateChanged =
-    currentPhase !== prevPhase || currentStateLevel !== prevStateLevel;
+  const resolvedCurrentPhase = resolvePhaseFromStateUpdate(
+    st,
+    previousConfirmedPhase,
+  );
+  const resolvedCurrentStateLevel =
+    toConversationStateLevel(resolvedCurrentPhase);
+
+  const prevPhase = hasPreviousAssistantState
+    ? previousConfirmedPhase
+    : resolvedCurrentPhase;
+
+  const prevStateLevel = hasPreviousAssistantState
+    ? previousConfirmedPhase
+    : resolvedCurrentStateLevel;
+
+  const currentPhase = resolvedCurrentPhase;
+  const currentStateLevel = resolvedCurrentStateLevel;
+
+  const stateChanged = hasPreviousAssistantState
+    ? currentPhase !== prevPhase || currentStateLevel !== prevStateLevel
+    : false;
 
   /**
    * 回答確定前に conversations.state_level を先回り更新しない。
@@ -350,7 +367,9 @@ updateUserStateFromMessage(...) の結果を受け取り、
 【今回このファイルで修正したこと】
 - updateUserStateFromMessage(...) の返り値から phase を読む処理を、トップレベルだけでなくネストした object まで辿れる形へ修正した。
 - current_phase / state_level / phase_after / after_state_level / next_phase / next_state_level を、wrapper配下でも拾えるようにした。
-- resolveConversationState(...) の入出力構造、DB更新停止方針、HOPY回答○ の唯一の正には触れていない。
+- 新規チャット1発話目では、前回 assistant 状態が存在しないため、prev=current に揃えて stateChanged=false に固定するよう修正した。
+- これにより、初回発話で仮置き prev=1 と current の比較から擬似的な状態変化が立つのを防ぐ。
+- resolveConversationState(...) の役割、DB更新停止方針、HOPY回答○ の唯一の正そのものには触れていない。
 
 /app/api/chat/_lib/route/authState.ts
 */
