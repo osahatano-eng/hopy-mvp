@@ -13,7 +13,10 @@ import { handleChatSendFailure } from "./chatSendHandleFailure";
 import { createPendingUserMessage } from "./chatSendPendingUserMessage";
 import { prepareRetrySend } from "./chatSendRetryPreparation";
 import { runSendThreadPostProcess } from "./chatSendThreadPostProcess";
-import { runChatSendRequestExecution } from "./chatSendRequestExecution";
+import {
+  runChatSendRequestExecution,
+  type ChatSendFutureChainPersist,
+} from "./chatSendRequestExecution";
 import {
   genClientRequestId,
   microtask,
@@ -50,6 +53,9 @@ export function useChatSend<TState>(params: {
   ensureThreadId?: () => Promise<string | null>;
   onThreadIdResolved?: (threadId: string) => void;
   onThreadRenamed?: (thread: ApiThread) => void;
+  onFutureChainPersist?: (
+    futureChainPersist: ChatSendFutureChainPersist | null
+  ) => void;
   input: string;
   setInput: (v: string) => void;
   loading: boolean;
@@ -79,6 +85,7 @@ export function useChatSend<TState>(params: {
     activeThreadId,
     onThreadIdResolved,
     onThreadRenamed,
+    onFutureChainPersist,
     input,
     setInput,
     loading,
@@ -156,6 +163,10 @@ export function useChatSend<TState>(params: {
           clientRequestId,
           getMemoryBlock,
         });
+
+        try {
+          onFutureChainPersist?.(executed.futureChainPersist ?? null);
+        } catch {}
 
         cid = String(executed.conversationId ?? "").trim() || null;
 
@@ -238,6 +249,7 @@ export function useChatSend<TState>(params: {
       setLastFailed,
       onThreadIdResolved,
       onThreadRenamed,
+      onFutureChainPersist,
     ],
   );
 
@@ -306,7 +318,7 @@ export function useChatSend<TState>(params: {
 }
 
 /*
-このファイルの正式役割
+【このファイルの正式役割】
 送信フロー全体を管理し、user message追加、assistant message確定反映、thread反映、retry をつなぐ親ファイル。
 API送信実行本体は持たず、子へ渡して結果を受け取る。
 pending user message生成本体は持たず、子へ渡して結果を受け取る。
@@ -317,22 +329,12 @@ retry 前準備本体も持たず、子へ渡して結果を受け取る。
 重複送信判定本体は持たず、子へ渡して結果を受け取る。
 IME composing 判定本体は持たず、子へ渡して結果を受け取る。
 親は入口・中継・UI反映に寄せる。
-*/
 
-/*
 【今回このファイルで修正したこと】
-1. 前回追加した dispatchThreadsRefresh() を削除しました。
-2. runSendThreadPostProcess 完了後に hopy:threads-refresh を通知する処理を削除しました。
-3. 自動タイトル生成前の threads 再取得で「新規チャット」が反映される改悪を戻しました。
-4. onThreadIdResolved の activeThreadId 確定処理、pending user message、assistant message 反映、送信条件には触っていません。
-5. confirmed payload、state_changed、HOPY回答○、Compass、DB保存、DB復元、1..5 の意味判定には触っていません。
-*/
+- onFutureChainPersist を任意callbackとして追加した。
+- runChatSendRequestExecution(...) から受け取った executed.futureChainPersist を、再判定せず呼び出し元へ渡すようにした。
+- Future Chain の保存可否、state_changed、state_level、Compass、HOPY回答○、DB保存、MEMORIES、DASHBOARD は再判定していない。
+- ChatClient.tsx、ChatClientView.tsx、ChatFutureChainNotice.tsx には触れていない。
 
-/*
-このファイルの正式役割:
-送信フローの親として、入口・中継・UI反映だけを持つ。
-pending user message 生成、送信実行、userState反映、post process、retry準備、送信失敗処理、重複送信判定、IME composing 判定は子へ委譲し、
-親自身は読むだけ・つなぐだけに寄せる。
+/components/chat/lib/useChatSend.ts
 */
-
-/* /components/chat/lib/useChatSend.ts */
