@@ -1,8 +1,8 @@
 // /app/api/chat/_lib/hopy/future-chain/futureChainCandidate.ts
 
 import type { HopyFutureChainPrecheckResult } from "./futureChainCheck";
+import { buildDownwardMeaningParts } from "./futureChainDownwardCandidate";
 import {
-  HOPY_FUTURE_CHAIN_GENERATION_VERSION,
   type HopyFutureChainCandidate,
   type HopyFutureChainConfirmedPayload,
   type HopyFutureChainLanguage,
@@ -12,11 +12,65 @@ import {
   type HopyFutureChainTransitionKind,
 } from "./futureChainTypes";
 
+type HopyFutureChainTransitionMeaning =
+  | "progress"
+  | "readjustment"
+  | "recovery_entry"
+  | "premise_reconsideration"
+  | "stabilization"
+  | "reinforcement";
+
 type BridgeSummary = {
   insight: string;
   hint: string;
   flow: string;
   reason: string;
+};
+
+type HopyFutureChainBridgeEventCandidate = {
+  language: HopyFutureChainLanguage;
+
+  from_state_level: HopyFutureChainStateLevel;
+  to_state_level: HopyFutureChainStateLevel;
+
+  transition_kind: HopyFutureChainTransitionKind;
+  transition_meaning: HopyFutureChainTransitionMeaning;
+
+  user_signal_summary: string;
+  hopy_support_summary: string;
+  transition_reason: string;
+  future_support_hint: string;
+
+  bridge_insight: string;
+  bridge_hint: string;
+  bridge_flow: string;
+  bridge_reason: string;
+
+  owner_visible_summary: string;
+  future_visible_summary: string;
+
+  compass_basis: string | null;
+  safety_notes: string | null;
+  avoidance_notes: string | null;
+
+  source_transition_signal_id: string | null;
+  source_assistant_message_id: string;
+  source_trigger_message_id: string | null;
+
+  confidence_score: number;
+  reuse_scope: "global" | "limited" | "experimental";
+  status: "active" | "trash";
+
+  metadata: {
+    source: "hopy_confirmed_payload";
+    version: "future_chain_pattern_v2";
+  };
+};
+
+type HopyFutureChainCandidateV2 = HopyFutureChainCandidate & {
+  transition_meaning: HopyFutureChainTransitionMeaning;
+  support_shape_key: string;
+  bridge_event: HopyFutureChainBridgeEventCandidate;
 };
 
 type MeaningEvidence = {
@@ -26,6 +80,8 @@ type MeaningEvidence = {
   futureSupportHint: string;
   bridgeSummary: BridgeSummary;
   compassBasis: string | null;
+  transitionMeaning: HopyFutureChainTransitionMeaning;
+  supportShapeKey: string;
   evidenceSources: string[];
 };
 
@@ -91,23 +147,6 @@ function maskSensitiveText(value: unknown): string {
     .replace(/\b\d{8,}\b/g, "[number]")
     .replace(/[「」『』]/g, "")
     .trim();
-}
-
-function sentenceLike(value: unknown, maxLength: number): string {
-  const text = maskSensitiveText(value);
-  if (!text) return "";
-
-  const firstLine = text
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)[0];
-
-  if (!firstLine) return "";
-
-  const firstSentence =
-    firstLine.match(/^(.+?[。.!?！？])(?:\s|$)/)?.[1] ?? firstLine;
-
-  return clipText(firstSentence, maxLength);
 }
 
 function readNestedRecord(
@@ -188,6 +227,8 @@ function readSourceContextIds(
   sourceTransitionSignalId: string | null;
   sourceResponseLearningId: string | null;
   sourceLearningInsightId: string | null;
+  sourceAssistantMessageId: string | null;
+  sourceTriggerMessageId: string | null;
 } {
   const sourceRecord = asRecord(sourceContext);
 
@@ -219,38 +260,145 @@ function readSourceContextIds(
         ]),
         80,
       ) || null,
+    sourceAssistantMessageId:
+      clipText(
+        readStringByKeys(sourceRecord, [
+          "sourceAssistantMessageId",
+          "source_assistant_message_id",
+          "assistantMessageId",
+          "assistant_message_id",
+        ]),
+        80,
+      ) || null,
+    sourceTriggerMessageId:
+      clipText(
+        readStringByKeys(sourceRecord, [
+          "sourceTriggerMessageId",
+          "source_trigger_message_id",
+          "triggerMessageId",
+          "trigger_message_id",
+        ]),
+        80,
+      ) || null,
   };
 }
 
-function buildStableHash(value: string): string {
-  let hash = 2166136261;
+function collectMeaningText(params: {
+  sourceContext: HopyFutureChainSourceContext;
+  payload: HopyFutureChainConfirmedPayload;
+}): { text: string; sources: string[] } {
+  const payloadRecord = asRecord(params.payload);
+  const compass = readNestedRecord(payloadRecord, "compass");
 
-  for (let i = 0; i < value.length; i += 1) {
-    hash ^= value.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
+  const parts: Array<{ value: string; source: string }> = [
+    {
+      value: readMemoryCandidateBody(params.payload),
+      source: "memory_candidates.body",
+    },
+    {
+      value: readDashboardSignalSummary(params.payload),
+      source: "dashboard_signals.summary",
+    },
+    {
+      value: normalizeText(compass?.prompt),
+      source: "compass.prompt",
+    },
+    {
+      value: normalizeText(compass?.text),
+      source: "compass.text",
+    },
+    {
+      value: normalizeText(params.payload.reply),
+      source: "hopy_confirmed_payload.reply",
+    },
+    {
+      value: readSourceContextUserText(params.sourceContext),
+      source: "source_context.user_text",
+    },
+  ];
+
+  const used = parts.filter((part) => normalizeText(part.value));
+
+  return {
+    text: maskSensitiveText(used.map((part) => part.value).join("\n")),
+    sources: used.map((part) => part.source),
+  };
+}
+
+function includesAny(text: string, words: string[]): boolean {
+  return words.some((word) => text.includes(word));
+}
+
+function deriveSupportShapeKeyFromText(text: string): string {
+  if (includesAny(text, ["休", "何もしない", "無理に", "急が", "立て直"])) {
+    return "rest_permission";
   }
 
-  return (hash >>> 0).toString(36);
+  if (includesAny(text, ["一つ", "1つ", "基準", "判断軸", "絞"])) {
+    return "single_criterion_narrowing";
+  }
+
+  if (includesAny(text, ["優先", "順番", "並べ", "整理"])) {
+    return "priority_sorting";
+  }
+
+  if (includesAny(text, ["前提", "見直", "違和感", "戻"])) {
+    return "premise_reset";
+  }
+
+  if (includesAny(text, ["小さ", "一歩", "少し", "次に"])) {
+    return "action_step_smallening";
+  }
+
+  if (includesAny(text, ["つら", "しんど", "限界", "怖", "不安", "感情"])) {
+    return "emotion_acknowledgement";
+  }
+
+  return "reframing";
+}
+
+function deriveTransitionMeaning(params: {
+  transitionKind: HopyFutureChainTransitionKind;
+  evidenceText: string;
+  supportShapeKey: string;
+}): HopyFutureChainTransitionMeaning | null {
+  if (params.transitionKind === "same_level") {
+    return null;
+  }
+
+  if (params.transitionKind === "upward") {
+    if (params.supportShapeKey === "priority_sorting") return "progress";
+    if (params.supportShapeKey === "single_criterion_narrowing") {
+      return "progress";
+    }
+    if (params.supportShapeKey === "action_step_smallening") return "progress";
+    return "progress";
+  }
+
+  if (includesAny(params.evidenceText, ["前提", "見直", "違和感", "戻"])) {
+    return "premise_reconsideration";
+  }
+
+  if (includesAny(params.evidenceText, ["限界", "無理", "しんど", "つら"])) {
+    return "recovery_entry";
+  }
+
+  return "readjustment";
 }
 
 function buildPatternKey(params: {
-  language: HopyFutureChainLanguage;
   fromStateLevel: HopyFutureChainStateLevel;
   toStateLevel: HopyFutureChainStateLevel;
-  transitionKind: HopyFutureChainTransitionKind;
-  userSignal: string;
-  hopySupport: string;
+  transitionMeaning: HopyFutureChainTransitionMeaning;
+  supportShapeKey: string;
 }): string {
-  const seed = [
-    params.language,
-    params.fromStateLevel,
-    params.toStateLevel,
-    params.transitionKind,
-    params.userSignal,
-    params.hopySupport,
-  ].join("|");
-
-  return `state_${params.fromStateLevel}_to_${params.toStateLevel}_${params.transitionKind}_${buildStableHash(seed)}`;
+  return [
+    `state_${params.fromStateLevel}`,
+    `to_${params.toStateLevel}`,
+    params.transitionMeaning,
+    "by",
+    params.supportShapeKey,
+  ].join("_");
 }
 
 function buildTransitionLabel(params: {
@@ -272,184 +420,263 @@ function buildTransitionLabel(params: {
   return `${fromLabel}から${toLabel}への前進`;
 }
 
-function resolveCompassBasis(
-  payload: HopyFutureChainConfirmedPayload,
-): string | null {
-  const payloadRecord = asRecord(payload);
-  const compass = readNestedRecord(payloadRecord, "compass");
-  const compassPrompt = sentenceLike(compass?.prompt, 120);
-  const compassText = sentenceLike(compass?.text, 160);
+function buildUserSignalSummary(params: {
+  transitionKind: HopyFutureChainTransitionKind;
+  supportShapeKey: string;
+}): string {
+  if (params.transitionKind === "downward") {
+    if (params.supportShapeKey === "emotion_acknowledgement") {
+      return "ユーザーは、前進を続けるよりも感情や限界感を受け止める必要があるサインを示した。";
+    }
 
-  if (compassPrompt) {
-    return `Compass根拠: ${compassPrompt}`;
+    if (params.supportShapeKey === "premise_reset") {
+      return "ユーザーは、いったん決めた前提をそのまま進めるより、見直す必要があるサインを示した。";
+    }
+
+    return "ユーザーは、決めた状態を保つよりも再調整が必要なサインを示した。";
   }
 
-  if (compassText) {
-    return `Compass根拠: ${compassText}`;
+  if (params.supportShapeKey === "single_criterion_narrowing") {
+    return "ユーザーは、迷いを広げるより一つの判断軸へ寄せられるサインを示した。";
   }
 
-  return null;
+  if (params.supportShapeKey === "priority_sorting") {
+    return "ユーザーは、複数の選択肢や考えを順番づけし、次に扱う対象を整理できるサインを示した。";
+  }
+
+  if (params.supportShapeKey === "action_step_smallening") {
+    return "ユーザーは、大きな結論よりも小さな次の一歩へ移れるサインを示した。";
+  }
+
+  return "ユーザーは、混ざっていた考えをほどき、次の方向を受け取れるサインを示した。";
 }
 
-function buildUserSignal(params: {
-  sourceContext: HopyFutureChainSourceContext;
-  payload: HopyFutureChainConfirmedPayload;
-}): { text: string; sources: string[] } {
-  const memoryBody = sentenceLike(readMemoryCandidateBody(params.payload), 180);
-  if (memoryBody) {
-    return {
-      text: `${memoryBody}`,
-      sources: ["memory_candidates.body"],
-    };
+function buildHopySupportSummary(params: {
+  transitionKind: HopyFutureChainTransitionKind;
+  supportShapeKey: string;
+}): string {
+  if (params.supportShapeKey === "rest_permission") {
+    return "HOPYは、無理に前進させず、休むことや立て直す余白を許す支援を返した。";
   }
 
-  const sourceUserText = sentenceLike(
-    readSourceContextUserText(params.sourceContext),
-    160,
-  );
-
-  if (sourceUserText) {
-    return {
-      text: `ユーザーは、${sourceUserText}という会話上のサインを示した。`,
-      sources: ["source_context.user_text"],
-    };
+  if (params.supportShapeKey === "single_criterion_narrowing") {
+    return "HOPYは、判断軸を一つに絞り、迷いを扱いやすくする支援を返した。";
   }
 
-  const dashboardSummary = sentenceLike(
-    readDashboardSignalSummary(params.payload),
-    160,
-  );
-
-  if (dashboardSummary) {
-    return {
-      text: `ユーザー側の状態変化は、${dashboardSummary}`,
-      sources: ["dashboard_signals.summary"],
-    };
+  if (params.supportShapeKey === "priority_sorting") {
+    return "HOPYは、優先順位を整理し、次に見るべき対象を絞る支援を返した。";
   }
 
-  return {
-    text: "ユーザー側の状態変化サインが、HOPY確定payload上で確認された。",
-    sources: ["hopy_confirmed_payload.state"],
-  };
-}
-
-function buildHopySupport(params: {
-  payload: HopyFutureChainConfirmedPayload;
-}): { text: string; sources: string[] } {
-  const payloadRecord = asRecord(params.payload);
-  const compass = readNestedRecord(payloadRecord, "compass");
-
-  const compassPrompt = sentenceLike(compass?.prompt, 160);
-  if (compassPrompt) {
-    return {
-      text: `HOPYは、${compassPrompt}という支援の方向を返した。`,
-      sources: ["compass.prompt"],
-    };
+  if (params.supportShapeKey === "premise_reset") {
+    return "HOPYは、進める前に前提を見直し、無理な決定をほどく支援を返した。";
   }
 
-  const reply = sentenceLike(params.payload.reply, 180);
-  if (reply) {
-    return {
-      text: `HOPYは、${reply}という支援を返した。`,
-      sources: ["hopy_confirmed_payload.reply"],
-    };
+  if (params.supportShapeKey === "emotion_acknowledgement") {
+    return "HOPYは、感情や限界感を否定せず、再調整の入口として扱う支援を返した。";
   }
 
-  const dashboardSummary = sentenceLike(
-    readDashboardSignalSummary(params.payload),
-    180,
-  );
-
-  if (dashboardSummary) {
-    return {
-      text: `HOPYは、${dashboardSummary}という支援を返した。`,
-      sources: ["dashboard_signals.summary"],
-    };
+  if (params.supportShapeKey === "action_step_smallening") {
+    return "HOPYは、結論を急がせず、次の一歩を小さくする支援を返した。";
   }
 
-  return {
-    text: "HOPYは、状態変化に合わせた支援を返した。",
-    sources: ["hopy_confirmed_payload.state"],
-  };
+  if (params.transitionKind === "downward") {
+    return "HOPYは、状態を無理に上げず、再調整に必要な余白を渡す支援を返した。";
+  }
+
+  return "HOPYは、考えをほどき、次の方向を受け取りやすくする支援を返した。";
 }
 
 function buildTransitionReason(params: {
-  fromStateLevel: HopyFutureChainStateLevel;
-  toStateLevel: HopyFutureChainStateLevel;
   transitionKind: HopyFutureChainTransitionKind;
-  userSignal: string;
-  hopySupport: string;
+  transitionMeaning: HopyFutureChainTransitionMeaning;
+  supportShapeKey: string;
 }): string {
-  const label = buildTransitionLabel(params);
-
-  if (params.transitionKind === "downward") {
-    return clipText(
-      `${label}として、${params.userSignal} そのため、前進を急がせるより、${params.hopySupport}`,
-      360,
-    );
+  if (params.transitionMeaning === "recovery_entry") {
+    return "無理に決定状態を保つより、限界感を認めることが立て直しの入口になったため。";
   }
 
-  if (params.transitionKind === "same_level") {
-    return clipText(
-      `${label}として、${params.userSignal} その状態を崩さず支えるため、${params.hopySupport}`,
-      360,
-    );
+  if (params.transitionMeaning === "premise_reconsideration") {
+    return "前に進む前に、前提そのものを見直す必要が会話上で明確になったため。";
   }
 
-  return clipText(
-    `${label}として、${params.userSignal} その変化を支えるため、${params.hopySupport}`,
-    360,
-  );
+  if (params.transitionMeaning === "readjustment") {
+    return "前進を急ぐより、いったん状態を整え直すことが次の行動につながりやすいため。";
+  }
+
+  if (params.supportShapeKey === "single_criterion_narrowing") {
+    return "迷いを増やすより、一つの判断軸に寄せることで次の選択が扱いやすくなったため。";
+  }
+
+  if (params.supportShapeKey === "priority_sorting") {
+    return "複数の考えを同時に抱えるより、優先順位を置くことで次に進みやすくなったため。";
+  }
+
+  if (params.transitionKind === "upward") {
+    return "思考の焦点が絞られ、次の方向を受け取りやすい状態へ進んだため。";
+  }
+
+  return "今回の状態変化に、未来の似たユーザーへ渡せる支援意味が確認できたため。";
 }
 
 function buildFutureSupportHint(params: {
   transitionKind: HopyFutureChainTransitionKind;
-  userSignal: string;
-  hopySupport: string;
+  transitionMeaning: HopyFutureChainTransitionMeaning;
+  supportShapeKey: string;
 }): string {
-  if (params.transitionKind === "downward") {
-    return clipText(
-      `似た状態のユーザーには、状態を無理に上げようとせず、${params.userSignal} そのうえで、${params.hopySupport}`,
-      360,
-    );
+  if (params.transitionMeaning === "recovery_entry") {
+    return "似た状態のユーザーには、状態を無理に上げようとせず、まず限界感を認めて休む余白を渡す支援が有効な候補になる。";
   }
 
-  if (params.transitionKind === "same_level") {
-    return clipText(
-      `似た状態のユーザーには、変化を急がせず、${params.userSignal} その状態を支える形で、${params.hopySupport}`,
-      360,
-    );
+  if (params.transitionMeaning === "premise_reconsideration") {
+    return "似た状態のユーザーには、答えを急がせず、前提を見直す時間を渡す支援が有効な候補になる。";
   }
 
-  return clipText(
-    `似た状態のユーザーには、${params.userSignal} このサインが見えた段階で、${params.hopySupport}`,
-    360,
-  );
+  if (params.transitionMeaning === "readjustment") {
+    return "似た状態のユーザーには、前進より再調整を先に置き、立て直しの足場を作る支援が有効な候補になる。";
+  }
+
+  if (params.supportShapeKey === "single_criterion_narrowing") {
+    return "似た状態のユーザーには、選択肢を増やすより、一つの判断軸へ絞る支援が有効な候補になる。";
+  }
+
+  if (params.supportShapeKey === "priority_sorting") {
+    return "似た状態のユーザーには、同時に全部を扱わせず、優先順位を一つ置く支援が有効な候補になる。";
+  }
+
+  if (params.transitionKind === "upward") {
+    return "似た状態のユーザーには、見えてきた方向を小さく言語化し、次の一歩へつなげる支援が有効な候補になる。";
+  }
+
+  return "似た状態のユーザーには、今回の支援を参考候補として扱い、本人の納得を優先する形が安全である。";
 }
 
 function buildBridgeSummary(params: {
   fromStateLevel: HopyFutureChainStateLevel;
   toStateLevel: HopyFutureChainStateLevel;
   transitionKind: HopyFutureChainTransitionKind;
-  userSignal: string;
-  hopySupport: string;
+  transitionMeaning: HopyFutureChainTransitionMeaning;
+  supportShapeKey: string;
   transitionReason: string;
   futureSupportHint: string;
 }): BridgeSummary {
   const label = buildTransitionLabel(params);
 
+  if (params.transitionMeaning === "recovery_entry") {
+    return {
+      insight: "限界感が出たときは、決定を保つより再調整が必要な場合がある。",
+      hint: "答えを出す前に、まず休むことを選択肢に入れる。",
+      flow: `${STATE_LABELS[params.fromStateLevel]} → 限界感の表出 → ${STATE_LABELS[params.toStateLevel]}`,
+      reason: params.transitionReason,
+    };
+  }
+
+  if (params.transitionMeaning === "premise_reconsideration") {
+    return {
+      insight: "違和感が出たときは、行動の前に前提を見直すことが支えになる場合がある。",
+      hint: "次へ進む前に、いまの前提が本当に合っているかを一つ確認する。",
+      flow: `${STATE_LABELS[params.fromStateLevel]} → 前提の見直し → ${STATE_LABELS[params.toStateLevel]}`,
+      reason: params.transitionReason,
+    };
+  }
+
+  if (params.transitionMeaning === "readjustment") {
+    return {
+      insight: "前進できない感覚は、失敗ではなく再調整の入口になる場合がある。",
+      hint: "進むことより、いったん整え直すことを選択肢に入れる。",
+      flow: `${STATE_LABELS[params.fromStateLevel]} → 再調整 → ${STATE_LABELS[params.toStateLevel]}`,
+      reason: params.transitionReason,
+    };
+  }
+
+  if (params.supportShapeKey === "single_criterion_narrowing") {
+    return {
+      insight: "迷いが広がるときは、一つの判断軸に絞ることで動きやすくなる場合がある。",
+      hint: "まず一つだけ、今回の判断基準を決める。",
+      flow: `${STATE_LABELS[params.fromStateLevel]} → 判断軸の一本化 → ${STATE_LABELS[params.toStateLevel]}`,
+      reason: params.transitionReason,
+    };
+  }
+
+  if (params.supportShapeKey === "priority_sorting") {
+    return {
+      insight: "複数の考えが並ぶときは、優先順位を置くことで次が見えやすくなる場合がある。",
+      hint: "いま一番先に見るものを一つだけ選ぶ。",
+      flow: `${STATE_LABELS[params.fromStateLevel]} → 優先順位の整理 → ${STATE_LABELS[params.toStateLevel]}`,
+      reason: params.transitionReason,
+    };
+  }
+
   return {
-    insight: clipText(
-      `この回では、${params.userSignal} そこから、${label}として扱える状態変化が見えた。`,
-      220,
-    ),
-    hint: clipText(params.futureSupportHint, 220),
-    flow: clipText(
-      `${STATE_LABELS[params.fromStateLevel]} → ${params.userSignal} → ${STATE_LABELS[params.toStateLevel]}`,
-      220,
-    ),
-    reason: clipText(params.transitionReason, 220),
+    insight: `${label}として、次の方向を受け取りやすい状態変化が見えた。`,
+    hint: params.futureSupportHint,
+    flow: `${STATE_LABELS[params.fromStateLevel]} → 支援の受け取り → ${STATE_LABELS[params.toStateLevel]}`,
+    reason: params.transitionReason,
   };
+}
+
+function buildOwnerVisibleSummary(params: {
+  transitionMeaning: HopyFutureChainTransitionMeaning;
+  bridgeInsight: string;
+}): string {
+  if (params.transitionMeaning === "progress") {
+    return `今回は「${params.bridgeInsight}」という前進の支援パターンとして保存されます。`;
+  }
+
+  if (params.transitionMeaning === "recovery_entry") {
+    return `今回は「${params.bridgeInsight}」という立て直しの入口として保存されます。`;
+  }
+
+  if (params.transitionMeaning === "premise_reconsideration") {
+    return `今回は「${params.bridgeInsight}」という前提を見直す支援パターンとして保存されます。`;
+  }
+
+  return `今回は「${params.bridgeInsight}」という再調整の支援パターンとして保存されます。`;
+}
+
+function buildFutureVisibleSummary(params: {
+  transitionMeaning: HopyFutureChainTransitionMeaning;
+  bridgeHint: string;
+}): string {
+  if (params.transitionMeaning === "progress") {
+    return `似た場面では、${params.bridgeHint}`;
+  }
+
+  if (params.transitionMeaning === "recovery_entry") {
+    return `似た場面では、無理に前へ進むより、${params.bridgeHint}`;
+  }
+
+  if (params.transitionMeaning === "premise_reconsideration") {
+    return `似た場面では、答えを急ぐより、${params.bridgeHint}`;
+  }
+
+  return `似た場面では、前進を急ぐより、${params.bridgeHint}`;
+}
+
+function resolveCompassBasis(params: {
+  payload: HopyFutureChainConfirmedPayload;
+  transitionMeaning: HopyFutureChainTransitionMeaning;
+}): string | null {
+  const payloadRecord = asRecord(params.payload);
+  const compass = readNestedRecord(payloadRecord, "compass");
+  const compassText = maskSensitiveText(
+    [compass?.prompt, compass?.text].filter(Boolean).join("\n"),
+  );
+
+  if (!compassText) return null;
+
+  if (params.transitionMeaning === "recovery_entry") {
+    return "Compassは、限界感を再調整や回復入口として扱う根拠を補助している。";
+  }
+
+  if (params.transitionMeaning === "premise_reconsideration") {
+    return "Compassは、前提を見直す必要がある状態変化の根拠を補助している。";
+  }
+
+  if (params.transitionMeaning === "readjustment") {
+    return "Compassは、前進より再調整を優先する状態変化の根拠を補助している。";
+  }
+
+  return "Compassは、ユーザーの状態変化を前進として扱う根拠を補助している。";
 }
 
 function buildMeaningEvidence(params: {
@@ -458,53 +685,96 @@ function buildMeaningEvidence(params: {
   fromStateLevel: HopyFutureChainStateLevel;
   toStateLevel: HopyFutureChainStateLevel;
   transitionKind: HopyFutureChainTransitionKind;
-}): MeaningEvidence {
-  const userSignal = buildUserSignal({
+}): MeaningEvidence | null {
+  const evidence = collectMeaningText({
     sourceContext: params.sourceContext,
     payload: params.payload,
   });
 
-  const hopySupport = buildHopySupport({
-    payload: params.payload,
+  const supportShapeKey = deriveSupportShapeKeyFromText(evidence.text);
+  const transitionMeaning = deriveTransitionMeaning({
+    transitionKind: params.transitionKind,
+    evidenceText: evidence.text,
+    supportShapeKey,
+  });
+
+  if (!transitionMeaning) {
+    return null;
+  }
+
+  if (params.transitionKind === "downward") {
+    const downwardParts = buildDownwardMeaningParts({
+      sourceContext: params.sourceContext,
+      payload: params.payload,
+      fromStateLevel: params.fromStateLevel,
+      toStateLevel: params.toStateLevel,
+    });
+
+    return {
+      userSignal: downwardParts.userProgressSignal,
+      hopySupport: downwardParts.effectiveSupport,
+      transitionReason: downwardParts.transitionReason,
+      futureSupportHint: downwardParts.futureSupportHint,
+      bridgeSummary: downwardParts.bridgeSummary,
+      compassBasis: downwardParts.compassBasis,
+      transitionMeaning,
+      supportShapeKey,
+      evidenceSources: Array.from(
+        new Set([
+          ...evidence.sources,
+          ...downwardParts.evidenceSources,
+          "hopy_confirmed_payload.state",
+        ]),
+      ),
+    };
+  }
+
+  const userSignal = buildUserSignalSummary({
+    transitionKind: params.transitionKind,
+    supportShapeKey,
+  });
+
+  const hopySupport = buildHopySupportSummary({
+    transitionKind: params.transitionKind,
+    supportShapeKey,
   });
 
   const transitionReason = buildTransitionReason({
-    fromStateLevel: params.fromStateLevel,
-    toStateLevel: params.toStateLevel,
     transitionKind: params.transitionKind,
-    userSignal: userSignal.text,
-    hopySupport: hopySupport.text,
+    transitionMeaning,
+    supportShapeKey,
   });
 
   const futureSupportHint = buildFutureSupportHint({
     transitionKind: params.transitionKind,
-    userSignal: userSignal.text,
-    hopySupport: hopySupport.text,
+    transitionMeaning,
+    supportShapeKey,
   });
 
   const bridgeSummary = buildBridgeSummary({
     fromStateLevel: params.fromStateLevel,
     toStateLevel: params.toStateLevel,
     transitionKind: params.transitionKind,
-    userSignal: userSignal.text,
-    hopySupport: hopySupport.text,
+    transitionMeaning,
+    supportShapeKey,
     transitionReason,
     futureSupportHint,
   });
 
   return {
-    userSignal: userSignal.text,
-    hopySupport: hopySupport.text,
+    userSignal,
+    hopySupport,
     transitionReason,
     futureSupportHint,
     bridgeSummary,
-    compassBasis: resolveCompassBasis(params.payload),
+    compassBasis: resolveCompassBasis({
+      payload: params.payload,
+      transitionMeaning,
+    }),
+    transitionMeaning,
+    supportShapeKey,
     evidenceSources: Array.from(
-      new Set([
-        ...userSignal.sources,
-        ...hopySupport.sources,
-        "hopy_confirmed_payload.state",
-      ]),
+      new Set([...evidence.sources, "hopy_confirmed_payload.state"]),
     ),
   };
 }
@@ -530,6 +800,22 @@ export function buildFutureChainCandidate(params: {
   const transitionKind = precheck.transitionKind;
   const sourceIds = readSourceContextIds(sourceContext);
 
+  if (transitionKind === "same_level") {
+    return {
+      decision: "skip",
+      reason: "Future Chain v2 の本線では same_level を保存対象にしない",
+      status: "none",
+    };
+  }
+
+  if (!sourceIds.sourceAssistantMessageId) {
+    return {
+      decision: "skip",
+      reason: "source_assistant_message_id が存在しないため bridge_event を保存しない",
+      status: "none",
+    };
+  }
+
   const meaning = buildMeaningEvidence({
     sourceContext,
     payload,
@@ -538,34 +824,90 @@ export function buildFutureChainCandidate(params: {
     transitionKind,
   });
 
-  const candidate: HopyFutureChainCandidate = {
-    pattern_key: buildPatternKey({
-      language,
-      fromStateLevel,
-      toStateLevel,
-      transitionKind,
-      userSignal: meaning.userSignal,
-      hopySupport: meaning.hopySupport,
-    }),
+  if (!meaning) {
+    return {
+      decision: "skip",
+      reason: "transition_meaning を安全に決められなかった",
+      status: "none",
+    };
+  }
+
+  const patternKey = buildPatternKey({
+    fromStateLevel,
+    toStateLevel,
+    transitionMeaning: meaning.transitionMeaning,
+    supportShapeKey: meaning.supportShapeKey,
+  });
+
+  const ownerVisibleSummary = buildOwnerVisibleSummary({
+    transitionMeaning: meaning.transitionMeaning,
+    bridgeInsight: meaning.bridgeSummary.insight,
+  });
+
+  const futureVisibleSummary = buildFutureVisibleSummary({
+    transitionMeaning: meaning.transitionMeaning,
+    bridgeHint: meaning.bridgeSummary.hint,
+  });
+
+  const bridgeEvent: HopyFutureChainBridgeEventCandidate = {
+    language,
+
+    from_state_level: fromStateLevel,
+    to_state_level: toStateLevel,
+
+    transition_kind: transitionKind,
+    transition_meaning: meaning.transitionMeaning,
+
+    user_signal_summary: clipText(meaning.userSignal, 360),
+    hopy_support_summary: clipText(meaning.hopySupport, 360),
+    transition_reason: clipText(meaning.transitionReason, 360),
+    future_support_hint: clipText(meaning.futureSupportHint, 360),
+
+    bridge_insight: clipText(meaning.bridgeSummary.insight, 220),
+    bridge_hint: clipText(meaning.bridgeSummary.hint, 220),
+    bridge_flow: clipText(meaning.bridgeSummary.flow, 220),
+    bridge_reason: clipText(meaning.bridgeSummary.reason, 220),
+
+    owner_visible_summary: clipText(ownerVisibleSummary, 260),
+    future_visible_summary: clipText(futureVisibleSummary, 260),
+
+    compass_basis: meaning.compassBasis,
+    safety_notes: DEFAULT_SAFETY_NOTES,
+    avoidance_notes: DEFAULT_AVOIDANCE_NOTES,
+
+    source_transition_signal_id: sourceIds.sourceTransitionSignalId,
+    source_assistant_message_id: sourceIds.sourceAssistantMessageId,
+    source_trigger_message_id: sourceIds.sourceTriggerMessageId,
+
+    confidence_score: 0.5,
+    reuse_scope: "experimental",
+    status: "active",
+
+    metadata: {
+      source: "hopy_confirmed_payload",
+      version: "future_chain_pattern_v2",
+    },
+  };
+
+  const candidate: HopyFutureChainCandidateV2 = {
+    pattern_key: patternKey,
     language,
     from_state_level: fromStateLevel,
     to_state_level: toStateLevel,
     transition_kind: transitionKind,
-    abstract_context: clipText(
-      `この回では、${meaning.userSignal}`,
-      360,
-    ),
+    transition_meaning: meaning.transitionMeaning,
+    support_shape_key: meaning.supportShapeKey,
+
+    abstract_context: clipText(meaning.bridgeSummary.insight, 360),
     transition_reason: meaning.transitionReason,
     effective_support: clipText(meaning.hopySupport, 360),
-    user_progress_signal: clipText(
-      `ユーザー側の状態変化サイン: ${meaning.userSignal}`,
-      360,
-    ),
+    user_progress_signal: clipText(meaning.userSignal, 360),
     future_support_hint: meaning.futureSupportHint,
     bridge_summary: meaning.bridgeSummary,
     compass_basis: meaning.compassBasis,
     safety_notes: DEFAULT_SAFETY_NOTES,
     avoidance_notes: DEFAULT_AVOIDANCE_NOTES,
+
     evidence_count: 1,
     weight: 1,
     confidence_score: 0.5,
@@ -573,19 +915,20 @@ export function buildFutureChainCandidate(params: {
     status: "active",
     metadata: {
       source: "hopy_confirmed_payload",
-      version: HOPY_FUTURE_CHAIN_GENERATION_VERSION,
-      generation: "payload_meaning_extraction_v1",
-      evidence_sources: meaning.evidenceSources,
-      raw_log_saved: false,
+      version: "future_chain_pattern_v2",
     },
+
     source_transition_signal_id: sourceIds.sourceTransitionSignalId,
     source_response_learning_id: sourceIds.sourceResponseLearningId,
     source_learning_insight_id: sourceIds.sourceLearningInsightId,
+
+    bridge_event: bridgeEvent,
   };
 
   return {
     decision: "save",
-    reason: "Future Chain candidate を hopy_confirmed_payload の意味情報から生成した",
+    reason:
+      "Future Chain v2 candidate を hopy_confirmed_payload の意味情報から生成した",
     status: "active",
     candidate,
   };
@@ -598,12 +941,9 @@ HOPY Future Chain DB の保存候補 candidate 生成だけを担当する。
 このファイルは保存前チェック、DB insert、state_changed再判定、state_level再判定、current_phase再判定、Compass再判定を担当しない。
 
 【今回このファイルで修正したこと】
-- 状態値だけを見て定形文を返す switch / 固定文生成をやめた。
-- hopy_confirmed_payload の memory_candidates / reply / compass / dashboard_signals / state から、ユーザー側の状態変化サイン、HOPY側の支援、変化理由、未来ユーザーへのヒントを抽出する形へ全文置き換えした。
-- bridge_summary の insight / hint / flow / reason も、from/to状態だけではなく payload 由来の意味情報を含めて生成するようにした。
-- pattern_key を state だけの固定キーではなく、匿名化・抽象化された userSignal / hopySupport を含む安定hash付きキーに変更し、同じ状態遷移でも別の意味を持つ橋渡しを別候補として保存できるようにした。
-- metadata に generation / evidence_sources / raw_log_saved=false を追加し、生ログではなくHOPY確定payload由来の意味抽出であることを明示した。
-- futureChainDownwardCandidate.ts の定形文生成には依存しない形へ戻した。
+- downward の保存候補生成で futureChainDownwardCandidate.ts の buildDownwardMeaningParts(...) を使うようにした。
+- downward の場合だけ、下降専用ファイルが生成する user_progress_signal / effective_support / transition_reason / future_support_hint / bridge_summary / compass_basis を保存候補へ反映するようにした。
+- upward はこれまで通り、このファイル内の既存ロジックで生成するようにして、安定している前進側を触らないようにした。
 - 保存前チェック、DB insert、DB制約、UI、HOPY回答○、Compass表示、MEMORIES、DASHBOARDには触れていない。
 
 /app/api/chat/_lib/hopy/future-chain/futureChainCandidate.ts

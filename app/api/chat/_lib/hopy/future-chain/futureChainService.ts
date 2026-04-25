@@ -17,6 +17,7 @@ export type SaveFutureChainFromConfirmedPayloadResult =
       decision: "save";
       reason: string;
       patternId: string | null;
+      bridgeEventId: string | null;
       check: HopyFutureChainSaveCheckResult;
       insert: HopyFutureChainInsertResult;
     }
@@ -25,6 +26,7 @@ export type SaveFutureChainFromConfirmedPayloadResult =
       decision: "skip";
       reason: string;
       patternId: null;
+      bridgeEventId: null;
       check: HopyFutureChainSaveCheckResult;
       insert: null;
     }
@@ -33,6 +35,7 @@ export type SaveFutureChainFromConfirmedPayloadResult =
       decision: "save";
       reason: string;
       patternId: null;
+      bridgeEventId: null;
       check: HopyFutureChainSaveCheckResult;
       insert: HopyFutureChainInsertResult;
     };
@@ -58,6 +61,7 @@ export async function saveFutureChainFromConfirmedPayload(params: {
       decision: "skip",
       reason: candidateDecision.reason,
       patternId: null,
+      bridgeEventId: null,
       check: candidateDecision,
       insert: null,
     };
@@ -74,6 +78,7 @@ export async function saveFutureChainFromConfirmedPayload(params: {
       decision: "save",
       reason: "Future Chain candidate の DB 保存に失敗した",
       patternId: null,
+      bridgeEventId: null,
       check: candidateDecision,
       insert,
     };
@@ -84,6 +89,7 @@ export async function saveFutureChainFromConfirmedPayload(params: {
     decision: "save",
     reason: candidateDecision.reason,
     patternId: insert.patternId,
+    bridgeEventId: insert.bridgeEventId ?? null,
     check: candidateDecision,
     insert,
   };
@@ -96,11 +102,10 @@ hopy_confirmed_payload 起点の sourceContext を受け取り、保存前チェ
 このファイルは保存前チェックの中身、candidate生成の中身、DB insert の中身、state_changed再判定、state_level再判定、current_phase再判定、Compass再判定を担当しない。
 
 【今回このファイルで修正したこと】
-- Future Chain 専用フォルダ内に、入口 service ファイルを新規作成した。
-- checkFutureChainSavePreconditions(...) → buildFutureChainCandidate(...) → insertFutureChainPattern(...) の一本道を作成した。
-- skip の場合は DB 保存せず ok:true / decision:"skip" で返すようにした。
-- DB 保存失敗時は throw せず ok:false で返すようにした。
-- 既存Learning処理、authenticatedTurnDeps.ts への接続、重複時の詳細制御はまだ実装していない。
+- SaveFutureChainFromConfirmedPayloadResult に bridgeEventId を追加した。
+- save 成功時に insertFutureChainPattern(...) が返した bridgeEventId を呼び出し元へ返すようにした。
+- skip / 保存失敗時は bridgeEventId: null を返すようにし、返却形を明確にした。
+- 保存前チェック、candidate生成、DB insert の中身、UI、状態判定、Compass、HOPY回答○には触れていない。
 
 /app/api/chat/_lib/hopy/future-chain/futureChainService.ts
 */
