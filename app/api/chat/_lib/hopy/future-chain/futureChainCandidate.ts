@@ -63,11 +63,11 @@ type HopyFutureChainBridgeEventCandidate = {
 
   metadata: {
     source: "hopy_confirmed_payload";
-    version: "future_chain_pattern_v2";
+    version: "future_chain_pattern_v3";
   };
 };
 
-type HopyFutureChainCandidateV2 = HopyFutureChainCandidate & {
+type HopyFutureChainCandidateV3 = HopyFutureChainCandidate & {
   transition_meaning: HopyFutureChainTransitionMeaning;
   support_shape_key: string;
   bridge_event: HopyFutureChainBridgeEventCandidate;
@@ -803,7 +803,7 @@ export function buildFutureChainCandidate(params: {
   if (transitionKind === "same_level") {
     return {
       decision: "skip",
-      reason: "Future Chain v2 の本線では same_level を保存対象にしない",
+      reason: "Future Chain v3 の本線では same_level を保存対象にしない",
       status: "none",
     };
   }
@@ -885,11 +885,11 @@ export function buildFutureChainCandidate(params: {
 
     metadata: {
       source: "hopy_confirmed_payload",
-      version: "future_chain_pattern_v2",
+      version: "future_chain_pattern_v3",
     },
   };
 
-  const candidate: HopyFutureChainCandidateV2 = {
+  const candidate: HopyFutureChainCandidateV3 = {
     pattern_key: patternKey,
     language,
     from_state_level: fromStateLevel,
@@ -915,7 +915,7 @@ export function buildFutureChainCandidate(params: {
     status: "active",
     metadata: {
       source: "hopy_confirmed_payload",
-      version: "future_chain_pattern_v2",
+      version: "future_chain_pattern_v3",
     },
 
     source_transition_signal_id: sourceIds.sourceTransitionSignalId,
@@ -928,7 +928,7 @@ export function buildFutureChainCandidate(params: {
   return {
     decision: "save",
     reason:
-      "Future Chain v2 candidate を hopy_confirmed_payload の意味情報から生成した",
+      "Future Chain v3 candidate を hopy_confirmed_payload の意味情報から生成した",
     status: "active",
     candidate,
   };
@@ -941,9 +941,10 @@ HOPY Future Chain DB の保存候補 candidate 生成だけを担当する。
 このファイルは保存前チェック、DB insert、state_changed再判定、state_level再判定、current_phase再判定、Compass再判定を担当しない。
 
 【今回このファイルで修正したこと】
-- downward の保存候補生成で futureChainDownwardCandidate.ts の buildDownwardMeaningParts(...) を使うようにした。
-- downward の場合だけ、下降専用ファイルが生成する user_progress_signal / effective_support / transition_reason / future_support_hint / bridge_summary / compass_basis を保存候補へ反映するようにした。
-- upward はこれまで通り、このファイル内の既存ロジックで生成するようにして、安定している前進側を触らないようにした。
+- Future Chain v3 定義に合わせて、candidate生成結果の reason に残っていた v2 固定文言を v3 文言へ修正した。
+- same_level skip reason に残っていた v2 固定文言を v3 文言へ修正した。
+- metadata.version の future_chain_pattern_v2 を future_chain_pattern_v3 へ修正した。
+- ファイル内だけで使う HopyFutureChainCandidateV2 型名を HopyFutureChainCandidateV3 へ修正した。
 - 保存前チェック、DB insert、DB制約、UI、HOPY回答○、Compass表示、MEMORIES、DASHBOARDには触れていない。
 
 /app/api/chat/_lib/hopy/future-chain/futureChainCandidate.ts
