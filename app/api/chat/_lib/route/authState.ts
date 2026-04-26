@@ -133,39 +133,28 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
-function readPhaseCandidateFromRecord(
+function readDeltaAppliedCandidateFromRecord(
   value: Record<string, unknown>,
-): 1 | 2 | 3 | 4 | 5 | null {
+): number | null {
   const candidates: unknown[] = [
-    value.current_phase,
-    value.currentPhase,
-    value.state_level,
-    value.stateLevel,
-    value.phase_after,
-    value.phaseAfter,
-    value.after_state_level,
-    value.afterStateLevel,
-    value.next_phase,
-    value.nextPhase,
-    value.next_state_level,
-    value.nextStateLevel,
+    value.deltaApplied,
+    value.delta_applied,
+    value.deltaAppliedFinal,
+    value.delta_applied_final,
   ];
 
   for (const candidate of candidates) {
     const n = Number(candidate);
     if (Number.isFinite(n)) {
-      return normalizePhase(n);
+      return Math.trunc(n);
     }
   }
 
   return null;
 }
 
-function resolvePhaseFromStateUpdate(
-  value: unknown,
-  fallback: 1 | 2 | 3 | 4 | 5,
-): 1 | 2 | 3 | 4 | 5 {
-  if (!isRecord(value)) return fallback;
+function resolveDeltaAppliedFromStateUpdate(value: unknown): number {
+  if (!isRecord(value)) return 0;
 
   const queue: Array<Record<string, unknown>> = [value];
   const seen = new Set<Record<string, unknown>>();
@@ -175,19 +164,17 @@ function resolvePhaseFromStateUpdate(
     if (!current || seen.has(current)) continue;
     seen.add(current);
 
-    const directPhase = readPhaseCandidateFromRecord(current);
-    if (directPhase !== null) {
-      return directPhase;
+    const directDelta = readDeltaAppliedCandidateFromRecord(current);
+    if (directDelta !== null) {
+      return directDelta;
     }
 
     const nestedCandidates: unknown[] = [
+      current.applied,
       current.data,
-      current.state,
       current.result,
       current.payload,
       current.update,
-      current.user_state,
-      current.userState,
     ];
 
     for (const nested of nestedCandidates) {
@@ -197,7 +184,24 @@ function resolvePhaseFromStateUpdate(
     }
   }
 
-  return fallback;
+  return 0;
+}
+
+function resolveConversationPhaseFromStateUpdate(params: {
+  stateUpdate: unknown;
+  previousConfirmedPhase: 1 | 2 | 3 | 4 | 5;
+}): 1 | 2 | 3 | 4 | 5 {
+  const deltaApplied = resolveDeltaAppliedFromStateUpdate(params.stateUpdate);
+
+  if (deltaApplied > 0) {
+    return normalizePhase(params.previousConfirmedPhase + 1);
+  }
+
+  if (deltaApplied < 0) {
+    return normalizePhase(params.previousConfirmedPhase - 1);
+  }
+
+  return params.previousConfirmedPhase;
 }
 
 async function updateConversationStateLevel(params: {
@@ -303,15 +307,23 @@ export async function resolveConversationState(params: {
    * HOPY回答○ の唯一の正は回答確定後の hopy_confirmed_payload.state.state_changed。
    * ここは回答確定前の暫定文脈だけを整える層。
    *
-   * 新規チャット1発話目では前回 assistant 状態が存在しないため、
-   * user_state 全体状態や updateUserStateFromMessage(...) の推定結果を
-   * そのスレッドの current として採用しない。
+   * user_state はユーザー全体の長期状態であり、
+   * 会話スレッド固有の current_phase / state_level そのものではない。
    *
-   * 初回はスレッド固有の状態として prev=current=1 に揃え、
+   * そのため updateUserStateFromMessage(...) の戻り値から
+   * state.current_phase / applied.nextPhase のような全体状態を採用しない。
+   * 会話ごとの状態は、直前 assistant 状態を基準に、
+   * 今回ターンの deltaApplied の符号だけで最大1段動かす。
+   *
+   * 新規チャット1発話目では前回 assistant 状態が存在しないため、
+   * スレッド固有の状態として prev=current=1 に揃え、
    * stateChanged=false で固定する。
    */
   const resolvedCurrentPhase = hasPreviousAssistantState
-    ? resolvePhaseFromStateUpdate(st, previousConfirmedPhase)
+    ? resolveConversationPhaseFromStateUpdate({
+        stateUpdate: st,
+        previousConfirmedPhase,
+      })
     : previousConfirmedPhase;
 
   const resolvedCurrentStateLevel = hasPreviousAssistantState
@@ -367,10 +379,10 @@ updateUserStateFromMessage(...) の結果を受け取り、
 ただし HOPY回答○ の唯一の正そのものは作らない。
 
 【今回このファイルで修正したこと】
-- 新規チャット1発話目では、updateUserStateFromMessage(...) の戻り値を currentPhase / currentStateLevel に採用しないようにした。
-- 前回 assistant 状態が存在しない場合は、スレッド固有の初期状態として currentPhase / currentStateLevel / prevPhase / prevStateLevel を 1 に揃えるようにした。
-- これにより、ユーザー全体状態が5の場合でも、新規スレッドが 5 / false で開始されないようにした。
-- 前回 assistant 状態が存在する通常ターンでは、これまで通り updateUserStateFromMessage(...) の結果から currentPhase を解決する。
+- updateUserStateFromMessage(...) の戻り値から state.current_phase / applied.nextPhase / user_state.current_phase を会話状態として採用しないようにした。
+- 会話ごとの currentPhase / currentStateLevel は、直前 assistant 状態を基準に applied.deltaApplied の符号だけで最大1段動かすようにした。
+- 新規チャット1発話目では、引き続き currentPhase / currentStateLevel / prevPhase / prevStateLevel を 1 に揃え、stateChanged=false に固定した。
+- これにより、ユーザー全体状態が5の場合でも、2会話目以降の軽い入力でスレッド状態が 1 から 5 へ飛ばないようにした。
 - state_changed・Compass・○表示・DB保存復元・回答保存処理には触れていない。
 
 /app/api/chat/_lib/route/authState.ts
