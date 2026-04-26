@@ -87,7 +87,7 @@ export function buildHopyPrompt(
   const transitionTargetLevel = normalizeStateLevel(
     params.transitionTargetLevel ?? stateLevel,
   );
-  const policy = getHopyReplyPolicy(transitionTargetLevel);
+  const policy = getHopyReplyPolicy(stateLevel);
   const resolvedPlan = normalizeResolvedPlan(params.resolvedPlan);
 
   return {
@@ -116,10 +116,11 @@ prompt section 文言そのものは /app/api/chat/_lib/hopy/prompt/hopyPromptSe
 DB取得、DB保存、state_changed生成、Compass生成、○表示、messages取得、回答保存処理は担当しない。
 
 【今回このファイルで修正したこと】
-- policy取得を stateLevel 基準から transitionTargetLevel 基準へ変更した。
-- これにより、下降や上昇など遷移目標が渡っている場合、状態別 policy も遷移先に合わせて組み立てるようにした。
+- policy取得を transitionTargetLevel 基準から stateLevel 基準へ戻した。
+- policy は入力前の参考状態に応じた返答トーン用として扱い、遷移先候補を先取りしないようにした。
+- transitionTargetLevel は buildHopyDeveloperPromptFromSections(...) へ渡す補助値として維持した。
 - stateLevel の正規化、transitionTargetLevel の正規化、prompt section 呼び出し以外には触れていない。
 - state_changed・Compass・○表示・DB保存復元・回答保存処理には触れていない。
 
- /app/api/chat/_lib/response/hopyPromptBuilder.ts
+/app/api/chat/_lib/response/hopyPromptBuilder.ts
 */
