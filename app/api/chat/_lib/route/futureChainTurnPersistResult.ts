@@ -7,6 +7,8 @@ export type FutureChainTurnPersistResult = {
   decision: FutureChainTurnPersistDecision;
   reason: string | null;
   patternId: string | null;
+  bridgeEventId: string | null;
+  deliveryEventId: string | null;
 };
 
 const EMPTY_FUTURE_CHAIN_TURN_PERSIST_RESULT: FutureChainTurnPersistResult = {
@@ -14,6 +16,8 @@ const EMPTY_FUTURE_CHAIN_TURN_PERSIST_RESULT: FutureChainTurnPersistResult = {
   decision: "skip",
   reason: null,
   patternId: null,
+  bridgeEventId: null,
+  deliveryEventId: null,
 };
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -45,6 +49,22 @@ function resolvePatternId(record: Record<string, unknown>): string | null {
   return (
     normalizeOptionalText(record.patternId) ??
     normalizeOptionalText(record.pattern_id) ??
+    null
+  );
+}
+
+function resolveBridgeEventId(record: Record<string, unknown>): string | null {
+  return (
+    normalizeOptionalText(record.bridgeEventId) ??
+    normalizeOptionalText(record.bridge_event_id) ??
+    null
+  );
+}
+
+function resolveDeliveryEventId(record: Record<string, unknown>): string | null {
+  return (
+    normalizeOptionalText(record.deliveryEventId) ??
+    normalizeOptionalText(record.delivery_event_id) ??
     null
   );
 }
@@ -83,6 +103,8 @@ export function buildFutureChainTurnPersistResult(
     decision,
     reason: resolveReason(record),
     patternId: resolvePatternId(record),
+    bridgeEventId: resolveBridgeEventId(record),
+    deliveryEventId: resolveDeliveryEventId(record),
   };
 }
 
@@ -94,6 +116,8 @@ export function buildSkippedFutureChainTurnPersistResult(
     decision: "skip",
     reason: normalizeOptionalText(reason),
     patternId: null,
+    bridgeEventId: null,
+    deliveryEventId: null,
   };
 }
 
@@ -101,16 +125,17 @@ export function buildSkippedFutureChainTurnPersistResult(
 【このファイルの正式役割】
 Future Chain 保存処理の戻り値を、route 層で UI へ渡しやすい最小結果へ正規化するだけの中継ファイル。
 
-このファイルは save / skip / reason / patternId / ok を整えるだけを担当する。
+このファイルは save / skip / reason / patternId / bridgeEventId / deliveryEventId / ok を整えるだけを担当する。
 Future Chain の保存前チェック、状態再判定、DB insert、UI文言決定は担当しない。
 
 【今回このファイルで修正したこと】
-- Future Chain 保存結果の最小中継型 FutureChainTurnPersistResult を新規定義した。
-- saveFutureChainFromConfirmedPayload(...) の戻り値を unknown のまま受け取り、decision / reason / patternId / ok だけへ正規化する buildFutureChainTurnPersistResult(...) を追加した。
-- 例外時や握りつぶし時に使える skip 固定の buildSkippedFutureChainTurnPersistResult(...) を追加した。
-- normalizeOptionalBoolean() が boolean 以外を unknown のまま返していたため、null を返すように修正した。
+- FutureChainTurnPersistResult に bridgeEventId と deliveryEventId を追加した。
+- saveFutureChainFromConfirmedPayload(...) から返る bridgeEventId / bridge_event_id を future_chain_persist に中継できるようにした。
+- 将来 delivery_events 保存結果が返る場合に備え、deliveryEventId / delivery_event_id も同じ中継型で受けられるようにした。
+- skip 時と空結果時は bridgeEventId / deliveryEventId を null に統一した。
 - このファイルでは hopy_confirmed_payload、state_changed、state_level、current_phase、Compass を再判定していない。
 - このファイルでは DB 保存処理や UI 表示文言を持たせていない。
+- 今回は責務が小さく正式役割内に収まるため、新規ファイル作成は行っていない。
 
 /app/api/chat/_lib/route/futureChainTurnPersistResult.ts
 */
