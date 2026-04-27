@@ -346,7 +346,7 @@ export async function finalizeAuthenticatedPostTurn(
       assistantMessageId: params.assistantMessageId,
     });
 
-  const { payload } = finalizeAuthenticatedPostTurnPayloadFlow({
+  const { payload } = await finalizeAuthenticatedPostTurnPayloadFlow({
     confirmedTurn: confirmedTurnWithCompass,
     notification: params.notification,
     resolvedConversationId: params.resolvedConversationId,
@@ -368,6 +368,9 @@ export async function finalizeAuthenticatedPostTurn(
     runTurnResult: params.runTurnResult,
     threadSummarySaveDebug,
     futureChainContext,
+    supabase: params.supabase,
+    resolvedPlan: params.resolvedPlan,
+    authedUserId: params.authedUserId,
   });
 
   return {
@@ -401,7 +404,19 @@ Future Chain の confirmed payload 中継責務は、
 回答確定後の confirmedTurnWithCompass / Compass / assistantMessageId から
 buildFutureChainContextFromFinalizedTurn(...) を呼び、
 生成された futureChainContext を最終payload組み立てフローへ渡すところまでに限定する。
-Future Chain の保存判定・DB保存・UI判定はこのファイルでは行わない。
+Future Chain の保存判定・DB保存・UI判定・recipient_support検索・delivery_event保存はこのファイルでは行わない。
+
+Future Chain 表示payload付与責務は
+authenticatedPostTurnPayloadFinalizeFlow.ts から
+authenticatedPostTurnFutureChainDisplay.ts へ委譲する。
+このファイルでは、表示payload付与に必要な supabase / resolvedPlan を
+最終payload組み立てフローへ渡すだけにする。
+
+Future Chain delivery_event 保存責務は
+authenticatedPostTurnPayloadFinalizeFlow.ts から
+futureChainDeliveryEvent.ts へ委譲する。
+このファイルでは、保存に必要な authedUserId を
+最終payload組み立てフローへ渡すだけにする。
 
 Future Chain 保存結果の payload 中継責務は
 authenticatedPostTurnFutureChainPayload.ts に分離し、
@@ -434,15 +449,12 @@ authenticatedPostTurnPayloadFinalizeFlow.ts に分離し、
 このファイルでは分離先関数を呼び出すだけにする。
 
 【今回このファイルで修正したこと】
-- runTurnResult 側の futureChainContext / future_chain_context 中継をやめました。
-- buildFutureChainContextFromFinalizedTurn(...) を import しました。
-- confirmedTurnWithCompass の assistantText / state、Compass、assistantMessageId を使って、
-  Future Chain v3.1 の futureChainContext を生成するようにしました。
-- finalizeAuthenticatedPostTurnPayloadFlow(...) に生成済み futureChainContext を渡しました。
-- Future Chain 保存判定、DB保存、UI判定、recipient_support検索、delivery_event保存は追加していません。
+- finalizeAuthenticatedPostTurnPayloadFlow(...) に authedUserId: params.authedUserId を渡すようにした。
+- Future Chain delivery_event 保存に必要な recipient_user_id の元値を最終payload組み立てフローへ渡すだけに留めた。
+- Future Chain 保存判定、DB保存本体、UI判定本体、recipient_support検索本体、delivery_event保存本体は追加していない。
 - state_changed、state_level、current_phase、prev系、
-  Compass表示可否、HOPY回答○表示可否は再判定していません。
-- HOPY回答やCompassをFuture Chain側で再要約していません。
+  Compass表示可否、HOPY回答○表示可否は再判定していない。
+- HOPY回答やCompassをFuture Chain側で再要約していない。
 
 /app/api/chat/_lib/route/authenticatedPostTurn.ts
 */

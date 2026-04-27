@@ -3,6 +3,7 @@
 
 import React from "react";
 import { ChatStream } from "./ChatStream";
+import type { ChatStreamFutureChainPlan } from "./chatStreamFutureChainItem";
 import GuestIntroHost from "./GuestIntroHost";
 import JumpButton from "./JumpButton";
 import PreparingHero from "./PreparingHero";
@@ -52,6 +53,8 @@ type Props = {
   topInset: string;
   rendered: RenderItem[];
   visibleTexts: Map<string, string>;
+  futureChainPlan?: ChatStreamFutureChainPlan | null;
+  futureChainDisplay?: unknown | null;
   canShowMore: boolean;
   onShowMore: () => void;
   scrollerRef: React.RefObject<HTMLDivElement | null>;
@@ -80,6 +83,8 @@ export const ChatMessagePane = React.memo(function ChatMessagePane(props: Props)
     labels,
     rendered,
     visibleTexts,
+    futureChainPlan = null,
+    futureChainDisplay = null,
     canShowMore,
     onShowMore,
     scrollerRef,
@@ -128,6 +133,8 @@ export const ChatMessagePane = React.memo(function ChatMessagePane(props: Props)
       onShowMore={onShowMore}
       rendered={rendered}
       visibleTexts={visibleTexts}
+      futureChainPlan={futureChainPlan}
+      futureChainDisplay={futureChainDisplay}
       shouldShowPreparing={shouldShowPreparing && hasRenderedItems}
       preparingLabel={labels.preparingLabel}
       shouldShowRecover={showRecoverUi}
@@ -189,25 +196,15 @@ export default ChatMessagePane;
 /*
 【このファイルの正式役割】
 チャット本文エリアの最終表示切替ファイル。
-受け取った props を使って、
-guest 側では stream / guest intro / guest preparing / jump button を切り替え、
-workspace 側では workspace hero と本文 stream のどちらを出すかを1箇所で決める。
-このファイルは thread 作成責務を持たない。
-message 保存責務を持たない。
-title 自動生成責務を持たない。
-HOPY唯一の正を再判定しない。
-本文があるかどうかを最優先に見て、本文があるなら stream を優先する。
-workspace 側では shouldHoldBlankThreadStage を表示切替条件に使わず、
-親から渡された shouldShowWorkspaceHero と本文有無だけで表示を決める。
-*/
+受け取った props を使って、guest / workspace の本文表示切替と ChatStream への中継だけを担当する。
+Future Chain の意味生成や plan 判定は担当せず、
+受け取った futureChainPlan / futureChainDisplay を下流へ渡すだけを担当する。
 
-/*
 【今回このファイルで修正したこと】
-1. workspace 側の表示切替から shouldHoldBlankThreadStage 依存を削除しました。
-2. shouldRenderStream から shouldHoldBlankThreadStage 条件を削除しました。
-3. shouldRenderWorkspaceBlankStage を shouldRenderWorkspaceHero に整理しました。
-4. スレッド切替中の待機状態を、このファイル内で Hero / PreparingHero へ逃がさない形に戻しました。
-5. 本文採用、confirmed payload、state_changed、HOPY回答○、Compass、DB保存/復元、1..5 の唯一の正には触っていません。
-*/
+futureChainDisplay を props として受け取れるようにした。
+受け取った futureChainDisplay を ChatStream へ渡す中継を追加した。
+このファイルでは state_changed、state_level、Compass、HOPY回答○、DB保存、
+recipient_support検索、delivery_event保存、Future Chainページには触れていない。
 
-/* /components/chat/view/ChatMessagePane.tsx */
+/components/chat/view/ChatMessagePane.tsx
+*/

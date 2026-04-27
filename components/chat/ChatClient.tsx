@@ -15,7 +15,10 @@ import { useThreadSwitch } from "./lib/useThreadSwitch";
 import { useTranslateCache } from "./lib/useTranslateCache";
 import { useChatSend, type FailedSend } from "./lib/useChatSend";
 import { loadMessages } from "./lib/threadApi";
-import type { ChatSendFutureChainPersist } from "./lib/chatSendRequestExecution";
+import type {
+  ChatSendFutureChainDisplay,
+  ChatSendFutureChainPersist,
+} from "./lib/chatSendRequestExecution";
 
 import { normalizeHopyState, type HopyState } from "./lib/stateBadge";
 import {
@@ -75,6 +78,8 @@ export default function ChatClient() {
   const [lastFailed, setLastFailed] = useState<FailedSend | null>(null);
   const [futureChainPersist, setFutureChainPersist] =
     useState<ChatSendFutureChainPersist | null>(null);
+  const [futureChainDisplay, setFutureChainDisplay] =
+    useState<ChatSendFutureChainDisplay | null>(null);
 
   const [userState, setUserState] = useState<HopyState | null>(null);
   const [userStateErr, setUserStateErr] = useState<string | null>(null);
@@ -447,6 +452,7 @@ export default function ChatClient() {
     onThreadIdResolved,
     onThreadRenamed: handleThreadRenamed,
     onFutureChainPersist: setFutureChainPersist,
+    onFutureChainDisplay: setFutureChainDisplay,
     input,
     setInput,
     loading,
@@ -506,6 +512,7 @@ export default function ChatClient() {
       uiLang={uiLang}
       ui={ui}
       futureChainPersist={futureChainPersist}
+      futureChainDisplay={futureChainDisplay}
       input={input}
       setInput={setInput}
       messages={viewMessages}
@@ -570,11 +577,12 @@ ChatClientView へ表示用の値を接続する。
 このファイルは HOPY唯一の正、state_changed、Compass、HOPY回答○、Future Chain保存可否を再判定しない。
 
 【今回このファイルで修正したこと】
-- ChatSendFutureChainPersist 型を読み込んだ。
-- futureChainPersist state を追加した。
-- useChatSend(...) の onFutureChainPersist で Future Chain 保存結果を受け取るようにした。
-- ChatClientView へ futureChainPersist を props として渡すようにした。
-- Future Chain の保存可否、state_changed、state_level、Compass、HOPY回答○、DB保存、MEMORIES、DASHBOARD は再判定していない。
+- ChatSendFutureChainDisplay 型を読み込んだ。
+- futureChainDisplay state を追加した。
+- useChatSend(...) の onFutureChainDisplay で Future Chain 表示payloadを受け取るようにした。
+- ChatClientView へ futureChainDisplay を props として渡すようにした。
+- futureChainPersist の既存中継は維持した。
+- Future Chain の表示可否、保存可否、state_changed、state_level、Compass、HOPY回答○、DB保存、MEMORIES、DASHBOARD は再判定していない。
 
 /components/chat/ChatClient.tsx
 */

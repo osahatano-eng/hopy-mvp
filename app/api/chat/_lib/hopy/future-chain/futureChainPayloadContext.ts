@@ -84,45 +84,58 @@ type ResolveFutureChainContextForConfirmedPayloadParams = {
   stateChanged: boolean;
 };
 
-const MAJOR_CATEGORY_KEYS = new Set<HopyFutureChainMajorCategory>([
-  "work",
-  "relationship",
-  "money",
-  "family",
-  "learning",
-  "development",
-  "creation",
-  "life",
-  "future",
-  "self",
+const MAJOR_CATEGORY_KEYS = new Set<string>([
+  "self_understanding",
+  "emotional_regulation",
+  "relationships",
+  "work_career",
+  "learning_creation",
+  "life_direction",
+  "action_execution",
+  "recovery_resilience",
+  "hopy_usage",
 ]);
 
-const MINOR_CATEGORY_KEYS = new Set<HopyFutureChainMinorCategory>([
+const MINOR_CATEGORY_KEYS = new Set<string>([
+  "unclear_thoughts",
+  "unclear_feelings",
+  "overwhelm",
   "anxiety",
-  "confusion",
-  "decision",
-  "action",
-  "continuity",
-  "relationship",
-  "confidence",
-  "priority",
-  "letting_go",
-  "retry",
-  "visualization",
+  "low_energy",
+  "communication",
+  "boundary",
+  "priority_confusion",
+  "career_direction",
+  "task_overload",
+  "skill_learning",
+  "creative_direction",
+  "project_building",
+  "life_choice",
+  "value_clarification",
+  "first_step",
+  "habit_continuation",
+  "recovery_pause",
+  "readjustment",
+  "hopy_understanding",
+  "hopy_direction",
 ]);
 
-const CHANGE_TRIGGER_KEYS = new Set<HopyFutureChainChangeTriggerKey>([
-  "verbalized",
-  "narrowed_to_one",
-  "noticed_true_feeling",
-  "stated_action",
-  "accepted_discomfort",
-  "found_priority",
-  "found_purpose",
-  "noticed_fear_source",
-  "allowed_to_release",
-  "rested_before_action",
-  "reset_premise",
+const CHANGE_TRIGGER_KEYS = new Set<string>([
+  "write_down_one_concern",
+  "name_current_feeling",
+  "notice_inner_reaction",
+  "choose_one_next_step",
+  "narrow_priority",
+  "accept_incomplete_state",
+  "pause_before_action",
+  "break_down_task",
+  "compare_options",
+  "define_success_condition",
+  "ask_one_question",
+  "reconnect_with_reason",
+  "notice_pattern",
+  "continue_small",
+  "handoff_message_snapshot",
 ]);
 
 const DISPLAY_MODES = new Set<HopyFutureChainDisplayMode>([
@@ -226,7 +239,7 @@ function normalizeMajorCategory(
   value: unknown,
 ): HopyFutureChainMajorCategory | null {
   const key = normalizeText(value);
-  if (!MAJOR_CATEGORY_KEYS.has(key as HopyFutureChainMajorCategory)) {
+  if (!MAJOR_CATEGORY_KEYS.has(key)) {
     return null;
   }
 
@@ -237,7 +250,7 @@ function normalizeMinorCategory(
   value: unknown,
 ): HopyFutureChainMinorCategory | null {
   const key = normalizeText(value);
-  if (!MINOR_CATEGORY_KEYS.has(key as HopyFutureChainMinorCategory)) {
+  if (!MINOR_CATEGORY_KEYS.has(key)) {
     return null;
   }
 
@@ -248,7 +261,7 @@ function normalizeChangeTriggerKey(
   value: unknown,
 ): HopyFutureChainChangeTriggerKey | null {
   const key = normalizeText(value);
-  if (!CHANGE_TRIGGER_KEYS.has(key as HopyFutureChainChangeTriggerKey)) {
+  if (!CHANGE_TRIGGER_KEYS.has(key)) {
     return null;
   }
 
@@ -483,12 +496,11 @@ Compass再判定、UI表示判定、HOPY回答再要約、Compass再要約、
 ユーザー発話読み取りを担当しない。
 
 【今回このファイルで修正したこと】
-- HopyFutureChainPayloadContext に handoffMessageSnapshot / handoffSnapshotReason / sourceAssistantMessageId を追加しました。
-- HopyFutureChainContext に handoff_message_snapshot / handoff_snapshot_reason / source_assistant_message_id を追加しました。
-- rawContext から handoff_message_snapshot / handoffMessageSnapshot を読み取る処理を追加しました。
-- confirmed payload へ載せる snake_case 形式に handoff_message_snapshot を含めるようにしました。
-- hasFutureChainOwnerHandoffContext(...) を owner_handoff 4項目必須から handoff_message_snapshot 必須へ変更しました。
-- Future Chain の意味生成・保存判定・DB保存・UI判定・HOPY回答再要約は持たせていません。
+- major_category / minor_category / change_trigger_key の許可キーを、Future Chain / World Learning 共通カテゴリ v1 に更新した。
+- normalizeMajorCategory / normalizeMinorCategory / normalizeChangeTriggerKey が新カテゴリを null に戻さないようにした。
+- HOPY回答確定時に受け取った rawContext のカテゴリ値を、confirmed payload の future_chain_context へ通せるようにした。
+- HOPY回答、Compass、ユーザー発話生文、DB保存、recipient_support検索、delivery_event保存、UI表示には触れていない。
+- state_changed、state_level、current_phase、prev系、Compass表示可否、HOPY回答○表示可否は再判定していない。
 
 /app/api/chat/_lib/hopy/future-chain/futureChainPayloadContext.ts
 */

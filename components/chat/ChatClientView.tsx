@@ -11,10 +11,6 @@ import { ChatLayout } from "./view/ChatLayout";
 import { ChatOverlays } from "./view/ChatOverlays";
 import { ChatMessagePane } from "./view/ChatMessagePane";
 import { ChatComposerSection } from "./view/ChatComposerSection";
-import {
-  ChatFutureChainNotice,
-  type ChatFutureChainPersist,
-} from "./view/ChatFutureChainNotice";
 
 import type { ChatClientViewProps } from "./view/chatClientViewTypes";
 import { useChatViewportController } from "./view/hooks/useChatViewportController";
@@ -23,8 +19,14 @@ import { useChatClientViewThreadActions } from "./view/hooks/useChatClientViewTh
 import { useChatClientViewMessagePaneProps } from "./view/hooks/useChatClientViewMessagePaneProps";
 import { useChatClientViewComposerSectionProps } from "./view/hooks/useChatClientViewComposerSectionProps";
 
+type FutureChainPlan = "free" | "plus" | "pro";
+
+type FutureChainDisplayForView = {
+  plan?: unknown;
+} & Record<string, unknown>;
+
 type ChatClientViewExtendedProps = ChatClientViewProps & {
-  futureChainPersist?: ChatFutureChainPersist | null;
+  futureChainDisplay?: FutureChainDisplayForView | null;
   railOpen: boolean;
   onOpenRail: () => void;
   onCloseRail: () => void;
@@ -40,6 +42,30 @@ type ChatClientViewExtendedProps = ChatClientViewProps & {
   shouldHoldBlankThreadStage?: boolean;
 };
 
+function normalizeFutureChainPlan(value: unknown): FutureChainPlan | null {
+  const plan = String(value ?? "").trim().toLowerCase();
+
+  if (plan === "free" || plan === "plus" || plan === "pro") {
+    return plan;
+  }
+
+  return null;
+}
+
+function resolveFutureChainPlan(params: {
+  futureChainDisplay: FutureChainDisplayForView | null;
+  userState: unknown;
+}): FutureChainPlan {
+  const displayPlan = normalizeFutureChainPlan(params.futureChainDisplay?.plan);
+  if (displayPlan) return displayPlan;
+
+  const statePlan = normalizeFutureChainPlan(
+    (params.userState as { plan?: unknown } | null | undefined)?.plan,
+  );
+
+  return statePlan ?? "free";
+}
+
 export default function ChatClientView(props: ChatClientViewExtendedProps) {
   const {
     rootRef,
@@ -47,7 +73,8 @@ export default function ChatClientView(props: ChatClientViewExtendedProps) {
     email,
     uiLang,
     ui,
-    futureChainPersist = null,
+
+    futureChainDisplay = null,
 
     input,
     setInput,
@@ -111,6 +138,15 @@ export default function ChatClientView(props: ChatClientViewExtendedProps) {
 
   const disableNewChat = Boolean(disableNewChatProp);
   const renderedLength = Array.isArray(rendered) ? rendered.length : 0;
+
+  const futureChainPlan = React.useMemo(
+    () =>
+      resolveFutureChainPlan({
+        futureChainDisplay,
+        userState,
+      }),
+    [futureChainDisplay, userState],
+  );
 
   const scrollerDivRef =
     scrollerRef as React.RefObject<HTMLDivElement | null>;
@@ -250,6 +286,8 @@ export default function ChatClientView(props: ChatClientViewExtendedProps) {
     onReload: reloadPage,
     onResetAndReload: reloadPage,
     isMobile,
+    futureChainDisplay,
+    futureChainPlan,
   });
 
   const messagePanePropsForRender = {
@@ -355,7 +393,6 @@ export default function ChatClientView(props: ChatClientViewExtendedProps) {
         onChangeLang={onChangeLang}
       >
         <ChatMessagePane {...messagePanePropsForRender} />
-        <ChatFutureChainNotice futureChainPersist={futureChainPersist} />
         <ChatComposerSection {...composerSectionProps} />
       </ChatLayout>
     </main>
@@ -372,11 +409,11 @@ Chat画面の親表示統合ファイル。
 子コンポーネントへ必要な値を渡す親責務だけを持つ。
 
 【今回このファイルで修正したこと】
-- Future Chain 保存成功通知の表示部品 ChatFutureChainNotice を読み込んだ。
-- futureChainPersist を任意propsとして受け取れるようにした。
-- ChatLayout 内で ChatFutureChainNotice を配置した。
-- このファイルでは Future Chain の保存可否、state_changed、state_level、Compass、HOPY回答○、DB保存、MEMORIES、DASHBOARD は再判定していない。
-- まだ ChatClient.tsx 側から futureChainPersist を渡す処理には触れていない。
+- ChatClient.tsx から渡される futureChainDisplay を props として受け取れるようにした。
+- futureChainDisplay.plan を優先して Future Chain 表示用 plan を正規化する処理を追加した。
+- futureChainDisplay.plan がない場合のみ、userState.plan を表示用 plan として正規化する fallback を追加した。
+- futureChainDisplay と futureChainPlan を useChatClientViewMessagePaneProps(...) へ渡すようにした。
+- このファイルでは Future Chain の表示可否、保存可否、handoffMessageSnapshot生成、recipient_support検索、delivery_event保存、state_changed、state_level、Compass、HOPY回答○、DB保存、MEMORIES、DASHBOARD は再判定していない。
 
 /components/chat/ChatClientView.tsx
 */

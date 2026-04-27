@@ -22,6 +22,37 @@ export type LoadMessagesStateArgs = {
   scrollToBottom: (behavior?: ScrollBehavior | "auto" | "smooth") => void;
 };
 
+type FutureChainBridgeEventRow = {
+  id?: string | null;
+  source_assistant_message_id?: string | null;
+  handoff_message_snapshot?: string | null;
+  transition_kind?: string | null;
+  transition_meaning?: string | null;
+  major_category?: string | null;
+  minor_category?: string | null;
+  change_trigger_key?: string | null;
+  support_shape_key?: string | null;
+  status?: string | null;
+};
+
+type FutureChainDeliveryEventRow = {
+  id?: string | null;
+  recipient_assistant_message_id?: string | null;
+  bridge_event_id?: string | null;
+  pattern_id?: string | null;
+  recipient_plan?: string | null;
+  display_mode?: string | null;
+  recipient_state_level?: number | null;
+  major_category?: string | null;
+  minor_category?: string | null;
+  change_trigger_key?: string | null;
+  display_title?: string | null;
+  display_hint?: string | null;
+  display_flow?: string | null;
+  delivery_reason?: string | null;
+  status?: string | null;
+};
+
 function shouldRetryLoadMessages(err: any) {
   const s = String(err?.message ?? err ?? "").toLowerCase();
   if (!s) return false;
@@ -61,6 +92,10 @@ function safeBoolOrNull(v: any): boolean | null {
 function safeTextOrNull(v: any): string | null {
   const s = String(v ?? "").trim();
   return s || null;
+}
+
+function isRecord(value: any): value is Record<string, any> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 function resolveMessageStableId(msg: ChatMsg): string | null {
@@ -308,6 +343,334 @@ function mapRowsToMessages(rows: any[], threadId: string): ChatMsg[] {
   return dedupeLoadedMessages(mapped);
 }
 
+function getAssistantMessageIds(messages: ChatMsg[]): string[] {
+  const ids = new Set<string>();
+
+  for (const msg of messages) {
+    const raw = msg as any;
+    if (raw?.role !== "assistant") continue;
+
+    const id = resolveMessageStableId(msg);
+    if (id) ids.add(id);
+  }
+
+  return Array.from(ids);
+}
+
+async function loadFutureChainBridgeEventMap(params: {
+  supabase: SupabaseClient;
+  messages: ChatMsg[];
+  threadId: string;
+}): Promise<Map<string, FutureChainBridgeEventRow>> {
+  const assistantIds = getAssistantMessageIds(params.messages);
+  const out = new Map<string, FutureChainBridgeEventRow>();
+
+  if (assistantIds.length === 0) {
+    return out;
+  }
+
+  const { data, error } = await params.supabase
+    .from("hopy_future_chain_bridge_events")
+    .select(
+      [
+        "id",
+        "source_assistant_message_id",
+        "handoff_message_snapshot",
+        "transition_kind",
+        "transition_meaning",
+        "major_category",
+        "minor_category",
+        "change_trigger_key",
+        "support_shape_key",
+        "status",
+        "deleted_at",
+        "created_at",
+      ].join(", "),
+    )
+    .in("source_assistant_message_id", assistantIds)
+    .eq("status", "active")
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    logWarn("[threadApi] loadMessages:future chain bridge restore skipped", {
+      threadId: params.threadId,
+      reason: normMsg(error),
+    });
+
+    return out;
+  }
+
+  const rows = Array.isArray(data)
+    ? (data as unknown as FutureChainBridgeEventRow[])
+    : [];
+
+  for (const row of rows) {
+    const assistantId = String(row?.source_assistant_message_id ?? "").trim();
+    const snapshot = safeTextOrNull(row?.handoff_message_snapshot);
+
+    if (!assistantId || !snapshot) continue;
+    if (out.has(assistantId)) continue;
+
+    out.set(assistantId, row);
+  }
+
+  return out;
+}
+
+async function loadFutureChainDeliveryEventMap(params: {
+  supabase: SupabaseClient;
+  messages: ChatMsg[];
+  threadId: string;
+}): Promise<Map<string, FutureChainDeliveryEventRow>> {
+  const assistantIds = getAssistantMessageIds(params.messages);
+  const out = new Map<string, FutureChainDeliveryEventRow>();
+
+  if (assistantIds.length === 0) {
+    return out;
+  }
+
+  const { data, error } = await params.supabase
+    .from("hopy_future_chain_delivery_events")
+    .select(
+      [
+        "id",
+        "recipient_assistant_message_id",
+        "bridge_event_id",
+        "pattern_id",
+        "recipient_plan",
+        "display_mode",
+        "recipient_state_level",
+        "major_category",
+        "minor_category",
+        "change_trigger_key",
+        "display_title",
+        "display_hint",
+        "display_flow",
+        "delivery_reason",
+        "status",
+        "deleted_at",
+        "created_at",
+      ].join(", "),
+    )
+    .in("recipient_assistant_message_id", assistantIds)
+    .eq("status", "shown")
+    .eq("display_mode", "recipient_support")
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    logWarn("[threadApi] loadMessages:future chain delivery restore skipped", {
+      threadId: params.threadId,
+      reason: normMsg(error),
+    });
+
+    return out;
+  }
+
+  const rows = Array.isArray(data)
+    ? (data as unknown as FutureChainDeliveryEventRow[])
+    : [];
+
+  for (const row of rows) {
+    const assistantId = String(row?.recipient_assistant_message_id ?? "").trim();
+    const snapshot = safeTextOrNull(row?.display_hint);
+
+    if (!assistantId || !snapshot) continue;
+    if (out.has(assistantId)) continue;
+
+    out.set(assistantId, row);
+  }
+
+  return out;
+}
+
+function attachFutureChainBridgeEventsToMessages(params: {
+  messages: ChatMsg[];
+  bridgeEventsByAssistantId: Map<string, FutureChainBridgeEventRow>;
+}): ChatMsg[] {
+  if (params.bridgeEventsByAssistantId.size === 0) {
+    return params.messages;
+  }
+
+  return params.messages.map((msg) => {
+    const raw = msg as any;
+    if (raw?.role !== "assistant") return msg;
+
+    const assistantId = resolveMessageStableId(msg);
+    if (!assistantId) return msg;
+
+    const bridgeEvent = params.bridgeEventsByAssistantId.get(assistantId);
+    const handoffMessageSnapshot = safeTextOrNull(
+      bridgeEvent?.handoff_message_snapshot,
+    );
+
+    if (!bridgeEvent || !handoffMessageSnapshot) {
+      return msg;
+    }
+
+    const next: any = { ...raw };
+
+    const confirmedPayload: Record<string, any> = isRecord(
+      raw?.hopy_confirmed_payload,
+    )
+      ? { ...raw.hopy_confirmed_payload }
+      : {};
+
+    const existingFutureChainContext = isRecord(
+      confirmedPayload.future_chain_context,
+    )
+      ? { ...confirmedPayload.future_chain_context }
+      : {};
+
+    confirmedPayload.future_chain_context = {
+      ...existingFutureChainContext,
+      delivery_mode: "owner_handoff",
+      major_category:
+        safeTextOrNull(bridgeEvent.major_category) ??
+        existingFutureChainContext.major_category ??
+        null,
+      minor_category:
+        safeTextOrNull(bridgeEvent.minor_category) ??
+        existingFutureChainContext.minor_category ??
+        null,
+      change_trigger_key:
+        safeTextOrNull(bridgeEvent.change_trigger_key) ??
+        existingFutureChainContext.change_trigger_key ??
+        null,
+      transition_kind:
+        safeTextOrNull(bridgeEvent.transition_kind) ??
+        existingFutureChainContext.transition_kind ??
+        null,
+      transition_meaning:
+        safeTextOrNull(bridgeEvent.transition_meaning) ??
+        existingFutureChainContext.transition_meaning ??
+        null,
+      support_shape_key:
+        safeTextOrNull(bridgeEvent.support_shape_key) ??
+        existingFutureChainContext.support_shape_key ??
+        "handoff_message_snapshot",
+      handoff_message_snapshot: handoffMessageSnapshot,
+      source_assistant_message_id: assistantId,
+      bridge_event_id: safeTextOrNull(bridgeEvent.id),
+    };
+
+    if (!confirmedPayload.assistant_message_id) {
+      confirmedPayload.assistant_message_id = assistantId;
+    }
+
+    if (!confirmedPayload.reply && typeof raw?.content === "string") {
+      confirmedPayload.reply = raw.content;
+    }
+
+    next.hopy_confirmed_payload = confirmedPayload;
+
+    return next as ChatMsg;
+  });
+}
+
+function attachFutureChainDeliveryEventsToMessages(params: {
+  messages: ChatMsg[];
+  deliveryEventsByAssistantId: Map<string, FutureChainDeliveryEventRow>;
+}): ChatMsg[] {
+  if (params.deliveryEventsByAssistantId.size === 0) {
+    return params.messages;
+  }
+
+  return params.messages.map((msg) => {
+    const raw = msg as any;
+    if (raw?.role !== "assistant") return msg;
+
+    const assistantId = resolveMessageStableId(msg);
+    if (!assistantId) return msg;
+
+    const deliveryEvent = params.deliveryEventsByAssistantId.get(assistantId);
+    const handoffMessageSnapshot = safeTextOrNull(deliveryEvent?.display_hint);
+
+    if (!deliveryEvent || !handoffMessageSnapshot) {
+      return msg;
+    }
+
+    const next: any = { ...raw };
+
+    const confirmedPayload: Record<string, any> = isRecord(
+      raw?.hopy_confirmed_payload,
+    )
+      ? { ...raw.hopy_confirmed_payload }
+      : {};
+
+    const displayTitle =
+      safeTextOrNull(deliveryEvent.display_title) ??
+      "過去のユーザーさんから Future Chain が届いています";
+
+    const futureChainDisplay = {
+      kind: "recipient_support",
+      shouldDisplay: true,
+      plan: safeTextOrNull(deliveryEvent.recipient_plan) ?? "pro",
+      placement: "below_reply",
+      detailLevel: "full",
+      title: displayTitle,
+      description:
+        "過去の本物の会話から生まれたHOPYの言葉が、今のあなたへ届いています。",
+      handoffMessageSnapshot,
+      bridgeEventId: safeTextOrNull(deliveryEvent.bridge_event_id),
+      deliveryEventId: safeTextOrNull(deliveryEvent.id),
+      delivery_event_id: safeTextOrNull(deliveryEvent.id),
+    };
+
+    next.future_chain_display = futureChainDisplay;
+    next.futureChainDisplay = futureChainDisplay;
+
+    confirmedPayload.future_chain_display = futureChainDisplay;
+
+    if (!confirmedPayload.assistant_message_id) {
+      confirmedPayload.assistant_message_id = assistantId;
+    }
+
+    if (!confirmedPayload.reply && typeof raw?.content === "string") {
+      confirmedPayload.reply = raw.content;
+    }
+
+    next.hopy_confirmed_payload = confirmedPayload;
+
+    return next as ChatMsg;
+  });
+}
+
+async function restoreFutureChainBridgeEvents(params: {
+  supabase: SupabaseClient;
+  messages: ChatMsg[];
+  threadId: string;
+}): Promise<ChatMsg[]> {
+  const bridgeEventsByAssistantId = await loadFutureChainBridgeEventMap({
+    supabase: params.supabase,
+    messages: params.messages,
+    threadId: params.threadId,
+  });
+
+  return attachFutureChainBridgeEventsToMessages({
+    messages: params.messages,
+    bridgeEventsByAssistantId,
+  });
+}
+
+async function restoreFutureChainDeliveryEvents(params: {
+  supabase: SupabaseClient;
+  messages: ChatMsg[];
+  threadId: string;
+}): Promise<ChatMsg[]> {
+  const deliveryEventsByAssistantId = await loadFutureChainDeliveryEventMap({
+    supabase: params.supabase,
+    messages: params.messages,
+    threadId: params.threadId,
+  });
+
+  return attachFutureChainDeliveryEventsToMessages({
+    messages: params.messages,
+    deliveryEventsByAssistantId,
+  });
+}
+
 export async function loadMessages(
   supabase: SupabaseClient,
   threadId: string,
@@ -424,15 +787,25 @@ export async function loadMessages(a1: any, a2?: any): Promise<ChatMsg[]> {
 
     const orderedRows = Array.isArray(rows) ? rows.slice().reverse() : [];
     const fixed = mapRowsToMessages(orderedRows, tid);
+    const withOwnerHandoff = await restoreFutureChainBridgeEvents({
+      supabase,
+      messages: fixed,
+      threadId: tid,
+    });
+    const restored = await restoreFutureChainDeliveryEvents({
+      supabase,
+      messages: withOwnerHandoff,
+      threadId: tid,
+    });
 
     logInfo("[threadApi] loadMessages:ok", {
       threadId: tid,
       fk: "conversation_id",
       rows: Array.isArray(rows) ? rows.length : 0,
-      fixed: fixed.length,
+      fixed: restored.length,
     });
 
-    return fixed;
+    return restored;
   };
 
   const delays = [0, 250, 800, 1600, 3200];
@@ -480,12 +853,18 @@ threadId
 - hopy_confirmed_payload
 - conversation_id
 - thread_id
-*/
+- hopy_confirmed_payload.future_chain_context
+- future_chain_display / futureChainDisplay
+- hopy_confirmed_payload.future_chain_display
 
-/*
 【今回このファイルで修正したこと】
-1. 古いチャットで最新の送信・回答が復元対象から漏れないように、messages 取得を created_at 降順の最新200件に変更した。
-2. 描画順は壊さないように、取得後に reverse して古い順の ChatMsg[] へ戻した。
-3. retry、state 1..5、Compass、hopy_confirmed_payload、UI更新しない方針は触っていない。
+hopy_future_chain_bridge_events から owner_handoff を復元するときに、
+major_category / minor_category / change_trigger_key も取得し、
+hopy_confirmed_payload.future_chain_context へ戻す処理を追加した。
+hopy_future_chain_delivery_events から recipient_support 表示履歴を復元する処理は維持した。
+messages.hopy_confirmed_payload カラムは存在しないため select していない。
+Future Chain の保存可否、state_changed、state_level、Compass、HOPY回答○は再判定していない。
+既存の state 1..5、Compass復元、本文復元、取得順、dedupe、UI更新しない方針は維持した。
+
+/components/chat/lib/threadApiMessages.ts
 */
-// /components/chat/lib/threadApiMessages.ts

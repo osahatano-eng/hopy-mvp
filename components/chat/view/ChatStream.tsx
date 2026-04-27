@@ -14,6 +14,7 @@ import {
 } from "./chatStreamAssistantState";
 import ChatStreamCompass from "./ChatStreamCompass";
 import ChatStreamFutureChain from "./ChatStreamFutureChain";
+import type { ChatStreamFutureChainPlan } from "./chatStreamFutureChainItem";
 import ChatStreamLoadingRow from "./chatStreamLoadingRow";
 import {
   getChatStreamViewItems,
@@ -32,6 +33,8 @@ function ChatStreamInner(props: {
 
   rendered: RenderItem[];
   visibleTexts: Map<string, string>;
+  futureChainPlan?: ChatStreamFutureChainPlan | null;
+  futureChainDisplay?: unknown | null;
 
   shouldShowPreparing: boolean;
   preparingLabel: string;
@@ -61,6 +64,8 @@ function ChatStreamInner(props: {
     onShowMore,
     rendered,
     visibleTexts,
+    futureChainPlan = null,
+    futureChainDisplay = null,
     shouldShowPreparing,
     preparingLabel,
     shouldShowRecover,
@@ -101,8 +106,10 @@ function ChatStreamInner(props: {
       rendered,
       visibleTexts,
       uiLang,
+      futureChainPlan,
+      futureChainDisplay,
     });
-  }, [rendered, visibleTexts, uiLang]);
+  }, [rendered, visibleTexts, uiLang, futureChainPlan, futureChainDisplay]);
 
   const viewMessageRowCount = useMemo(() => {
     return viewItems.reduce((count, it) => {
@@ -200,17 +207,15 @@ export default ChatStream;
 /*
 【このファイルの正式役割】
 チャット本文の描画ファイル。
-受け取った rendered / visibleTexts を、そのまま表示用 viewItems に変換し、
+受け取った rendered / visibleTexts / futureChainPlan / futureChainDisplay を表示用 ViewItem 生成へ渡し、
 MessageRow / DayDivider / Compass / Future Chain / LoadingRow を描画する。
-このファイルは本文採用や thread 判定を持たず、表示だけを担当する。
-*/
+Future Chain の意味生成や plan 判定は担当せず、受け取った値を下流へ渡すだけを担当する。
 
-/*
 【今回このファイルで修正したこと】
-- ChatStreamFutureChain を import しました。
-- kind: "future_chain" の分岐を return null から ChatStreamFutureChain 表示へ接続しました。
-- Future Chain 本表示UIは ChatStreamFutureChain.tsx に分離し、このファイルには直書きしていません。
-- 本文採用、thread 判定、送信処理、jumpボタン判定、confirmed payload、state_changed、HOPY回答○、Compass、DB保存/復元、1..5 の唯一の正には触っていません。
-*/
+futureChainDisplay を props として受け取れるようにした。
+受け取った futureChainDisplay を getChatStreamViewItems(...) へ渡す中継を追加した。
+このファイルでは state_changed、state_level、Compass、HOPY回答○、DB保存、
+recipient_support検索、delivery_event保存、Future Chainページには触れていない。
 
-/* /components/chat/view/ChatStream.tsx */
+/components/chat/view/ChatStream.tsx
+*/

@@ -15,6 +15,7 @@ import { prepareRetrySend } from "./chatSendRetryPreparation";
 import { runSendThreadPostProcess } from "./chatSendThreadPostProcess";
 import {
   runChatSendRequestExecution,
+  type ChatSendFutureChainDisplay,
   type ChatSendFutureChainPersist,
 } from "./chatSendRequestExecution";
 import {
@@ -45,6 +46,49 @@ function normalizeConversationIdSeed(threadId: string | null | undefined) {
   return tid;
 }
 
+function hasFutureChainDisplaySnapshot(
+  futureChainDisplay: ChatSendFutureChainDisplay | null | undefined,
+): futureChainDisplay is ChatSendFutureChainDisplay {
+  const snapshot = String(
+    futureChainDisplay?.handoffMessageSnapshot ?? "",
+  ).trim();
+
+  if (!futureChainDisplay) return false;
+  if (futureChainDisplay.shouldDisplay !== true) return false;
+  if (futureChainDisplay.kind === "none") return false;
+  if (!snapshot) return false;
+
+  return true;
+}
+
+function attachFutureChainDisplayToAssistantMessage(params: {
+  message: ChatMsg;
+  futureChainDisplay: ChatSendFutureChainDisplay | null | undefined;
+}): ChatMsg {
+  if (!hasFutureChainDisplaySnapshot(params.futureChainDisplay)) {
+    return params.message;
+  }
+
+  const raw = params.message as any;
+  const next: any = { ...raw };
+
+  const confirmedPayload =
+    raw?.hopy_confirmed_payload &&
+    typeof raw.hopy_confirmed_payload === "object" &&
+    !Array.isArray(raw.hopy_confirmed_payload)
+      ? { ...raw.hopy_confirmed_payload }
+      : {};
+
+  next.future_chain_display = params.futureChainDisplay;
+  next.futureChainDisplay = params.futureChainDisplay;
+
+  confirmedPayload.future_chain_display = params.futureChainDisplay;
+
+  next.hopy_confirmed_payload = confirmedPayload;
+
+  return next as ChatMsg;
+}
+
 export function useChatSend<TState>(params: {
   supabase: SupabaseClient;
   uiLang: Lang;
@@ -55,6 +99,9 @@ export function useChatSend<TState>(params: {
   onThreadRenamed?: (thread: ApiThread) => void;
   onFutureChainPersist?: (
     futureChainPersist: ChatSendFutureChainPersist | null
+  ) => void;
+  onFutureChainDisplay?: (
+    futureChainDisplay: ChatSendFutureChainDisplay | null
   ) => void;
   input: string;
   setInput: (v: string) => void;
@@ -86,6 +133,7 @@ export function useChatSend<TState>(params: {
     onThreadIdResolved,
     onThreadRenamed,
     onFutureChainPersist,
+    onFutureChainDisplay,
     input,
     setInput,
     loading,
@@ -168,6 +216,10 @@ export function useChatSend<TState>(params: {
           onFutureChainPersist?.(executed.futureChainPersist ?? null);
         } catch {}
 
+        try {
+          onFutureChainDisplay?.(executed.futureChainDisplay ?? null);
+        } catch {}
+
         cid = String(executed.conversationId ?? "").trim() || null;
 
         const resolvedThreadId = normalizeConversationIdSeed(
@@ -187,10 +239,15 @@ export function useChatSend<TState>(params: {
               : m,
           );
 
-          const confirmedAssistant = attachThreadIdToMessage(
+          const confirmedAssistantBase = attachThreadIdToMessage(
             executed.confirmedAssistantMessage,
             resolvedThreadId,
           );
+
+          const confirmedAssistant = attachFutureChainDisplayToAssistantMessage({
+            message: confirmedAssistantBase,
+            futureChainDisplay: executed.futureChainDisplay,
+          });
 
           return [...next, confirmedAssistant];
         });
@@ -250,6 +307,7 @@ export function useChatSend<TState>(params: {
       onThreadIdResolved,
       onThreadRenamed,
       onFutureChainPersist,
+      onFutureChainDisplay,
     ],
   );
 
@@ -331,9 +389,10 @@ IME composing 判定本体は持たず、子へ渡して結果を受け取る。
 親は入口・中継・UI反映に寄せる。
 
 【今回このファイルで修正したこと】
-- onFutureChainPersist を任意callbackとして追加した。
-- runChatSendRequestExecution(...) から受け取った executed.futureChainPersist を、再判定せず呼び出し元へ渡すようにした。
-- Future Chain の保存可否、state_changed、state_level、Compass、HOPY回答○、DB保存、MEMORIES、DASHBOARD は再判定していない。
+- executed.futureChainDisplay を confirmed assistant message に future_chain_display / futureChainDisplay として紐づける処理を追加した。
+- hopy_confirmed_payload.future_chain_display にも同じ表示payloadを保持するようにした。
+- recipient_support の表示payloadが、画面全体stateだけでなく、その時のassistant messageにも残るようにした。
+- Future Chain の表示可否、保存可否、state_changed、state_level、Compass、HOPY回答○、DB保存、MEMORIES、DASHBOARD は再判定していない。
 - ChatClient.tsx、ChatClientView.tsx、ChatFutureChainNotice.tsx には触れていない。
 
 /components/chat/lib/useChatSend.ts

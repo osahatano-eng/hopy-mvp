@@ -290,7 +290,9 @@ function resolveMajorCategory(
 ): NonNullable<HopyFutureChainPayloadContext["majorCategory"]> {
   return (
     context.majorCategory ||
-    ("self" as NonNullable<HopyFutureChainPayloadContext["majorCategory"]>)
+    ("self_understanding" as NonNullable<
+      HopyFutureChainPayloadContext["majorCategory"]
+    >)
   );
 }
 
@@ -299,20 +301,28 @@ function resolveMinorCategory(
 ): NonNullable<HopyFutureChainPayloadContext["minorCategory"]> {
   return (
     context.minorCategory ||
-    ("action" as NonNullable<HopyFutureChainPayloadContext["minorCategory"]>)
+    ("unclear_thoughts" as NonNullable<
+      HopyFutureChainPayloadContext["minorCategory"]
+    >)
   );
 }
 
 function resolveChangeTriggerKey(
   context: HopyFutureChainPayloadContext,
 ): HopyFutureChainChangeTriggerKey {
-  return context.changeTriggerKey || ("verbalized" as HopyFutureChainChangeTriggerKey);
+  return (
+    context.changeTriggerKey ||
+    ("handoff_message_snapshot" as HopyFutureChainChangeTriggerKey)
+  );
 }
 
 function resolveSupportShapeKey(
   context: HopyFutureChainPayloadContext,
 ): HopyFutureChainSupportShapeKey {
-  return context.supportShapeKey || ("verbalization" as HopyFutureChainSupportShapeKey);
+  return (
+    context.supportShapeKey ||
+    ("handoff_message_snapshot" as HopyFutureChainSupportShapeKey)
+  );
 }
 
 function resolveBridgeSummaryFromSnapshot(
@@ -546,13 +556,13 @@ state_level再判定、current_phase再判定、Compass再判定、
 HOPY回答再要約、Compass再要約、ユーザー発話読み取りを担当しない。
 
 【今回このファイルで修正したこと】
-- owner_handoff の4項目必須判定を削除しました。
-- hopy_confirmed_payload.future_chain_context.handoff_message_snapshot を読み取る処理を追加しました。
-- handoff_message_snapshot を bridge_event / candidate の主役として保存候補へ入れるようにしました。
-- DBの既存必須カラムには handoff_message_snapshot を起点にした互換値を入れる形にしました。
-- major_category / minor_category / change_trigger_key / support_shape_key が不足している場合は、DB保存互換の最小分類値を入れる形にしました。
-- HOPY回答やCompassをFuture Chain側で再要約していません。
-- 保存前チェック、DB insert、DB制約、UI、HOPY回答○、Compass表示、MEMORIES、DASHBOARDには触れていません。
+- major_category の fallback を旧 self から self_understanding に変更した。
+- minor_category の fallback を旧 action から unclear_thoughts に変更した。
+- change_trigger_key の fallback を旧 verbalized から handoff_message_snapshot に変更した。
+- support_shape_key の fallback を旧 verbalization から handoff_message_snapshot に変更した。
+- hopy_confirmed_payload.future_chain_context にカテゴリがある場合は、その値を優先して bridge_event / candidate へ渡す既存方針は維持した。
+- HOPY回答やCompassをFuture Chain側で再要約していない。
+- 保存前チェック、DB insert、DB制約、UI、HOPY回答○、Compass表示、MEMORIES、DASHBOARDには触れていない。
 
 /app/api/chat/_lib/hopy/future-chain/futureChainCandidate.ts
 */
