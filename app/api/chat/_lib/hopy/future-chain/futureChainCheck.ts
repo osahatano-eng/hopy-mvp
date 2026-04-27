@@ -40,15 +40,26 @@ function normalizeText(value: unknown): string {
   return value.trim();
 }
 
-function resolveTransitionKind(params: {
-  fromStateLevel: HopyFutureChainStateLevel;
-  toStateLevel: HopyFutureChainStateLevel;
-}): HopyFutureChainTransitionKind {
-  const { fromStateLevel, toStateLevel } = params;
+function normalizeTransitionKind(
+  value: unknown,
+): HopyFutureChainTransitionKind | null {
+  if (value === "upward") return "upward";
+  if (value === "downward") return "downward";
+  if (value === "same_level") return "same_level";
+  return null;
+}
 
-  if (toStateLevel > fromStateLevel) return "upward";
-  if (toStateLevel < fromStateLevel) return "downward";
-  return "same_level";
+function isValidTransitionMeaning(value: unknown): boolean {
+  const text = normalizeText(value);
+
+  return (
+    text === "progress" ||
+    text === "readjustment" ||
+    text === "recovery_entry" ||
+    text === "premise_reconsideration" ||
+    text === "stabilization" ||
+    text === "reinforcement"
+  );
 }
 
 function resolveConfirmedPayload(
@@ -56,6 +67,24 @@ function resolveConfirmedPayload(
 ): HopyFutureChainConfirmedPayload | null {
   if (!isRecord(value)) return null;
   return value as HopyFutureChainConfirmedPayload;
+}
+
+function resolveFutureChainContext(
+  confirmedPayload: HopyFutureChainConfirmedPayload,
+): Record<string, unknown> | null {
+  const context = confirmedPayload.future_chain_context;
+  if (!isRecord(context)) return null;
+  return context;
+}
+
+function hasRequiredOwnerHandoffContext(
+  context: Record<string, unknown>,
+): boolean {
+  return (
+    !!normalizeText(context.support_shape_key) &&
+    isValidTransitionMeaning(context.transition_meaning) &&
+    !!normalizeText(context.handoff_message_snapshot)
+  );
 }
 
 function isMissingRequiredId(value: unknown): boolean {
@@ -167,10 +196,35 @@ export function checkFutureChainSavePreconditions(params: {
     };
   }
 
-  const transitionKind = resolveTransitionKind({
-    fromStateLevel,
-    toStateLevel,
-  });
+  const futureChainContext = resolveFutureChainContext(confirmedPayload);
+
+  if (!futureChainContext) {
+    return {
+      decision: "skip",
+      reason: "future_chain_context が存在しない",
+      status: "none",
+    };
+  }
+
+  if (normalizeText(futureChainContext.delivery_mode) !== "owner_handoff") {
+    return {
+      decision: "skip",
+      reason: "delivery_mode が owner_handoff ではない",
+      status: "none",
+    };
+  }
+
+  const transitionKind = normalizeTransitionKind(
+    futureChainContext.transition_kind,
+  );
+
+  if (!transitionKind) {
+    return {
+      decision: "skip",
+      reason: "future_chain_context.transition_kind が不正",
+      status: "none",
+    };
+  }
 
   if (transitionKind === "same_level") {
     return {
@@ -180,12 +234,11 @@ export function checkFutureChainSavePreconditions(params: {
     };
   }
 
-  const reply = normalizeText(confirmedPayload.reply);
-
-  if (!reply) {
+  if (!hasRequiredOwnerHandoffContext(futureChainContext)) {
     return {
       decision: "skip",
-      reason: "reply が存在しない",
+      reason:
+        "owner_handoff 保存に必要な handoff_message_snapshot が不足",
       status: "none",
     };
   }
@@ -203,13 +256,20 @@ export function checkFutureChainSavePreconditions(params: {
 /*
 【このファイルの正式役割】
 HOPY Future Chain DB の保存前チェックだけを担当する。
-hopy_confirmed_payload を唯一の起点として受け取り、保存処理へ進んでよいか、skip するかを判定する。
-このファイルは candidate生成、DB insert、state_changed再判定、state_level再判定、current_phase再判定、Compass再判定を担当しない。
+hopy_confirmed_payload.future_chain_context を唯一の起点として受け取り、
+owner_handoff を保存処理へ進めてよいか、skip するかを判定する。
+v3.1では、owner_handoff 4項目ではなく handoff_message_snapshot を保存前チェックの主条件にする。
+
+このファイルは candidate生成、DB insert、HOPY回答再要約、Compass再要約、
+state_changed再判定、state_level再判定、current_phase再判定、
+Compass再判定、HOPY回答○再判定を担当しない。
 
 【今回このファイルで修正したこと】
-- Future Chain 保存前チェックの遷移条件を、upward限定から same_level除外へ変更した。
-- これにより、state_changed=true の downward 遷移も保存候補として先へ進めるようにした。
-- 開発テスト除外、新規チャット1発話目除外、state_changed確認、状態値1..5確認、reply確認には触れていない。
+- 旧v3の owner_handoff.insight / hint / flow / reason 必須チェックを削除しました。
+- owner_handoff 保存前チェックを、support_shape_key / transition_meaning / handoff_message_snapshot 必須へ変更しました。
+- major_category / minor_category / change_trigger_key は v3.1 candidate側で最小分類値を補うため、保存前チェックでは必須にしない形へ変更しました。
+- delivery_mode owner_handoff、transition_kind、same_level除外、state_changed確認、状態値1..5確認は維持しました。
+- candidate生成、DB insert、UI判定、recipient_support検索、delivery_event保存には触れていません。
 
- /app/api/chat/_lib/hopy/future-chain/futureChainCheck.ts
+/app/api/chat/_lib/hopy/future-chain/futureChainCheck.ts
 */

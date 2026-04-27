@@ -10,6 +10,7 @@ import {
   saveAssistantLearningLogs,
   saveAssistantMessageOrError,
 } from "./authenticatedHelpers";
+import { buildFutureChainContextFromFinalizedTurn } from "../hopy/future-chain/futureChainContextFromFinalizedTurn";
 import type { Lang } from "../router/simpleRouter";
 import type { NotificationState } from "../state/notification";
 import { buildAuthenticatedTurnResult } from "./authenticatedTurnResult";
@@ -552,6 +553,26 @@ export function createAuthenticatedTurnDeps(params: {
       });
 
       if (confirmedPayload) {
+        const { context: futureChainContext } =
+          buildFutureChainContextFromFinalizedTurn({
+            reply: confirmedTurn.assistantText,
+            state: {
+              state_level: confirmedTurn.currentStateLevel,
+              current_phase: confirmedTurn.currentPhase,
+              prev_state_level: confirmedTurn.prevStateLevel,
+              prev_phase: confirmedTurn.prevPhase,
+              state_changed: confirmedTurn.stateChanged,
+            },
+            compassText: confirmedTurn.compassText,
+            compassPrompt: confirmedTurn.compassPrompt,
+            assistantMessageId: saveAssistantRes.assistantMessageId,
+          });
+
+        const confirmedPayloadForFutureChain = {
+          ...confirmedPayload,
+          future_chain_context: futureChainContext,
+        };
+
         result.future_chain_persist = await saveFutureChainFromConfirmedPayload({
           supabase: params.internalWriteSupabase,
           sourceContext: {
@@ -561,7 +582,7 @@ export function createAuthenticatedTurnDeps(params: {
             assistantMessageId: saveAssistantRes.assistantMessageId,
             language: params.replyLang,
             hopyConfirmedPayload:
-              confirmedPayload as HopyFutureChainConfirmedPayload,
+              confirmedPayloadForFutureChain as HopyFutureChainConfirmedPayload,
             isFirstUserMessageInThread: resolvedHistory.length <= 0,
             isDevelopmentTest: resolveFutureChainDevelopmentTestFlag(
               params.body,
@@ -617,14 +638,21 @@ authenticated 経路の runHopyTurn 用 deps 作成ファイル。
 confirmedTurn は hopy_confirmed_payload からのみ復元する。
 turnRecord は唯一の正の fallback に使わない。
 
+Future Chain v3.1 観点では、このファイルはDB保存の直前に、
+保存済み assistantMessageId を含めた future_chain_context を専用関数で作り、
+saveFutureChainFromConfirmedPayload(...) へ渡す hopyConfirmedPayload に載せる。
+このファイル自身は HOPY回答再要約、Compass再要約、保存前チェック、
+candidate生成、DB insert、UI表示判定を担当しない。
+
 【今回このファイルで修正したこと】
-- futureChainTurnPersistResult.ts を import し、Future Chain 保存結果の最小中継型を受けられるようにした。
-- RunHopyTurnBuiltResult に future_chain_persist を追加した。
-- buildTurnResult で future_chain_persist の初期値を skip として載せるようにした。
-- persistTurn で saveFutureChainFromConfirmedPayload(...) の戻り値を握りつぶさず、buildFutureChainTurnPersistResult(...) を通して result.future_chain_persist に載せるようにした。
-- Future Chain 保存失敗時だけ、buildSkippedFutureChainTurnPersistResult("future_chain_persist_failed") を入れるようにした。
-- state_changed / state_level / current_phase / Compass はこのファイルで再判定していない。
-- UI文言決定、通知表示、保存前チェック、候補生成、DB定義には触っていない。
+- buildFutureChainContextFromFinalizedTurn(...) を import しました。
+- persistTurn 内で、assistant message 保存後の assistantMessageId を使って
+  Future Chain v3.1 の futureChainContext を生成するようにしました。
+- saveFutureChainFromConfirmedPayload(...) へ渡す hopyConfirmedPayload に、
+  future_chain_context を載せた confirmedPayloadForFutureChain を渡すようにしました。
+- OpenAI直後の古い hopy_confirmed_payload をそのまま Future Chain保存へ渡す処理をやめました。
+- state_changed / state_level / current_phase / Compass はこのファイルで再判定していません。
+- UI文言決定、通知表示、保存前チェック、候補生成、DB定義には触っていません。
 
 /app/api/chat/_lib/route/authenticatedTurnDeps.ts
 */

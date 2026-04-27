@@ -133,6 +133,7 @@ export function buildHopyConfirmedPayloadShapeSection(
       '- top-level の "reply" / "state" / "assistant_state" / "compassText" / "compassPrompt" / "compass" を返してはならない。',
       "- 回答本文は必ず hopy_confirmed_payload.reply に入れること。",
       "- 状態は必ず hopy_confirmed_payload.state に入れること。",
+      "- 必要な場合は Future Chain 用の確定意味を hopy_confirmed_payload.future_chain_context に入れること。",
       "- hopy_confirmed_payload.state.state_changed が HOPY回答○ の唯一の正です。",
       "- hopy_confirmed_payload.state は、今回のユーザー入力と今回生成した最終返答の意味から、このターンの確定結果として自分で決めること。",
       "- 状態判定の主根拠はユーザー自身の発話・選択・納得・実行意思であり、HOPYの回答本文で提案した次アクションではありません。",
@@ -160,6 +161,7 @@ export function buildHopyConfirmedPayloadShapeSection(
     '- top-level の "reply" / "state" / "assistant_state" / "compassText" / "compassPrompt" / "compass" を返してはならない。',
     "- 回答本文は必ず hopy_confirmed_payload.reply に入れること。",
     "- 状態は必ず hopy_confirmed_payload.state に入れること。",
+    "- 必要な場合は Future Chain 用の確定意味を hopy_confirmed_payload.future_chain_context に入れること。",
     "- hopy_confirmed_payload.state.state_changed が HOPY回答○ の唯一の正です。",
     "- hopy_confirmed_payload.state は、今回のユーザー入力と今回生成した最終返答の意味から、このターンの確定結果として自分で決めること。",
     "- 状態判定の主根拠はユーザー自身の発話・選択・納得・実行意思であり、HOPYの回答本文で提案した次アクションではありません。",
@@ -196,6 +198,8 @@ export function buildHopySingleSourceOfTruthSection(
       "- current_phase または stateLevel が prev と違うなら state_changed=true、両方同じときだけ false にすること。",
       "- 下流は再判定しない前提なので、current と prev の関係を曖昧にしないこと。",
       "- Free では state_changed=true でも hopy_confirmed_payload.compass を付けてはならないこと。",
+      "- Future Chain の唯一の起点は hopy_confirmed_payload.future_chain_context です。",
+      "- Future Chain 用の意味は、HOPY回答確定時に同時に作り、下流で作り直させないこと。",
     ].join("\n");
   }
 
@@ -213,6 +217,69 @@ export function buildHopySingleSourceOfTruthSection(
     "- Plus / Pro では state_changed=true なのに Compass を欠けさせてはならないこと。",
     "- Plus / Pro では state_changed=false の回に compass を付けてはならないこと。",
     "- ○ と Compass を分離しないこと。",
+    "- Future Chain の唯一の起点は hopy_confirmed_payload.future_chain_context です。",
+    "- Future Chain 用の意味は、HOPY回答確定時に同時に作り、下流で作り直させないこと。",
+  ].join("\n");
+}
+
+export function buildHopyFutureChainContextSection(
+  resolvedPlan: HopyPromptResolvedPlan,
+): string {
+  const freeDisplayRule =
+    resolvedPlan === "free"
+      ? "- Free では Future Chain の詳細カードや Compass 詳細を出さない前提だが、payload 上の future_chain_context は必要な場合に作ってよい。"
+      : "- Plus / Pro では state_changed=true の owner_handoff 回で、Compass と future_chain_context を同じ確定payload上にそろえること。";
+
+  return [
+    "Future Chain v3 返却ルール:",
+    "- Future Chain は HOPY回答の代わりではありません。主役は常に hopy_confirmed_payload.reply です。",
+    "- Future Chain 側で HOPY回答や Compass を再要約しないため、必要な Future Chain 意味はこの回答確定時に hopy_confirmed_payload.future_chain_context として同時に返してください。",
+    "- future_chain_context は、状態判定や Compass 判定を作り直す場所ではありません。hopy_confirmed_payload.state の確定結果と矛盾しない形にしてください。",
+    "- future_chain_context には、HOPY回答全文、Compass全文、ユーザー発話の生文、個人情報、企業機密を入れてはいけません。",
+    "- 抽象化された短い意味だけを入れてください。",
+    freeDisplayRule,
+    "",
+    "future_chain_context の shape:",
+    "- delivery_mode: owner_handoff | recipient_support | none",
+    "- major_category: work | relationship | money | family | learning | development | creation | life | future | self | null",
+    "- minor_category: anxiety | confusion | decision | action | continuity | relationship | confidence | priority | letting_go | retry | visualization | null",
+    "- current_stuck_state: string | null",
+    "- true_feeling_hypothesis: string | null",
+    "- change_trigger_key: verbalized | narrowed_to_one | noticed_true_feeling | stated_action | accepted_discomfort | found_priority | found_purpose | noticed_fear_source | allowed_to_release | rested_before_action | reset_premise | null",
+    "- support_needed: boolean",
+    "- transition_kind: upward | downward | same_level | null",
+    "- transition_meaning: progress | readjustment | recovery_entry | premise_reconsideration | stabilization | reinforcement | null",
+    "- support_shape_key: verbalization | single_criterion_narrowing | true_feeling_awareness | action_commitment | discomfort_acceptance | priority_sorting | purpose_refocus | fear_source_awareness | release_permission | rest_permission | premise_reset | null",
+    "- owner_handoff: { insight: string | null, hint: string | null, flow: string | null, reason: string | null } | null",
+    "- recipient_support_query: { target_state_level: 1 | 2 | 3 | 4 | 5 | null, major_category: string | null, minor_category: string | null, change_trigger_key: string | null, support_shape_key: string | null } | null",
+    "",
+    "delivery_mode の決め方:",
+    "- hopy_confirmed_payload.state.state_changed=true の回は、原則 delivery_mode=owner_handoff にしてください。",
+    "- owner_handoff は、今回の状態変化を未来へ渡す支えとして保存候補にするための context です。",
+    "- state_changed=true の上昇は transition_kind=upward、transition_meaning=progress を基本にしてください。",
+    "- state_changed=true の下降は transition_kind=downward とし、transition_meaning は readjustment / recovery_entry / premise_reconsideration の中から今回の意味に近いものを選んでください。",
+    "- state_changed=false の回は owner_handoff にしてはいけません。",
+    "- state_changed=false で、過去から届く支えが必要そうな場合だけ delivery_mode=recipient_support、support_needed=true にしてください。",
+    "- state_changed=false で支えが不要な軽い挨拶・雑談・情報返答なら delivery_mode=none、support_needed=false にしてください。",
+    "- owner_handoff と recipient_support を同時に出してはいけません。",
+    "",
+    "owner_handoff の4項目:",
+    "- insight は、今回見えた気づきを1文で書いてください。",
+    "- hint は、未来の似たユーザーにも渡せる小さな支えを1文で書いてください。",
+    "- flow は、状態変化や再調整の流れを1文で書いてください。",
+    "- reason は、なぜ今回を Future Chain として扱えるかを1文で書いてください。",
+    "- 4項目は一般論ではなく、今回の会話の意味を抽象化した文にしてください。",
+    "- 4項目に個人名、会社名、メール、住所、URL、契約内容、生の発話引用を入れてはいけません。",
+    "",
+    "recipient_support_query の作り方:",
+    "- delivery_mode=recipient_support の場合だけ作ってください。",
+    "- target_state_level は、今のユーザーに支えが必要な状態レベルを 1..5 で入れてください。",
+    "- major_category / minor_category / change_trigger_key / support_shape_key は、過去の支えを探すための抽象キーとして入れてください。",
+    "- recipient_support_query は検索条件であり、過去ユーザーの内容を生成する場所ではありません。",
+    "",
+    "none の扱い:",
+    "- Future Chain に流す意味が薄い場合、delivery_mode=none にしてください。",
+    "- delivery_mode=none の場合、owner_handoff=null、recipient_support_query=null にしてください。",
   ].join("\n");
 }
 
@@ -449,6 +516,8 @@ export function buildHopyDeveloperPromptFromSections(
     "",
     buildHopySingleSourceOfTruthSection(args.resolvedPlan),
     "",
+    buildHopyFutureChainContextSection(args.resolvedPlan),
+    "",
     buildHopyCoreAnswerSection(),
     "",
     buildHopyThreadMemorySection(args.threadMemory),
@@ -491,11 +560,14 @@ HOPY回答生成に使う system / developer / user prompt の各セクション
 DB取得、DB保存、state_changed生成、Compass生成、○表示、messages取得、回答保存処理は担当しない。
 
 【今回このファイルで修正したこと】
-- 状態判定の主根拠を、HOPYの提案ではなくユーザー自身の発話・選択・納得・実行意思に固定する文言を追加した。
-- 「相談内容が整理付かない」「頭が混乱してる」「何を話せばいいか分からない」入力を、5=決定ではなく混線(1)または模索(2)候補として扱う文言を追加した。
-- HOPYが「まず一つ書き出す」などの次アクションを提案しただけでは、ユーザー本人の決定として扱わない文言を追加した。
-- 5=決定は、ユーザー本人の方針確定・実行意思・決定完了が明確な場合に限る文言を追加した。
-- HOPY唯一の正、JSON契約、Compass条件、DB保存、UI表示、Future Chain保存処理そのものには触れていない。
+- 返却JSON契約に hopy_confirmed_payload.future_chain_context を追加しました。
+- Future Chain v3 返却ルールを buildHopyFutureChainContextSection(...) として追加しました。
+- Future Chain の唯一の起点を hopy_confirmed_payload.future_chain_context として明記しました。
+- owner_handoff / recipient_support / none の切り分けを、回答確定時のpayload生成指示として追加しました。
+- owner_handoff 4項目と recipient_support_query のshapeを追加しました。
+- HOPY回答全文、Compass全文、ユーザー発話生文、個人情報、企業機密を future_chain_context に入れない指示を追加しました。
+- buildHopyDeveloperPromptFromSections(...) に Future Chain セクションを接続しました。
+- DB保存、保存前チェック、candidate生成、UI表示、Compass表示、HOPY回答○判定には触れていません。
 
 /app/api/chat/_lib/hopy/prompt/hopyPromptSections.ts
 */

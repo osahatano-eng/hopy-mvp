@@ -79,6 +79,7 @@ function buildFutureChainBridgeEventInsertPayload(params: {
 
   return {
     pattern_id: patternId ?? bridgeEvent.pattern_id ?? null,
+    owner_user_id: bridgeEvent.owner_user_id,
     language: bridgeEvent.language,
     from_state_level: bridgeEvent.from_state_level,
     to_state_level: bridgeEvent.to_state_level,
@@ -90,11 +91,6 @@ function buildFutureChainBridgeEventInsertPayload(params: {
       bridgeEvent.change_trigger_key ?? candidate.change_trigger_key ?? null,
     support_shape_key:
       bridgeEvent.support_shape_key ?? candidate.support_shape_key ?? null,
-    delivery_target_state_level:
-      bridgeEvent.delivery_target_state_level ??
-      candidate.delivery_target_state_level ??
-      null,
-    delivery_usage: bridgeEvent.delivery_usage ?? candidate.delivery_usage ?? null,
     user_signal_summary: bridgeEvent.user_signal_summary,
     hopy_support_summary: bridgeEvent.hopy_support_summary,
     transition_reason: bridgeEvent.transition_reason,
@@ -112,6 +108,7 @@ function buildFutureChainBridgeEventInsertPayload(params: {
       bridgeEvent.source_transition_signal_id ?? null,
     source_assistant_message_id: bridgeEvent.source_assistant_message_id,
     source_trigger_message_id: bridgeEvent.source_trigger_message_id ?? null,
+    delivery_eligible: bridgeEvent.delivery_eligible,
     confidence_score: bridgeEvent.confidence_score,
     reuse_scope: bridgeEvent.reuse_scope,
     status: bridgeEvent.status,
@@ -170,13 +167,16 @@ async function insertFutureChainBridgeEvent(params: {
   patternId: string | null;
   candidate: HopyFutureChainCandidate;
   bridgeEvent: FutureChainBridgeEventCandidate;
-}): Promise<{
-  ok: true;
-  bridgeEventId: string | null;
-} | {
-  ok: false;
-  error: unknown;
-}> {
+}): Promise<
+  | {
+      ok: true;
+      bridgeEventId: string | null;
+    }
+  | {
+      ok: false;
+      error: unknown;
+    }
+> {
   const { supabase, patternId, candidate, bridgeEvent } = params;
 
   const existingBridgeEventId = await findExistingFutureChainBridgeEventId({
@@ -307,10 +307,9 @@ HOPY Future Chain DB の保存処理だけを担当する。
 このファイルは保存前チェック、candidate生成、state_changed再判定、state_level再判定、current_phase再判定、Compass再判定を担当しない。
 
 【今回このファイルで修正したこと】
-- hopy_future_chain_patterns 保存payloadに transition_meaning / support_shape_key / major_category / minor_category / change_trigger_key / delivery_target_state_level / delivery_usage を追加した。
-- candidate.bridge_event がある場合に hopy_future_chain_bridge_events へ保存する insertFutureChainBridgeEvent(...) を追加した。
-- source_assistant_message_id の既存 bridge_event を確認し、重複insertせず既存 bridgeEventId を返すようにした。
-- pattern 保存後に bridge_event を保存し、HopyFutureChainInsertResult で bridgeEventId も返せるようにした。
+- bridge_event 側に存在しない delivery_target_state_level / delivery_usage を bridgeEvent から読まないようにした。
+- delivery_target_state_level / delivery_usage は pattern/candidate 側の保存payloadだけに残し、bridge_event 保存payloadからは外した。
+- v3 bridge_event 保存に必要な owner_user_id / delivery_eligible を保存payloadへ追加した。
 - 保存前チェック、candidate生成、下降文言、DB制約、UI、状態判定、Compass、HOPY回答○には触れていない。
 
 /app/api/chat/_lib/hopy/future-chain/futureChainRepository.ts

@@ -44,6 +44,8 @@ export type RunHopyTurnBuiltResult = {
   compassPrompt?: unknown;
   compassText?: unknown;
   hopy_confirmed_payload?: unknown;
+  futureChainContext?: unknown;
+  future_chain_context?: unknown;
   speed_audit?: unknown;
 };
 
@@ -191,6 +193,8 @@ export function normalizeBuiltResult(
     compassPrompt: resolveCompassPromptFromConfirmedPayload(source),
     compassText: resolveCompassTextFromConfirmedPayload(source),
     hopy_confirmed_payload: confirmedPayloadRecord,
+    futureChainContext: source.futureChainContext,
+    future_chain_context: source.future_chain_context,
     speed_audit: normalizeSpeedAudit(source.speed_audit),
   };
 }
@@ -298,6 +302,8 @@ export function finalizeBuiltResult(
     state: confirmedState,
     threadPatch: persistedThreadPatch,
     hopy_confirmed_payload: confirmedPayloadRecord,
+    futureChainContext: result.futureChainContext,
+    future_chain_context: result.future_chain_context,
     state_changed: confirmedState?.state_changed ?? false,
     compassText: resolveCompassTextFromConfirmedPayload(source),
     compassPrompt: resolveCompassPromptFromConfirmedPayload(source),
@@ -416,6 +422,8 @@ export function buildFailedRunHopyTurnResult(
     compassPrompt: null,
     compassText: null,
     hopy_confirmed_payload: null,
+    futureChainContext: null,
+    future_chain_context: null,
     speed_audit: speedAudit,
   };
 }
@@ -440,6 +448,8 @@ hopy_confirmed_payload.state と hopy_confirmed_payload.compass を
 - finalizeBuiltResult(...) でも最終 reply / state / state_changed を hopy_confirmed_payload 起点に固定しました。
 - resolveBuiltResultFailure(...) に hopy_confirmed_payload.reply 必須検証と reply 一致検証を追加しました。
 - これにより、唯一の正が欠けた builtResult を見かけ上だけ成立させて後段へ流す経路を止めました。
+- buildTurnResult から来た futureChainContext / future_chain_context を normalize / finalize 後も保持し、authenticatedPostTurn.ts 側へ中継できるようにしました。
+- Future Chain の意味生成、state_changed 再判定、Compass 判定、HOPY回答○判定、DB保存、UI表示はこのファイルでは行っていません。
 */
 
 /* /app/api/chat/_lib/route/runHopyTurnBuiltResult.ts */

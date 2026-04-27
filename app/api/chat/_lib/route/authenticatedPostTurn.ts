@@ -4,6 +4,7 @@ import type OpenAI from "openai";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { insertInterventionLog } from "../db/interventionLog";
+import { buildFutureChainContextFromFinalizedTurn } from "../hopy/future-chain/futureChainContextFromFinalizedTurn";
 import type { Lang } from "../router/simpleRouter";
 import type { NotificationState } from "../state/notification";
 import type { ConfirmedMemoryCandidate } from "./authenticatedHelpers";
@@ -330,6 +331,21 @@ export async function finalizeAuthenticatedPostTurn(
     resolvedCompass,
   });
 
+  const { context: futureChainContext } =
+    buildFutureChainContextFromFinalizedTurn({
+      reply: confirmedTurnWithCompass.assistantText,
+      state: {
+        state_level: confirmedTurnWithCompass.currentStateLevel,
+        current_phase: confirmedTurnWithCompass.currentPhase,
+        prev_state_level: confirmedTurnWithCompass.prevStateLevel,
+        prev_phase: confirmedTurnWithCompass.prevPhase,
+        state_changed: confirmedTurnWithCompass.stateChanged,
+      },
+      compassText,
+      compassPrompt,
+      assistantMessageId: params.assistantMessageId,
+    });
+
   const { payload } = finalizeAuthenticatedPostTurnPayloadFlow({
     confirmedTurn: confirmedTurnWithCompass,
     notification: params.notification,
@@ -351,6 +367,7 @@ export async function finalizeAuthenticatedPostTurn(
     memory_clean: params.memory_clean,
     runTurnResult: params.runTurnResult,
     threadSummarySaveDebug,
+    futureChainContext,
   });
 
   return {
@@ -375,9 +392,16 @@ authenticated 経路の postTurn 最終化ファイル。
 runTurnResult と confirmedTurn を受け取り、
 memory 書き込み、learning 保存、audit 保存、thread title 解決、
 Compass を含む最終 turn artifacts 作成、
+Future Chain v3.1 context 生成、
 最終 payload 作成までを接続する。
 この層は state_changed を再計算せず、
 受け取った唯一の正と Compass の整合だけを検証する。
+
+Future Chain の confirmed payload 中継責務は、
+回答確定後の confirmedTurnWithCompass / Compass / assistantMessageId から
+buildFutureChainContextFromFinalizedTurn(...) を呼び、
+生成された futureChainContext を最終payload組み立てフローへ渡すところまでに限定する。
+Future Chain の保存判定・DB保存・UI判定はこのファイルでは行わない。
 
 Future Chain 保存結果の payload 中継責務は
 authenticatedPostTurnFutureChainPayload.ts に分離し、
@@ -410,18 +434,15 @@ authenticatedPostTurnPayloadFinalizeFlow.ts に分離し、
 このファイルでは分離先関数を呼び出すだけにする。
 
 【今回このファイルで修正したこと】
-- postTurn失敗結果作成責務を
-  /app/api/chat/_lib/route/authenticatedPostTurnFailureResult.ts へ分離接続した。
-- createAuthenticatedPostTurnFailureResult の import を追加した。
-- createDefaultMemoryWriteDebug の import を削除した。
-- postTurnFailure 発生時の失敗 result 作成本体を削除した。
-- stateCompassInvariantError 発生時の失敗 result 作成本体を削除した。
-- finalizeAuthenticatedPostTurn(...) 内では、
-  createAuthenticatedPostTurnFailureResult(...) を呼び出し、
-  返ってきた失敗 result をそのまま return するだけにした。
-- state_changed の唯一の正、Compass 生成、HOPY回答○、Memory 書き込み、
-  Learning 保存、thread_summary、audit、thread title、payload 生成、
-  Future Chain には触れていない。
+- runTurnResult 側の futureChainContext / future_chain_context 中継をやめました。
+- buildFutureChainContextFromFinalizedTurn(...) を import しました。
+- confirmedTurnWithCompass の assistantText / state、Compass、assistantMessageId を使って、
+  Future Chain v3.1 の futureChainContext を生成するようにしました。
+- finalizeAuthenticatedPostTurnPayloadFlow(...) に生成済み futureChainContext を渡しました。
+- Future Chain 保存判定、DB保存、UI判定、recipient_support検索、delivery_event保存は追加していません。
+- state_changed、state_level、current_phase、prev系、
+  Compass表示可否、HOPY回答○表示可否は再判定していません。
+- HOPY回答やCompassをFuture Chain側で再要約していません。
 
 /app/api/chat/_lib/route/authenticatedPostTurn.ts
 */

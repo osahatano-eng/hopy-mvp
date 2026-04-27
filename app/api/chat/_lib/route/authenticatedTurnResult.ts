@@ -62,6 +62,8 @@ type RunHopyTurnBuiltResult = {
   compassText: string | null;
   compassPrompt: string | null;
   hopy_confirmed_payload: Record<string, unknown>;
+  futureChainContext?: unknown;
+  future_chain_context?: unknown;
 };
 
 export type BuildAuthenticatedTurnResultParams = {
@@ -156,6 +158,21 @@ function resolveConfirmedPayloadReply(
   if (!confirmedPayload) return null;
 
   return normalizeReplyString(confirmedPayload.reply);
+}
+
+function resolveFutureChainContext(
+  confirmedPayload: Record<string, unknown>,
+): unknown {
+  if (
+    Object.prototype.hasOwnProperty.call(
+      confirmedPayload,
+      "future_chain_context",
+    )
+  ) {
+    return confirmedPayload.future_chain_context;
+  }
+
+  return undefined;
 }
 
 function resolveCompassText(
@@ -361,6 +378,8 @@ export async function buildAuthenticatedTurnResult(
           rawModelOutput.memory_candidates ??
           []) as ConfirmedMemoryCandidate[]);
 
+  const futureChainContext = resolveFutureChainContext(confirmedPayload);
+
   return {
     reply: confirmedTurn.assistantText,
     state: confirmedTurn.canonicalAssistantState,
@@ -379,55 +398,42 @@ export async function buildAuthenticatedTurnResult(
     compassText,
     compassPrompt,
     hopy_confirmed_payload: confirmedPayload,
+    ...(typeof futureChainContext === "undefined"
+      ? {}
+      : {
+          futureChainContext,
+          future_chain_context: futureChainContext,
+        }),
   };
 }
 
 export default buildAuthenticatedTurnResult;
 
 /*
-このファイルの正式役割
+【このファイルの正式役割】
 authenticated 経路における turn 結果の正式組み立てファイル。
 modelOutput を受けて、
-1. state を正規化する
-2. confirmedTurn を作る
-3. notification を決める
-4. memory candidate を確定する
-5. Compass を検証して載せる
-6. RunHopyTurnBuiltResult を返す
+1. hopy_confirmed_payload を唯一の正として受け取る
+2. state を 1..5 で正規化する
+3. confirmedTurn を作る
+4. notification を決める
+5. memory candidate を確定する
+6. Compass を検証して載せる
+7. hopy_confirmed_payload.future_chain_context が存在する場合だけ runTurnResult へ中継する
+8. RunHopyTurnBuiltResult を返す
 
-このファイルが受け取るもの
-promptInput
-modelOutput
-resolvedPlan
-userText
-uiLang
-resolvedConversationId
-setNotification(...)
-markUsedHeuristicConfirmedMemoryCandidates(...)
+このファイルは state_changed / state_level / current_phase / prev系を再判定しない。
+このファイルは Compass を新規生成しない。
+このファイルは Future Chain の意味生成・カテゴリ生成・owner_handoff生成・recipient_support検索をしない。
+このファイルは hopy_confirmed_payload.future_chain_context を作らない。
+受け取った future_chain_context が存在する場合だけ、後段へ渡す。
 
-このファイルが渡すもの
-RunHopyTurnBuiltResult
-- reply
-- state
-- notification
-- threadPatch
-- turnRecord
-- confirmed_memory_candidates
-- compassText
-- compassPrompt
-- hopy_confirmed_payload
-
-Compass 観点でこのファイルの意味
-このファイルは Compass の正式検証・搭載ポイントの1つ。
-確定意味ペイロードの state / compass だけを正として受け取り、
-RunHopyTurnBuiltResult にそのまま載せる。
-下流で Compass を生成・補完・再救出しない。
-*/
-
-/*
 【今回このファイルで修正したこと】
-- buildConfirmedAssistantTurn(...) に compassText / compassPrompt を渡すように修正しました。
-- 後段の手動代入を削除し、confirmedTurn.compass を buildConfirmedAssistantTurn 側で正式shapeとして組み立てる流れにそろえました。
-- それ以外の実行ロジック、Compass 条件、状態 1..5 の意味、memory candidate の流れには触っていません。
+- RunHopyTurnBuiltResult に futureChainContext / future_chain_context を追加しました。
+- hopy_confirmed_payload.future_chain_context が存在する場合だけ読み取る resolveFutureChainContext(...) を追加しました。
+- buildAuthenticatedTurnResult(...) の返却値に futureChainContext / future_chain_context を中継するようにしました。
+- Future Chain の意味生成・カテゴリ生成・4項目生成・保存判定・DB保存・UI判定は追加していません。
+- state_changed、state_level、current_phase、prev系、Compass表示可否、HOPY回答○表示可否は再判定していません。
+
+/app/api/chat/_lib/route/authenticatedTurnResult.ts
 */
-// このファイルの正式役割: authenticated 経路における turn 結果の正式組み立てファイル

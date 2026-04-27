@@ -30,6 +30,7 @@ export type AuthenticatedPostTurnPayloadFinalizeFlowParams = {
   confirmedMemoryCandidates: BuildFinalizedTurnArtifactsInput["confirmedMemoryCandidates"];
   compassText: BuildFinalizedTurnArtifactsInput["compassText"];
   compassPrompt: BuildFinalizedTurnArtifactsInput["compassPrompt"];
+  futureChainContext?: BuildFinalizedTurnArtifactsInput["futureChainContext"];
   threadTitleForPayload: BuildAuthenticatedResponsePayloadInput["threadTitleForPayload"];
   stateUpdateOk: boolean;
   stateUpdateError: string | null;
@@ -57,6 +58,7 @@ export function finalizeAuthenticatedPostTurnPayloadFlow({
   confirmedMemoryCandidates,
   compassText,
   compassPrompt,
+  futureChainContext,
   threadTitleForPayload,
   stateUpdateOk,
   stateUpdateError,
@@ -79,6 +81,7 @@ export function finalizeAuthenticatedPostTurnPayloadFlow({
     confirmedMemoryCandidates,
     compassText,
     compassPrompt,
+    futureChainContext,
   });
 
   const payload = buildAuthenticatedResponsePayload({
@@ -114,23 +117,24 @@ export function finalizeAuthenticatedPostTurnPayloadFlow({
 【このファイルの正式役割】
 authenticated 経路の postTurn 最終化における最終payload組み立てフロー責務。
 confirmedTurn、notification、memoryWrite、confirmedMemoryCandidates、
-Compass 表示用値、threadTitleForPayload、stateUpdate 結果、
+Compass 表示用値、Future Chain context、threadTitleForPayload、stateUpdate 結果、
 Future Chain persist 情報、threadSummarySaveDebug を受け取り、
 最終 payload を組み立てて返す。
-このファイルは state_changed / state_level / current_phase / Compass を再判定せず、
+
+このファイルは state_changed / state_level / current_phase / Compass を再判定しない。
+このファイルは Future Chain の意味生成・カテゴリ生成・4項目生成をしない。
 親から受け取った確定済み値を buildFinalizedTurnArtifacts(...)、
 buildAuthenticatedResponsePayload(...)、
 attachFutureChainPersistToPayload(...)、
 attachThreadSummarySaveDebugToPayload(...) へ渡すだけにする。
 
 【今回このファイルで修正したこと】
-- authenticatedPostTurn.ts に残っていた最終payload組み立てフローの受け皿を作成した。
-- buildFinalizedTurnArtifacts(...) の実行を受け持つ関数を作成した。
-- buildAuthenticatedResponsePayload(...) の実行を受け持つ関数を作成した。
-- attachFutureChainPersistToPayload(...) による Future Chain persist payload 中継を受け持つ関数を作成した。
-- attachThreadSummarySaveDebugToPayload(...) による thread_summary 保存debug付与を受け持つ関数を作成した。
+- AuthenticatedPostTurnPayloadFinalizeFlowParams に futureChainContext を追加しました。
+- finalizeAuthenticatedPostTurnPayloadFlow(...) で futureChainContext を受け取るようにしました。
+- buildFinalizedTurnArtifacts(...) へ futureChainContext を渡すようにしました。
+- Future Chain の意味生成・保存判定・DB保存・UI判定は入れていません。
 - HOPY唯一の正、state_changed、Compass生成、HOPY回答○、Memory書き込み、
-  Learning保存、thread_summary保存、audit、thread title、Future Chain保存仕様そのものには触れていない。
+  Learning保存、thread_summary保存、audit、thread title、Future Chain保存仕様そのものには触れていません。
 
 /app/api/chat/_lib/route/authenticatedPostTurnPayloadFinalizeFlow.ts
 */

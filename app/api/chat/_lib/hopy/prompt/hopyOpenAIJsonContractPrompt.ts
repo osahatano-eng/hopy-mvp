@@ -6,16 +6,42 @@ function normalizeResolvedPlan(value: ResolvedPlanLike): string {
   return String(value ?? "").trim().toLowerCase();
 }
 
-export function buildStateStructureSystem(args: {
-  uiLang: Lang;
-}): string {
+function buildFutureChainContractLines(args: { uiLang: Lang }): string[] {
+  if (args.uiLang === "ja") {
+    return [
+      "Future Chain v3.1 ルール:",
+      "この OpenAI JSON 契約では、future_chain_context を必須にしない。",
+      "Future Chain v3.1 の主役は、OpenAI JSON内で生成する4項目ではなく、回答確定後にHOPY回答本文から安全に切り出す handoff_message_snapshot です。",
+      'future_chain_context を top-level に返してはならない。',
+      "future_chain_context を返す場合でも、必ず hopy_confirmed_payload の内側だけに置くこと。",
+      "future_chain_context には、個人情報・企業機密・ユーザー発話生文・HOPY回答全文・Compass全文を入れてはならない。",
+      "Future Chain の長い4項目、handoff本文、未来ユーザー向け文言を、このJSON契約で無理に生成してはならない。",
+      "future_chain_context が不要または長くなりそうな場合は、省略してよい。",
+      "owner_handoff と recipient_support を同時に出してはならない。",
+    ];
+  }
+
+  return [
+    "Future Chain v3.1 rule:",
+    "In this OpenAI JSON contract, future_chain_context is not required.",
+    "The core of Future Chain v3.1 is not four generated fields inside the OpenAI JSON, but a handoff_message_snapshot safely extracted from the finalized HOPY reply after the reply is confirmed.",
+    "Never return future_chain_context at the top level.",
+    'If future_chain_context is returned, it must be inside "hopy_confirmed_payload" only.',
+    "Do not include personal information, company secrets, raw user text, the full HOPY reply, or the full Compass text in future_chain_context.",
+    "Do not force long Future Chain fields, handoff text, or future-user-facing text into this JSON contract.",
+    "Omit future_chain_context when it is unnecessary or would become long.",
+    "Never output owner_handoff and recipient_support at the same time.",
+  ];
+}
+
+export function buildStateStructureSystem(args: { uiLang: Lang }): string {
   if (args.uiLang === "ja") {
     return [
       "最重要出力ルール:",
       "返答は JSON object 1個だけで返すこと。",
       "markdown・コードブロック・説明文は禁止。",
       'トップレベルキーは "hopy_confirmed_payload" / "confirmed_memory_candidates" のみとすること。',
-      "top-level の reply / state / assistant_state / compassText / compassPrompt / compass は返してはならない。",
+      "top-level の reply / state / assistant_state / compassText / compassPrompt / compass / future_chain_context は返してはならない。",
       '"hopy_confirmed_payload" は必須。',
       '"hopy_confirmed_payload.reply" は 1文字以上必須。',
       '"hopy_confirmed_payload.state" は必須。',
@@ -28,6 +54,7 @@ export function buildStateStructureSystem(args: {
       "下の JSON は出力形を守るための構造例であり、state の数値や boolean は固定値ではない。",
       "この例の current_phase / state_level / prev_phase / prev_state_level / state_changed は、今回ターンの意味で必ず決め直すこと。",
       '"confirmed_memory_candidates" は必須で、配列にすること。',
+      ...buildFutureChainContractLines({ uiLang: args.uiLang }),
       "正式JSON構造例:",
       "{",
       '  "hopy_confirmed_payload": {',
@@ -43,6 +70,7 @@ export function buildStateStructureSystem(args: {
       '  "confirmed_memory_candidates": []',
       "}",
       "重要: 上の 3 / 2 / true は固定コピー禁止。今回ターンに合わない場合は必ず変更すること。",
+      "重要: Future Chain v3.1 の handoff_message_snapshot は、このJSONで長く生成せず、回答確定後の専用処理で作る。",
     ].join("\n");
   }
 
@@ -51,7 +79,7 @@ export function buildStateStructureSystem(args: {
     "Return exactly one JSON object.",
     "Do not output markdown, code fences, or explanations.",
     'The top-level keys must be only "hopy_confirmed_payload" and "confirmed_memory_candidates".',
-    "Never return top-level reply, state, assistant_state, compassText, compassPrompt, or compass.",
+    "Never return top-level reply, state, assistant_state, compassText, compassPrompt, compass, or future_chain_context.",
     '"hopy_confirmed_payload" is required.',
     '"hopy_confirmed_payload.reply" must be a non-empty string.',
     '"hopy_confirmed_payload.state" is required.',
@@ -64,6 +92,7 @@ export function buildStateStructureSystem(args: {
     "The JSON below is a structure example for valid output. The state numbers and boolean are not fixed values.",
     "You must decide current_phase, state_level, prev_phase, prev_state_level, and state_changed from this turn's meaning.",
     '"confirmed_memory_candidates" is required and must be an array.',
+    ...buildFutureChainContractLines({ uiLang: args.uiLang }),
     "Official JSON structure example:",
     "{",
     '  "hopy_confirmed_payload": {',
@@ -78,13 +107,12 @@ export function buildStateStructureSystem(args: {
     "  },",
     '  "confirmed_memory_candidates": []',
     "}",
-    "Important: the 3 / 2 / true values above must not be copied blindly. Change them whenever they do not match this turn.",
+    "Important: the 3 / 2 / true values must not be copied blindly. Change them whenever they do not match this turn.",
+    "Important: Future Chain v3.1 handoff_message_snapshot must not be generated as long JSON here; it is created by the post-confirmation dedicated flow.",
   ].join("\n");
 }
 
-export function buildStateMeaningSystem(args: {
-  uiLang: Lang;
-}): string {
+export function buildStateMeaningSystem(args: { uiLang: Lang }): string {
   if (args.uiLang === "ja") {
     return [
       "状態確定ルール:",
@@ -171,9 +199,7 @@ export function buildCompassStructureSystem(args: {
   ].join("\n");
 }
 
-export function buildEmptyJsonRetrySystem(args: {
-  uiLang: Lang;
-}): string {
+export function buildEmptyJsonRetrySystem(args: { uiLang: Lang }): string {
   if (args.uiLang === "ja") {
     return [
       "再出力指示:",
@@ -184,9 +210,10 @@ export function buildEmptyJsonRetrySystem(args: {
       '"hopy_confirmed_payload.reply" は 1文字以上必須です。',
       '"hopy_confirmed_payload.state" は必須です。',
       '"confirmed_memory_candidates" は空配列でもよいので必ず返してください。',
-      "top-level の reply / state / compassText / compassPrompt は禁止です。",
+      "top-level の reply / state / compassText / compassPrompt / future_chain_context は禁止です。",
       "state_changed を false に固定して逃げてはいけません。",
       "JSON object の外に説明文を出してはいけません。",
+      ...buildFutureChainContractLines({ uiLang: args.uiLang }),
     ].join("\n");
   }
 
@@ -199,22 +226,21 @@ export function buildEmptyJsonRetrySystem(args: {
     '"hopy_confirmed_payload.reply" must contain at least 1 character.',
     '"hopy_confirmed_payload.state" is required.',
     '"confirmed_memory_candidates" may be empty but must be present.',
-    "Top-level reply, state, compassText, and compassPrompt are forbidden.",
+    "Top-level reply, state, compassText, compassPrompt, and future_chain_context are forbidden.",
     "Do not escape by defaulting state_changed to false.",
     "Do not output any explanation outside the JSON object.",
+    ...buildFutureChainContractLines({ uiLang: args.uiLang }),
   ].join("\n");
 }
 
-export function buildContractRetrySystem(args: {
-  uiLang: Lang;
-}): string {
+export function buildContractRetrySystem(args: { uiLang: Lang }): string {
   if (args.uiLang === "ja") {
     return [
       "再出力指示:",
       "直前の JSON は HOPY の正式契約に違反していました。",
       "今回は hopy_confirmed_payload 正式shape を厳守してください。",
       "トップレベルキーは hopy_confirmed_payload / confirmed_memory_candidates のみです。",
-      "top-level の reply / state / assistant_state / compassText / compassPrompt / compass は禁止です。",
+      "top-level の reply / state / assistant_state / compassText / compassPrompt / compass / future_chain_context は禁止です。",
       "hopy_confirmed_payload.state.current_phase / state_level / prev_phase / prev_state_level は 1|2|3|4|5 の整数必須です。",
       "hopy_confirmed_payload.state.state_changed は boolean 必須です。",
       "state_changed を false に固定してはなりません。",
@@ -222,8 +248,11 @@ export function buildContractRetrySystem(args: {
       "Plus / Pro では state_changed=true の回に hopy_confirmed_payload.compass.text を必ず非空で返してください。",
       "Plus / Pro では state_changed=true の回に hopy_confirmed_payload.compass.prompt も必ず非空で返してください。",
       "空文字や省略や fallback でごまかしてはいけません。",
+      "future_chain_context は top-level ではなく、返す場合だけ hopy_confirmed_payload の内側に置いてください。",
+      "Future Chain v3.1 の handoff_message_snapshot は、このJSONで長く生成せず、回答確定後の専用処理で作ります。",
       "必ず JSON object 1個だけを返してください。",
       "JSON object の外に説明文を出してはいけません。",
+      ...buildFutureChainContractLines({ uiLang: args.uiLang }),
       "正式JSON構造例:",
       "{",
       '  "hopy_confirmed_payload": {',
@@ -247,7 +276,7 @@ export function buildContractRetrySystem(args: {
     "The previous JSON violated the HOPY contract.",
     "Return the official hopy_confirmed_payload shape exactly this time.",
     'The top-level keys must be only "hopy_confirmed_payload" and "confirmed_memory_candidates".',
-    "Top-level reply, state, assistant_state, compassText, compassPrompt, and compass are forbidden.",
+    "Top-level reply, state, assistant_state, compassText, compassPrompt, compass, and future_chain_context are forbidden.",
     "hopy_confirmed_payload.state.current_phase, state_level, prev_phase, and prev_state_level must be integers in 1|2|3|4|5.",
     "hopy_confirmed_payload.state.state_changed must be a boolean.",
     "Do not hard-code state_changed to false.",
@@ -255,8 +284,11 @@ export function buildContractRetrySystem(args: {
     'On Plus / Pro, when state_changed=true, "hopy_confirmed_payload.compass.text" must be non-empty.',
     'On Plus / Pro, when state_changed=true, "hopy_confirmed_payload.compass.prompt" must also be non-empty.',
     "Do not fake compliance with empty strings, omissions, or fallback text.",
+    'future_chain_context must never be top-level; include it only inside "hopy_confirmed_payload" when returned.',
+    "Future Chain v3.1 handoff_message_snapshot must not be generated as long JSON here; it is created by the post-confirmation dedicated flow.",
     "Return exactly one JSON object.",
     "Do not output any explanation outside the JSON object.",
+    ...buildFutureChainContractLines({ uiLang: args.uiLang }),
     "Official JSON structure example:",
     "{",
     '  "hopy_confirmed_payload": {',
@@ -271,25 +303,26 @@ export function buildContractRetrySystem(args: {
     "  },",
     '  "confirmed_memory_candidates": []',
     "}",
-    "Important: the 3 / 2 / true values above must not be copied blindly. Change them whenever they do not match this turn.",
+    "Important: the 3 / 2 / true values must not be copied blindly. Change them whenever they do not match this turn.",
   ].join("\n");
 }
 
 /*
-このファイルの正式役割:
+【このファイルの正式役割】
 OpenAI 実行層で使う HOPY JSON 契約プロンプト文言を生成するファイル。
 hopy_confirmed_payload の shape、state 1..5、state_changed、Compass、retry 時の契約再指示を文言として返す責務だけを持つ。
-OpenAI completion 実行、timeout / retry 実行、JSON parse、契約検証、DB保存復元、HOPY唯一の正の再判定は担当しない。
-*/
+Future Chain v3.1 の handoff_message_snapshot 生成、Future Chain 保存、表示、配信判定は担当しない。
+OpenAI completion 実行、timeout / retry 実行、JSON parse、契約検証、DB保存復元、HOPY唯一の正の再判定、Future Chain の意味生成・保存・表示は担当しない。
 
-/*
 【今回このファイルで修正したこと】
-- buildStateStructureSystem(...) に JSON object の正式構造例を戻し、parse_failed の危険を下げました。
-- ただし current_phase: 1 / state_level: 1 / prev_phase: 1 / prev_state_level: 1 / state_changed: false の固定コピーを避けるため、構造例の state 値は 3 / 2 / true にし、固定コピー禁止を明記しました。
-- buildStateMeaningSystem(...) に、HOPYが一つを提案しただけではユーザーの整理確定ではないこと、ユーザー自身の選択・理由・採用が整理/収束の信号になることを追加しました。
-- buildContractRetrySystem(...) に JSON object の正式構造例を戻し、retry 時も JSON 形が崩れにくいようにしました。
-- state値は 1..5 / 5段階のまま維持し、0..4 前提にはしていません。
-- HOPY唯一の正、Compass判定、DB保存復元、OpenAI実行処理、JSON契約検証処理はこのファイルでは再判定・再生成していません。
-*/
+- hopy_confirmed_payload.future_chain_context 必須指示を削除しました。
+- Future Chain の長い正式shape例と owner_handoff 4項目生成例を削除しました。
+- buildStateStructureSystem(...) の正式JSON構造例を reply / state / confirmed_memory_candidates の安定形へ戻しました。
+- buildEmptyJsonRetrySystem(...) と buildContractRetrySystem(...) から future_chain_context 必須指示を削除しました。
+- top-level future_chain_context 禁止は維持しました。
+- Future Chain v3.1 の handoff_message_snapshot は OpenAI JSONではなく、回答確定後の専用処理で作る方針を明記しました。
+- state 1..5、state_changed、Compass、confirmed_memory_candidates の契約は維持しました。
+- DB、UI、Future Chain 保存処理、表示処理、plan gate、HOPY唯一の正の再判定はこのファイルでは触っていません。
 
-/* /app/api/chat/_lib/hopy/prompt/hopyOpenAIJsonContractPrompt.ts */
+/app/api/chat/_lib/hopy/prompt/hopyOpenAIJsonContractPrompt.ts
+*/

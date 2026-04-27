@@ -96,6 +96,7 @@ export function buildFinalizedTurnArtifacts(params: {
   confirmedMemoryCandidates: ConfirmedMemoryCandidate[];
   compassText?: unknown;
   compassPrompt?: unknown;
+  futureChainContext?: unknown;
 }): FinalizedTurnArtifacts {
   const {
     confirmedTurn,
@@ -108,6 +109,7 @@ export function buildFinalizedTurnArtifacts(params: {
     confirmedMemoryCandidates,
     compassText,
     compassPrompt,
+    futureChainContext,
   } = params;
 
   const dashboardSignal = buildDashboardSignal({
@@ -149,6 +151,7 @@ export function buildFinalizedTurnArtifacts(params: {
     confirmedMemoryCandidates,
     compassText: finalizedCompassText,
     compassPrompt: finalizedCompassPrompt,
+    futureChainContext,
   });
 
   return {
@@ -199,9 +202,9 @@ export function buildAuthenticatedResponsePayload(
 }
 
 /*
-このファイルの正式役割
+【このファイルの正式役割】
 authenticated 経路の最終 artifacts / payload 組み立てファイル。
-confirmedTurn と notification と Compass 情報を受け取り、
+confirmedTurn、notification、Compass 情報、Future Chain context を受け取り、
 confirmedMeaningPayload を作成し、
 最終 API payload に hopy_confirmed_payload を載せる。
 
@@ -217,6 +220,7 @@ buildFinalizedTurnArtifacts(...) へ
 - confirmedMemoryCandidates
 - compassText
 - compassPrompt
+- futureChainContext
 
 buildAuthenticatedResponsePayload(...) へ
 - finalizedTurnArtifacts
@@ -249,19 +253,26 @@ stateChanged を見て Compass を再判定しない。
 受け取った compassText / compassPrompt を
 confirmedMeaningPayload 側へ載せる。
 
+Future Chain 観点でこのファイルの意味
+このファイルは Future Chain context の最終中継箇所。
+Future Chain の意味生成をしない。
+Future Chain の4項目やカテゴリを作らない。
+state_changed / state_level / current_phase / prev系を再判定しない。
+受け取った futureChainContext を confirmedMeaningPayload 側へ渡すだけを担当する。
+
 このファイルで確認できた大事なこと
 1. buildFinalizedTurnArtifacts(...) では、compassText 引数があればそれを優先し、なければ confirmedTurn 側の compassText を使う。
 2. buildConfirmedMeaningPayload(...) に compassText / compassPrompt を渡している。
-3. buildAuthenticatedResponsePayload(...) では top-level compass を載せず、hopy_confirmed_payload を唯一の正として返す。
-4. このファイルは Compass の生成元ではなく、唯一の正へ載せるための最終中継である。
-*/
+3. buildConfirmedMeaningPayload(...) に futureChainContext を渡す。
+4. buildAuthenticatedResponsePayload(...) では top-level compass を載せず、hopy_confirmed_payload を唯一の正として返す。
+5. このファイルは Compass / Future Chain の生成元ではなく、唯一の正へ載せるための最終中継である。
 
-/* 【今回このファイルで修正したこと】
-- buildAuthenticatedResponsePayload(...) で top-level payload.compass を載せる処理をやめました。
-- 念のため delete (payload as { compass?: unknown }).compass; を入れ、top-level compass が残らないようにしました。
-- Compass の正は hopy_confirmed_payload 側だけに残す形へ寄せました。
-- confirmedMeaningPayload の生成、state 値の計算、DB 保存処理には触れていません。
-*/
+【今回このファイルで修正したこと】
+- buildFinalizedTurnArtifacts(...) の引数に futureChainContext?: unknown を追加しました。
+- buildConfirmedMeaningPayload(...) へ futureChainContext を渡すようにしました。
+- Future Chain の意味生成・カテゴリ生成・owner_handoff生成・recipient_support検索は入れていません。
+- state_changed / state_level / current_phase / prev系 / Compass表示可否 / HOPY回答○表示可否は再判定していません。
+- 既存の top-level compass 削除処理と hopy_confirmed_payload 中心の返却は維持しました。
 
-/* /app/api/chat/_lib/route/authenticatedFinalize.ts */
-// このファイルの正式役割: authenticated 経路の最終 artifacts / payload 組み立て
+/app/api/chat/_lib/route/authenticatedFinalize.ts
+*/

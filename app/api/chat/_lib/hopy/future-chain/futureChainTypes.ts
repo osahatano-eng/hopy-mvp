@@ -22,6 +22,11 @@ export type HopyFutureChainReuseScope =
 
 export type HopyFutureChainStatus = "active" | "trash";
 
+export type HopyFutureChainDeliveryEventStatus =
+  | "shown"
+  | "skipped"
+  | "trash";
+
 export type HopyFutureChainDecision = "save" | "skip";
 
 export type HopyFutureChainDecisionStatus =
@@ -99,6 +104,10 @@ export type HopyFutureChainCandidateMetadataVersion =
   | typeof HOPY_FUTURE_CHAIN_PATTERN_VERSION_V2
   | typeof HOPY_FUTURE_CHAIN_GENERATION_VERSION_V3;
 
+export type HopyFutureChainCandidateMetadataSource =
+  | "hopy_confirmed_payload"
+  | "hopy_confirmed_payload.future_chain_context";
+
 export type HopyFutureChainConfirmedState = {
   current_phase: HopyFutureChainStateLevel;
   state_level: HopyFutureChainStateLevel;
@@ -112,14 +121,41 @@ export type HopyFutureChainConfirmedCompass = {
   prompt?: string;
 };
 
-export type HopyFutureChainConfirmedFutureChainContext = {
+export type HopyFutureChainOwnerHandoff = {
+  insight: string | null;
+  hint: string | null;
+  flow: string | null;
+  reason: string | null;
+};
+
+export type HopyFutureChainRecipientSupportQuery = {
+  target_state_level: HopyFutureChainStateLevel | null;
   major_category: HopyFutureChainMajorCategory | null;
   minor_category: HopyFutureChainMinorCategory | null;
+  change_trigger_key: HopyFutureChainChangeTriggerKey | null;
+  support_shape_key: HopyFutureChainSupportShapeKey | null;
+};
+
+export type HopyFutureChainConfirmedFutureChainContext = {
+  delivery_mode: HopyFutureChainDisplayMode;
+
+  major_category: HopyFutureChainMajorCategory | null;
+  minor_category: HopyFutureChainMinorCategory | null;
+
   current_stuck_state: string | null;
   true_feeling_hypothesis: string | null;
-  change_trigger_candidate: HopyFutureChainChangeTriggerKey | null;
+  change_trigger_key: HopyFutureChainChangeTriggerKey | null;
+
   support_needed: boolean;
-  delivery_mode: HopyFutureChainDisplayMode;
+
+  transition_kind: HopyFutureChainTransitionKind | null;
+  transition_meaning: HopyFutureChainTransitionMeaning | null;
+
+  support_shape_key: HopyFutureChainSupportShapeKey | null;
+
+  owner_handoff: HopyFutureChainOwnerHandoff | null;
+
+  recipient_support_query: HopyFutureChainRecipientSupportQuery | null;
 };
 
 export type HopyFutureChainConfirmedPayload = {
@@ -150,10 +186,13 @@ export type HopyFutureChainBridgeSummary = {
   reason: string;
 };
 
-export type HopyFutureChainReceiverBridgeSummaryItems = Pick<
+export type HopyFutureChainRecipientSupportItems = Pick<
   HopyFutureChainBridgeSummary,
   "insight" | "hint" | "flow"
 >;
+
+export type HopyFutureChainReceiverBridgeSummaryItems =
+  HopyFutureChainRecipientSupportItems;
 
 export type HopyFutureChainOwnerBridgeSummaryView = {
   type: "bridge_summary_for_owner";
@@ -163,83 +202,178 @@ export type HopyFutureChainOwnerBridgeSummaryView = {
   items: HopyFutureChainBridgeSummary;
 };
 
-export type HopyFutureChainReceiverBridgeSummaryView = {
-  type: "bridge_summary_for_receiver";
+export type HopyFutureChainRecipientSupportView = {
+  type: "bridge_summary_for_recipient";
   title: string;
   subtitle: string;
   note: string;
-  items: HopyFutureChainReceiverBridgeSummaryItems;
+  items: HopyFutureChainRecipientSupportItems;
 };
 
+export type HopyFutureChainReceiverBridgeSummaryView =
+  HopyFutureChainRecipientSupportView;
+
 export type HopyFutureChainCandidateMetadata = {
-  source: "hopy_confirmed_payload";
+  source: HopyFutureChainCandidateMetadataSource;
   version: HopyFutureChainCandidateMetadataVersion;
+  raw_log_saved?: false;
+  generation?: "owner_handoff" | "recipient_support" | "none" | string;
+};
+
+export type HopyFutureChainPatternCandidate = {
+  pattern_key: string;
+  language: HopyFutureChainLanguage;
+
+  from_state_level: HopyFutureChainStateLevel;
+  to_state_level: HopyFutureChainStateLevel;
+
+  transition_kind: HopyFutureChainTransitionKind;
+  transition_meaning: HopyFutureChainTransitionMeaning;
+
+  support_shape_key: HopyFutureChainSupportShapeKey;
+
+  major_category: HopyFutureChainMajorCategory;
+  minor_category: HopyFutureChainMinorCategory;
+  change_trigger_key: HopyFutureChainChangeTriggerKey;
+
+  delivery_target_state_level: HopyFutureChainStateLevel | null;
+  delivery_usage: HopyFutureChainDeliveryUsage;
+
+  evidence_count: number;
+  weight: number;
+  confidence_score: number;
+
+  reuse_scope: HopyFutureChainReuseScope;
+  status: HopyFutureChainStatus;
+
+  metadata: HopyFutureChainCandidateMetadata;
 };
 
 export type HopyFutureChainBridgeEventCandidate = {
   pattern_id?: string | null;
+
+  owner_user_id: string;
+
   language: HopyFutureChainLanguage;
+
   from_state_level: HopyFutureChainStateLevel;
   to_state_level: HopyFutureChainStateLevel;
+
   transition_kind: HopyFutureChainTransitionKind;
   transition_meaning: HopyFutureChainTransitionMeaning;
-  major_category?: HopyFutureChainMajorCategory | null;
-  minor_category?: HopyFutureChainMinorCategory | null;
-  change_trigger_key?: HopyFutureChainChangeTriggerKey | null;
-  support_shape_key?: HopyFutureChainSupportShapeKey | null;
+
+  major_category: HopyFutureChainMajorCategory;
+  minor_category: HopyFutureChainMinorCategory;
+  change_trigger_key: HopyFutureChainChangeTriggerKey;
+  support_shape_key: HopyFutureChainSupportShapeKey;
+
   delivery_target_state_level?: HopyFutureChainStateLevel | null;
   delivery_usage?: HopyFutureChainDeliveryUsage | null;
+
   user_signal_summary: string;
   hopy_support_summary: string;
   transition_reason: string;
   future_support_hint: string;
+
   bridge_insight: string;
   bridge_hint: string;
   bridge_flow: string;
   bridge_reason: string;
+
   owner_visible_summary: string;
   future_visible_summary: string;
+
   compass_basis: string | null;
-  safety_notes: string | null;
-  avoidance_notes: string | null;
+
   source_transition_signal_id?: string | null;
   source_assistant_message_id: string;
   source_trigger_message_id?: string | null;
+
+  delivery_eligible: boolean;
+
   confidence_score: number;
   reuse_scope: HopyFutureChainReuseScope;
   status: HopyFutureChainStatus;
+
+  safety_notes: string | null;
+  avoidance_notes: string | null;
+
+  metadata: HopyFutureChainCandidateMetadata;
+};
+
+export type HopyFutureChainDeliveryEventCandidate = {
+  bridge_event_id: string;
+  pattern_id?: string | null;
+
+  owner_user_id?: string | null;
+  recipient_user_id: string;
+
+  recipient_thread_id?: string | null;
+  recipient_assistant_message_id?: string | null;
+
+  recipient_state_level: HopyFutureChainStateLevel;
+
+  major_category: HopyFutureChainMajorCategory;
+  minor_category: HopyFutureChainMinorCategory;
+  change_trigger_key: HopyFutureChainChangeTriggerKey | null;
+  support_shape_key: HopyFutureChainSupportShapeKey | null;
+
+  display_title: string;
+  display_insight: string;
+  display_hint: string;
+  display_flow: string;
+
+  delivery_reason: string;
+
+  owner_notified: boolean;
+  owner_notified_at?: string | null;
+
+  status: HopyFutureChainDeliveryEventStatus;
+
   metadata: HopyFutureChainCandidateMetadata;
 };
 
 export type HopyFutureChainCandidate = {
   pattern_key: string;
   language: HopyFutureChainLanguage;
+
   from_state_level: HopyFutureChainStateLevel;
   to_state_level: HopyFutureChainStateLevel;
+
   transition_kind: HopyFutureChainTransitionKind;
   transition_meaning: HopyFutureChainTransitionMeaning;
+
   support_shape_key: HopyFutureChainSupportShapeKey;
-  major_category?: HopyFutureChainMajorCategory | null;
-  minor_category?: HopyFutureChainMinorCategory | null;
-  change_trigger_key?: HopyFutureChainChangeTriggerKey | null;
-  delivery_target_state_level?: HopyFutureChainStateLevel | null;
-  delivery_usage?: HopyFutureChainDeliveryUsage | null;
+
+  major_category: HopyFutureChainMajorCategory;
+  minor_category: HopyFutureChainMinorCategory;
+  change_trigger_key: HopyFutureChainChangeTriggerKey;
+
+  delivery_target_state_level: HopyFutureChainStateLevel | null;
+  delivery_usage: HopyFutureChainDeliveryUsage;
+
   abstract_context: string;
   transition_reason: string;
   effective_support: string;
   user_progress_signal: string;
   future_support_hint: string;
-  bridge_summary?: HopyFutureChainBridgeSummary | null;
-  bridge_event?: HopyFutureChainBridgeEventCandidate | null;
+
+  bridge_summary: HopyFutureChainBridgeSummary;
+  bridge_event: HopyFutureChainBridgeEventCandidate;
+
   compass_basis: string | null;
   safety_notes: string | null;
   avoidance_notes: string | null;
+
   evidence_count: number;
   weight: number;
   confidence_score: number;
+
   reuse_scope: HopyFutureChainReuseScope;
   status: HopyFutureChainStatus;
+
   metadata: HopyFutureChainCandidateMetadata;
+
   source_transition_signal_id?: string | null;
   source_response_learning_id?: string | null;
   source_learning_insight_id?: string | null;
@@ -273,17 +407,15 @@ export type HopyFutureChainInsertResult =
 
 /*
 【このファイルの正式役割】
-HOPY Future Chain DB 用の型定義だけを担当する。
-hopy_confirmed_payload を起点にした保存可否チェック、candidate生成、DB保存、本人表示、受け取り側表示で共通利用する型を定義する。
-このファイルは保存可否判定、candidate生成、DB insert、state_changed再判定、state_level再判定、Compass再判定を担当しない。
+HOPY Future Chain v3 用の型定義だけを担当する。
+hopy_confirmed_payload.future_chain_context を唯一の起点として、payload読取、保存候補、保存前チェック、DB保存、owner_handoff表示、recipient_support表示で共通利用する型を定義する。
+このファイルは保存可否判定、candidate生成、DB insert、UI表示、state_changed再判定、state_level再判定、Compass再判定、HOPY回答再要約を担当しない。
 
 【今回このファイルで修正したこと】
-- metadata.version が "future_chain_generation_v1" 固定になっていた状態をやめ、v1 / v2途中実装 / v3 を受けられる HopyFutureChainCandidateMetadataVersion を追加した。
-- Future Chain v3 DB定義に合わせて、plan / display_mode / transition_meaning / major_category / minor_category / change_trigger_key / delivery_usage の型を追加した。
-- hopy_confirmed_payload 側で確定する future_chain_context の型 HopyFutureChainConfirmedFutureChainContext を追加した。
-- hopy_future_chain_bridge_events 保存候補用の HopyFutureChainBridgeEventCandidate を追加した。
-- HopyFutureChainCandidate に v3追加カラムと bridge_event を受けられる型を追加した。
-- このファイルでは、保存可否判定、candidate生成、DB保存、UI表示、state_changed再判定、Compass再判定は触っていない。
+- hopy_future_chain_bridge_events のDB実態に合わせて、HopyFutureChainBridgeEventCandidate に user_signal_summary / hopy_support_summary / transition_reason / future_support_hint を追加した。
+- hopy_future_chain_bridge_events のDB実態に合わせて、HopyFutureChainBridgeEventCandidate に delivery_target_state_level / delivery_usage を任意項目として追加した。
+- futureChainRepository.ts が bridge_event 保存payloadを作るときに、DB実在カラムを型安全に参照できるようにした。
+- このファイルでは、保存可否判定、candidate生成、DB保存、UI表示、state_changed再判定、Compass再判定、HOPY回答再要約は触っていない。
 
 /app/api/chat/_lib/hopy/future-chain/futureChainTypes.ts
 */

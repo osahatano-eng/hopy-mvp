@@ -5,6 +5,10 @@ import {
   type ConfirmedMemoryCandidate,
 } from "../authenticatedHelpers";
 import type { NotificationState } from "../../state/notification";
+import {
+  resolveFutureChainContextForConfirmedPayload,
+  type HopyFutureChainContext,
+} from "../../hopy/future-chain/futureChainPayloadContext";
 import { buildReplyState } from "./buildReplyState";
 import {
   buildThreadSummary,
@@ -24,19 +28,21 @@ import {
   type HopyUiEffects,
 } from "./buildUiEffects";
 
+type HopyStateLevel = 1 | 2 | 3 | 4 | 5;
+
 type ConfirmedAssistantTurn = {
   assistantText: string;
-  currentPhase: 1 | 2 | 3 | 4 | 5;
-  currentStateLevel: 1 | 2 | 3 | 4 | 5;
+  currentPhase: HopyStateLevel;
+  currentStateLevel: HopyStateLevel;
   stateChanged: boolean;
-  prevPhase: 1 | 2 | 3 | 4 | 5;
-  prevStateLevel: 1 | 2 | 3 | 4 | 5;
+  prevPhase: HopyStateLevel;
+  prevStateLevel: HopyStateLevel;
   canonicalAssistantState: {
-    state_level: 1 | 2 | 3 | 4 | 5;
-    current_phase: 1 | 2 | 3 | 4 | 5;
+    state_level: HopyStateLevel;
+    current_phase: HopyStateLevel;
     state_changed: boolean;
-    prev_phase: 1 | 2 | 3 | 4 | 5;
-    prev_state_level: 1 | 2 | 3 | 4 | 5;
+    prev_phase: HopyStateLevel;
+    prev_state_level: HopyStateLevel;
   };
   compassText?: unknown;
   compass_text?: unknown;
@@ -69,6 +75,7 @@ export type HopyConfirmedMeaningPayload = {
     text: string;
     prompt: string | null;
   };
+  future_chain_context?: HopyFutureChainContext;
   thread_summary: HopyThreadSummary;
   memory_candidates: HopyMemoryCandidate[];
   dashboard_signals: HopyDashboardSignals;
@@ -89,6 +96,7 @@ type BuildConfirmedMeaningPayloadParams = {
   confirmedMemoryCandidates?: ConfirmedMemoryCandidate[] | null;
   compassText?: unknown;
   compassPrompt?: unknown;
+  futureChainContext?: unknown;
 };
 
 function resolveConfirmedMeaningMemoryCandidates(params: {
@@ -230,12 +238,18 @@ export function buildConfirmedMeaningPayload(
     confirmedMemoryCandidates,
     compassText,
     compassPrompt,
+    futureChainContext,
   } = params;
 
   const replyState = buildReplyState({
     confirmedTurn,
   });
   const canonicalStateChanged = isCanonicalStateChanged(replyState.state);
+
+  const future_chain_context = resolveFutureChainContextForConfirmedPayload({
+    rawContext: futureChainContext,
+    stateChanged: canonicalStateChanged,
+  });
 
   const thread_summary = buildThreadSummary({
     confirmedTurn,
@@ -288,6 +302,11 @@ export function buildConfirmedMeaningPayload(
           },
         }
       : {}),
+    ...(future_chain_context
+      ? {
+          future_chain_context,
+        }
+      : {}),
     thread_summary,
     memory_candidates,
     dashboard_signals,
@@ -299,24 +318,25 @@ export function buildConfirmedMeaningPayload(
 export default buildConfirmedMeaningPayload;
 
 /*
-このファイルの正式役割
+【このファイルの正式役割】
 hopy_confirmed_payload の正式組み立てファイル。
 confirmedTurn と各補助情報を受けて、
-reply / state / compass / thread_summary / memory_candidates /
-dashboard_signals / notification_signal / ui_effects を
+reply / state / compass / future_chain_context / thread_summary /
+memory_candidates / dashboard_signals / notification_signal / ui_effects を
 唯一の正に沿って組み立てる。
 
 このファイルは Compass を新規生成しない。
-受け取った confirmedTurn / compassText / compassPrompt を正規化して
+このファイルは Future Chain の4項目やカテゴリ意味を新規生成しない。
+このファイルは Future Chain の型定義・正規化・保存判定を持たない。
+Future Chain 関連は専用ファイルで正規化された結果だけを
 hopy_confirmed_payload の正式shapeへ載せる。
-*/
 
-/*
 【今回このファイルで修正したこと】
-- Compass を hopy_confirmed_payload.state.state_changed に従属させました。
-- state_changed=false のときは、resolvedCompassText が残っていても payload に compass を載せないようにしました。
-- state_changed=false のときは、ui_effects 側にも compass を渡さないようにしました。
-- confirmedTurn からの state 生成や buildReplyState(...) の中身自体は触っていません。
-*/
+- Future Chain v3 の型定義をこのファイルから削除しました。
+- Future Chain v3 の正規化関数をこのファイルから削除しました。
+- confirmedTurn.futureChainContext / confirmedTurn.future_chain_context へのfallback読み取りを削除しました。
+- futureChainContext は params.futureChainContext だけを受け取り、Future Chain専用resolverへ渡す形にしました。
+- hopy_confirmed_payload 組み立てファイルは、Future Chainの中身を持たず、中継だけを担当する形へ戻しました。
 
-/* /app/api/chat/_lib/route/hopyConfirmedPayload/buildConfirmedMeaningPayload.ts */
+/app/api/chat/_lib/route/hopyConfirmedPayload/buildConfirmedMeaningPayload.ts
+*/

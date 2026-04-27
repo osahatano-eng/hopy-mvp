@@ -64,6 +64,7 @@ type GenerateAssistantReplyResult = {
       text: string;
       prompt: string;
     };
+    future_chain_context?: Record<string, unknown>;
   };
   speed_audit: SpeedAudit;
 };
@@ -75,6 +76,7 @@ type ExtractedReplyPayload = {
   compassText: string;
   compassPrompt: string;
   state: Record<string, unknown> | null;
+  futureChainContext: Record<string, unknown> | null;
 };
 
 type AttemptDebugInfo = {
@@ -251,9 +253,16 @@ function buildConfirmedPayload(params: {
   compassText: string;
   compassPrompt: string;
   resolvedPlan: ResolvedPlanLike;
+  futureChainContext: Record<string, unknown> | null;
 }): GenerateAssistantReplyResult["hopy_confirmed_payload"] {
-  const { assistantText, state, compassText, compassPrompt, resolvedPlan } =
-    params;
+  const {
+    assistantText,
+    state,
+    compassText,
+    compassPrompt,
+    resolvedPlan,
+    futureChainContext,
+  } = params;
 
   const canonicalState = resolveCanonicalState(state);
   if (!canonicalState) return undefined;
@@ -282,6 +291,10 @@ function buildConfirmedPayload(params: {
       text: compassText.trim(),
       prompt: compassPrompt.trim(),
     };
+  }
+
+  if (futureChainContext) {
+    payload.future_chain_context = futureChainContext;
   }
 
   return payload;
@@ -323,6 +336,16 @@ function selectPreferredMemoryCandidates(params: {
   if (Array.isArray(primary) && primary.length > 0) return primary;
   if (Array.isArray(fallback) && fallback.length > 0) return fallback;
   return [];
+}
+
+function selectPreferredFutureChainContext(params: {
+  primary: Record<string, unknown> | null;
+  fallback: Record<string, unknown> | null;
+}): Record<string, unknown> | null {
+  const { primary, fallback } = params;
+  if (isRecord(primary)) return primary;
+  if (isRecord(fallback)) return fallback;
+  return null;
 }
 
 function extractCanonicalStateFromUnknown(
@@ -387,6 +410,17 @@ function recoverCompassFromParsedJson(parsedJson: unknown): {
   };
 }
 
+function recoverFutureChainContextFromParsedJson(
+  parsedJson: unknown,
+): Record<string, unknown> | null {
+  const payload = recoverConfirmedPayloadFromParsedJson(parsedJson);
+  if (!payload) return null;
+
+  return isRecord(payload.future_chain_context)
+    ? payload.future_chain_context
+    : null;
+}
+
 function recoverMemoryCandidatesFromParsedJson(parsedJson: unknown): unknown[] {
   if (!isRecord(parsedJson)) return [];
   return Array.isArray(parsedJson.confirmed_memory_candidates)
@@ -403,6 +437,9 @@ function buildExtractedPayloadFromRawContent(
   );
   const canonicalState = recoverStateFromParsedJson(extracted.parsed_json);
   const canonicalCompass = recoverCompassFromParsedJson(extracted.parsed_json);
+  const canonicalFutureChainContext = recoverFutureChainContextFromParsedJson(
+    extracted.parsed_json,
+  );
   const canonicalMemoryCandidates = recoverMemoryCandidatesFromParsedJson(
     extracted.parsed_json,
   );
@@ -414,6 +451,7 @@ function buildExtractedPayloadFromRawContent(
     compassText: canonicalCompass.text,
     compassPrompt: canonicalCompass.prompt,
     state: canonicalState,
+    futureChainContext: canonicalFutureChainContext,
   };
 }
 
@@ -444,6 +482,10 @@ function mergeExtractedPayloads(params: {
     state: selectPreferredState({
       primary: primary.state,
       fallback: fallback.state,
+    }),
+    futureChainContext: selectPreferredFutureChainContext({
+      primary: primary.futureChainContext,
+      fallback: fallback.futureChainContext,
     }),
   };
 }
@@ -533,6 +575,7 @@ export async function generateAssistantReply(
   let compassText = "";
   let compassPrompt = "";
   let state: Record<string, unknown> | null = null;
+  let futureChainContext: Record<string, unknown> | null = null;
   let resolvedPlan: ResolvedPlanLike = "free";
   const attemptDebugInfos: AttemptDebugInfo[] = [];
   const speed_audit = createInitialSpeedAudit();
@@ -643,6 +686,7 @@ export async function generateAssistantReply(
     const extracted = selectedExtracted;
 
     assistantText = normalizeAssistantText(extracted.assistantText);
+    futureChainContext = extracted.futureChainContext;
 
     const memoryCandidatesResolveStartMs = nowMs();
     confirmed_memory_candidates = extracted.confirmed_memory_candidates;
@@ -711,6 +755,7 @@ export async function generateAssistantReply(
     compassText = "";
     compassPrompt = "";
     state = null;
+    futureChainContext = null;
   }
 
   speed_audit.openai_total_ms = elapsedMs(openaiTotalStartMs);
@@ -723,6 +768,7 @@ export async function generateAssistantReply(
         compassText,
         compassPrompt,
         resolvedPlan,
+        futureChainContext,
       })
     : undefined;
   speed_audit.confirmed_payload_build_ms = elapsedMs(
@@ -745,23 +791,20 @@ export async function generateAssistantReply(
 export default generateAssistantReply;
 
 /*
-このファイルの正式役割:
+【このファイルの正式役割】
 OpenAI 応答の生成・回収ファイル。
 promptBundle と history から messages を作る前提で、
 JSON強制生成を試し、
 返ってきた内容から assistantText / confirmed_memory_candidates /
-compassText / compassPrompt / state を回収して返す。
-このファイルは独自に状態変化や Compass を再判定する層ではなく、
+compassText / compassPrompt / state / futureChainContext を回収して返す。
+このファイルは独自に状態変化や Compass や Future Chain を再判定する層ではなく、
 確定意味ペイロードから正式値だけを回収して次段へ渡す生成結果回収責務を持つ。
-*/
 
-/*
 【今回このファイルで修正したこと】
-- sanitizeAssistantReply の import を削除しました。
-- assistantText を sanitize 後の別文字列へ差し替える処理をやめ、hopy_confirmed_payload.reply から回収した確定本文だけをそのまま返す形に戻しました。
-- これにより、このファイル内で reply と state の出どころがズレる経路を止めました。
-- retry、speed_audit、memory_candidates 回収、compass 必須判定、confirmed payload 組み立ての責務には触っていません。
-*/
+- needsStructuredRetry から Future Chain context 不足時 retry 判定を削除しました。
+- このファイルの retry 対象を state / Compass 不足だけに戻しました。
+- future_chain_context は、モデルが返した場合のみ回収して次段へ渡します。
+- Future Chain の意味生成、state_changed 再判定、Compass 判定、HOPY回答○判定、DB保存、UI表示はこのファイルでは行っていません。
 
-/* /app/api/chat/_lib/route/openai.ts */
-// このファイルの正式役割: OpenAI の確定意味ペイロードを回収し、そのまま次段へ渡すファイル
+/app/api/chat/_lib/route/openai.ts
+*/

@@ -12,46 +12,27 @@ export type ChatFutureChainNoticeProps = {
 };
 
 export function ChatFutureChainNotice({
-  futureChainPersist,
+  futureChainPersist: _futureChainPersist,
 }: ChatFutureChainNoticeProps) {
-  const shouldShow =
-    futureChainPersist?.ok === true &&
-    futureChainPersist.decision === "save" &&
-    Boolean(futureChainPersist.patternId);
-
-  if (!shouldShow) {
-    return null;
-  }
-
-  return (
-    <section
-      aria-label="Future Chain"
-      className="mt-3 rounded-2xl border border-slate-200/80 bg-white/70 px-4 py-3 text-sm text-slate-700 shadow-sm"
-    >
-      <p className="text-xs font-medium tracking-[0.08em] text-slate-400">
-        FUTURE CHAIN
-      </p>
-      <p className="mt-1 font-medium text-slate-800">
-        未来の誰かへ、支えとして残しました。
-      </p>
-      <p className="mt-1 leading-relaxed text-slate-600">
-        この前進は、会話本文や個人情報ではなく、抽象化された支援パターンとして保存されています。
-      </p>
-    </section>
-  );
+  return null;
 }
 
 /*
 【このファイルの正式役割】
-Future Chain の保存結果を受け取り、保存成功時だけ小さな通知UIとして表示する描画専用コンポーネント。
-このファイルは Future Chain の保存可否、state_changed、state_level、Compass、HOPY回答○、DB取得、payload生成を再判定しない。
-受け取った futureChainPersist の結果をもとに、decision が save の場合だけ表示する。
+旧 Future Chain v2 の保存成功通知UIを受け止める互換コンポーネント。
+v3では Future Chain の本表示位置をこのファイルに持たせない。
+owner_handoff は Compass下、recipient_support は HOPY回答下に表示する方針のため、
+このファイルでは旧 notice を表示せず null を返す。
+
+このファイルは Future Chain の保存可否、state_changed、state_level、Compass、HOPY回答○、
+DB取得、payload生成、表示payload生成、recipient_support検索を再判定しない。
 
 【今回このファイルで修正したこと】
-- Future Chain 保存成功時に表示するための新規UIコンポーネントを作成した。
-- skip / failed / null の場合は何も表示しないようにした。
-- ChatClientView 側を重くしないため、表示責務を新規ファイルへ分離した。
-- HOPY唯一の正、state_changed、Compass、HOPY回答○、Future Chain保存処理、DB、MEMORIES、DASHBOARDには触れていない。
+- v2の保存成功通知UIを表示しないようにしました。
+- futureChainPersist を受け取る互換propsは残し、ChatClientView 側の既存importを壊さない形にしました。
+- 入力欄上・本文最下部に出ていた旧 FUTURE CHAIN notice を止めました。
+- v3本来の owner_handoff / recipient_support 表示はまだこのファイルには実装していません。
+- HOPY唯一の正、state_changed、Compass、HOPY回答○、Future Chain保存処理、DB、MEMORIES、DASHBOARDには触れていません。
 
 /components/chat/view/ChatFutureChainNotice.tsx
 */

@@ -13,6 +13,7 @@ import {
   type AssistantDotMeta,
 } from "./chatStreamAssistantState";
 import ChatStreamCompass from "./ChatStreamCompass";
+import ChatStreamFutureChain from "./ChatStreamFutureChain";
 import ChatStreamLoadingRow from "./chatStreamLoadingRow";
 import {
   getChatStreamViewItems,
@@ -140,6 +141,10 @@ function ChatStreamInner(props: {
       return <ChatStreamCompass key={it.key} item={it} />;
     }
 
+    if (it.kind === "future_chain") {
+      return <ChatStreamFutureChain key={it.key} item={it} />;
+    }
+
     const role = it.role;
 
     return (
@@ -196,17 +201,16 @@ export default ChatStream;
 【このファイルの正式役割】
 チャット本文の描画ファイル。
 受け取った rendered / visibleTexts を、そのまま表示用 viewItems に変換し、
-MessageRow / DayDivider / Compass / LoadingRow を描画する。
+MessageRow / DayDivider / Compass / Future Chain / LoadingRow を描画する。
 このファイルは本文採用や thread 判定を持たず、表示だけを担当する。
 */
 
 /*
 【今回このファイルで修正したこと】
-1. 本文末尾の bottom spacer を 132px から 72px に下げました。
-2. 入力欄へのかぶりを避けつつ、アクセス時に本文が上へ押し上がりすぎない位置へ戻しました。
-3. 本文がない場合は bottom spacer を 0px にしました。
-4. YOU と HOPY の1往復が見えやすい表示位置に寄せました。
-5. 本文採用、thread 判定、送信処理、jumpボタン判定、confirmed payload、state_changed、HOPY回答○、Compass、DB保存/復元、1..5 の唯一の正には触っていません。
+- ChatStreamFutureChain を import しました。
+- kind: "future_chain" の分岐を return null から ChatStreamFutureChain 表示へ接続しました。
+- Future Chain 本表示UIは ChatStreamFutureChain.tsx に分離し、このファイルには直書きしていません。
+- 本文採用、thread 判定、送信処理、jumpボタン判定、confirmed payload、state_changed、HOPY回答○、Compass、DB保存/復元、1..5 の唯一の正には触っていません。
 */
 
 /* /components/chat/view/ChatStream.tsx */
