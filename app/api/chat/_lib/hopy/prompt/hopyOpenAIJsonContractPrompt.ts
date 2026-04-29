@@ -9,28 +9,26 @@ function normalizeResolvedPlan(value: ResolvedPlanLike): string {
 function buildFutureChainContractLines(args: { uiLang: Lang }): string[] {
   if (args.uiLang === "ja") {
     return [
-      "Future Chain v3.1 ルール:",
-      "この OpenAI JSON 契約では、future_chain_context を必須にしない。",
-      "Future Chain v3.1 の主役は、OpenAI JSON内で生成する4項目ではなく、回答確定後にHOPY回答本文から安全に切り出す handoff_message_snapshot です。",
-      'future_chain_context を top-level に返してはならない。',
-      "future_chain_context を返す場合でも、必ず hopy_confirmed_payload の内側だけに置くこと。",
-      "future_chain_context には、個人情報・企業機密・ユーザー発話生文・HOPY回答全文・Compass全文を入れてはならない。",
-      "Future Chain の長い4項目、handoff本文、未来ユーザー向け文言を、このJSON契約で無理に生成してはならない。",
-      "future_chain_context が不要または長くなりそうな場合は、省略してよい。",
-      "owner_handoff と recipient_support を同時に出してはならない。",
+      "Future Chain v3.1 境界ルール:",
+      "この OpenAI JSON 契約では、future_chain_context を返してはならない。",
+      "Future Chain v3.1 の future_chain_context / handoff_message_snapshot は、回答確定後の専用処理で作る。",
+      "OpenAI JSON内で owner_handoff / recipient_support / recipient_support_query / handoff_message_snapshot を生成してはならない。",
+      "future_chain_context を top-level に返してはならない。",
+      "hopy_confirmed_payload の内側にも future_chain_context を置いてはならない。",
+      "Future Chain の長い4項目、handoff本文、未来ユーザー向け文言を、このJSON契約で生成してはならない。",
+      "HOPY回答本文、Compass全文、ユーザー発話生文、個人情報、企業機密を Future Chain 用JSONとして作ってはならない。",
     ];
   }
 
   return [
-    "Future Chain v3.1 rule:",
-    "In this OpenAI JSON contract, future_chain_context is not required.",
-    "The core of Future Chain v3.1 is not four generated fields inside the OpenAI JSON, but a handoff_message_snapshot safely extracted from the finalized HOPY reply after the reply is confirmed.",
+    "Future Chain v3.1 boundary rule:",
+    "Do not return future_chain_context in this OpenAI JSON contract.",
+    "Future Chain v3.1 future_chain_context and handoff_message_snapshot are created by the post-confirmation dedicated flow.",
+    "Do not generate owner_handoff, recipient_support, recipient_support_query, or handoff_message_snapshot inside the OpenAI JSON.",
     "Never return future_chain_context at the top level.",
-    'If future_chain_context is returned, it must be inside "hopy_confirmed_payload" only.',
-    "Do not include personal information, company secrets, raw user text, the full HOPY reply, or the full Compass text in future_chain_context.",
-    "Do not force long Future Chain fields, handoff text, or future-user-facing text into this JSON contract.",
-    "Omit future_chain_context when it is unnecessary or would become long.",
-    "Never output owner_handoff and recipient_support at the same time.",
+    'Never include future_chain_context inside "hopy_confirmed_payload" either.',
+    "Do not generate long Future Chain fields, handoff text, or future-user-facing text in this JSON contract.",
+    "Do not create Future Chain JSON from the full HOPY reply, full Compass text, raw user text, personal information, or company secrets.",
   ];
 }
 
@@ -70,7 +68,7 @@ export function buildStateStructureSystem(args: { uiLang: Lang }): string {
       '  "confirmed_memory_candidates": []',
       "}",
       "重要: 上の 3 / 2 / true は固定コピー禁止。今回ターンに合わない場合は必ず変更すること。",
-      "重要: Future Chain v3.1 の handoff_message_snapshot は、このJSONで長く生成せず、回答確定後の専用処理で作る。",
+      "重要: Future Chain v3.1 の handoff_message_snapshot は、このJSONで生成せず、回答確定後の専用処理で作る。",
     ].join("\n");
   }
 
@@ -108,7 +106,7 @@ export function buildStateStructureSystem(args: { uiLang: Lang }): string {
     '  "confirmed_memory_candidates": []',
     "}",
     "Important: the 3 / 2 / true values must not be copied blindly. Change them whenever they do not match this turn.",
-    "Important: Future Chain v3.1 handoff_message_snapshot must not be generated as long JSON here; it is created by the post-confirmation dedicated flow.",
+    "Important: Future Chain v3.1 handoff_message_snapshot must not be generated as JSON here; it is created by the post-confirmation dedicated flow.",
   ].join("\n");
 }
 
@@ -211,6 +209,7 @@ export function buildEmptyJsonRetrySystem(args: { uiLang: Lang }): string {
       '"hopy_confirmed_payload.state" は必須です。',
       '"confirmed_memory_candidates" は空配列でもよいので必ず返してください。',
       "top-level の reply / state / compassText / compassPrompt / future_chain_context は禁止です。",
+      "hopy_confirmed_payload.future_chain_context も返してはなりません。",
       "state_changed を false に固定して逃げてはいけません。",
       "JSON object の外に説明文を出してはいけません。",
       ...buildFutureChainContractLines({ uiLang: args.uiLang }),
@@ -227,6 +226,7 @@ export function buildEmptyJsonRetrySystem(args: { uiLang: Lang }): string {
     '"hopy_confirmed_payload.state" is required.',
     '"confirmed_memory_candidates" may be empty but must be present.',
     "Top-level reply, state, compassText, compassPrompt, and future_chain_context are forbidden.",
+    'Do not return "hopy_confirmed_payload.future_chain_context" either.',
     "Do not escape by defaulting state_changed to false.",
     "Do not output any explanation outside the JSON object.",
     ...buildFutureChainContractLines({ uiLang: args.uiLang }),
@@ -241,6 +241,7 @@ export function buildContractRetrySystem(args: { uiLang: Lang }): string {
       "今回は hopy_confirmed_payload 正式shape を厳守してください。",
       "トップレベルキーは hopy_confirmed_payload / confirmed_memory_candidates のみです。",
       "top-level の reply / state / assistant_state / compassText / compassPrompt / compass / future_chain_context は禁止です。",
+      "hopy_confirmed_payload.future_chain_context も返してはなりません。",
       "hopy_confirmed_payload.state.current_phase / state_level / prev_phase / prev_state_level は 1|2|3|4|5 の整数必須です。",
       "hopy_confirmed_payload.state.state_changed は boolean 必須です。",
       "state_changed を false に固定してはなりません。",
@@ -248,8 +249,7 @@ export function buildContractRetrySystem(args: { uiLang: Lang }): string {
       "Plus / Pro では state_changed=true の回に hopy_confirmed_payload.compass.text を必ず非空で返してください。",
       "Plus / Pro では state_changed=true の回に hopy_confirmed_payload.compass.prompt も必ず非空で返してください。",
       "空文字や省略や fallback でごまかしてはいけません。",
-      "future_chain_context は top-level ではなく、返す場合だけ hopy_confirmed_payload の内側に置いてください。",
-      "Future Chain v3.1 の handoff_message_snapshot は、このJSONで長く生成せず、回答確定後の専用処理で作ります。",
+      "Future Chain v3.1 の handoff_message_snapshot は、このJSONで生成せず、回答確定後の専用処理で作ります。",
       "必ず JSON object 1個だけを返してください。",
       "JSON object の外に説明文を出してはいけません。",
       ...buildFutureChainContractLines({ uiLang: args.uiLang }),
@@ -277,6 +277,7 @@ export function buildContractRetrySystem(args: { uiLang: Lang }): string {
     "Return the official hopy_confirmed_payload shape exactly this time.",
     'The top-level keys must be only "hopy_confirmed_payload" and "confirmed_memory_candidates".',
     "Top-level reply, state, assistant_state, compassText, compassPrompt, compass, and future_chain_context are forbidden.",
+    'Do not return "hopy_confirmed_payload.future_chain_context" either.',
     "hopy_confirmed_payload.state.current_phase, state_level, prev_phase, and prev_state_level must be integers in 1|2|3|4|5.",
     "hopy_confirmed_payload.state.state_changed must be a boolean.",
     "Do not hard-code state_changed to false.",
@@ -284,8 +285,7 @@ export function buildContractRetrySystem(args: { uiLang: Lang }): string {
     'On Plus / Pro, when state_changed=true, "hopy_confirmed_payload.compass.text" must be non-empty.',
     'On Plus / Pro, when state_changed=true, "hopy_confirmed_payload.compass.prompt" must also be non-empty.',
     "Do not fake compliance with empty strings, omissions, or fallback text.",
-    'future_chain_context must never be top-level; include it only inside "hopy_confirmed_payload" when returned.',
-    "Future Chain v3.1 handoff_message_snapshot must not be generated as long JSON here; it is created by the post-confirmation dedicated flow.",
+    "Future Chain v3.1 handoff_message_snapshot must not be generated as JSON here; it is created by the post-confirmation dedicated flow.",
     "Return exactly one JSON object.",
     "Do not output any explanation outside the JSON object.",
     ...buildFutureChainContractLines({ uiLang: args.uiLang }),
@@ -311,16 +311,15 @@ export function buildContractRetrySystem(args: { uiLang: Lang }): string {
 【このファイルの正式役割】
 OpenAI 実行層で使う HOPY JSON 契約プロンプト文言を生成するファイル。
 hopy_confirmed_payload の shape、state 1..5、state_changed、Compass、retry 時の契約再指示を文言として返す責務だけを持つ。
-Future Chain v3.1 の handoff_message_snapshot 生成、Future Chain 保存、表示、配信判定は担当しない。
+Future Chain v3.1 の future_chain_context / handoff_message_snapshot 生成、Future Chain 保存、表示、配信判定は担当しない。
 OpenAI completion 実行、timeout / retry 実行、JSON parse、契約検証、DB保存復元、HOPY唯一の正の再判定、Future Chain の意味生成・保存・表示は担当しない。
 
 【今回このファイルで修正したこと】
-- hopy_confirmed_payload.future_chain_context 必須指示を削除しました。
-- Future Chain の長い正式shape例と owner_handoff 4項目生成例を削除しました。
-- buildStateStructureSystem(...) の正式JSON構造例を reply / state / confirmed_memory_candidates の安定形へ戻しました。
-- buildEmptyJsonRetrySystem(...) と buildContractRetrySystem(...) から future_chain_context 必須指示を削除しました。
+- OpenAI JSON契約内で future_chain_context を任意返却できる余地を削除しました。
+- hopy_confirmed_payload.future_chain_context も返さない境界ルールへ変更しました。
+- owner_handoff / recipient_support / recipient_support_query / handoff_message_snapshot を OpenAI JSON内で生成しない指示へ統一しました。
+- Future Chain v3.1 の future_chain_context / handoff_message_snapshot は回答確定後の専用処理で作る方針へそろえました。
 - top-level future_chain_context 禁止は維持しました。
-- Future Chain v3.1 の handoff_message_snapshot は OpenAI JSONではなく、回答確定後の専用処理で作る方針を明記しました。
 - state 1..5、state_changed、Compass、confirmed_memory_candidates の契約は維持しました。
 - DB、UI、Future Chain 保存処理、表示処理、plan gate、HOPY唯一の正の再判定はこのファイルでは触っていません。
 
