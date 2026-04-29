@@ -49,6 +49,21 @@ function normalizeTransitionKind(
   return null;
 }
 
+function resolveTransitionKindFromStateLevels(params: {
+  fromStateLevel: HopyFutureChainStateLevel;
+  toStateLevel: HopyFutureChainStateLevel;
+}): HopyFutureChainTransitionKind {
+  if (params.toStateLevel > params.fromStateLevel) {
+    return "upward";
+  }
+
+  if (params.toStateLevel < params.fromStateLevel) {
+    return "downward";
+  }
+
+  return "same_level";
+}
+
 function isValidTransitionMeaning(value: unknown): boolean {
   const text = normalizeText(value);
 
@@ -214,11 +229,11 @@ export function checkFutureChainSavePreconditions(params: {
     };
   }
 
-  const transitionKind = normalizeTransitionKind(
+  const contextTransitionKind = normalizeTransitionKind(
     futureChainContext.transition_kind,
   );
 
-  if (!transitionKind) {
+  if (!contextTransitionKind) {
     return {
       decision: "skip",
       reason: "future_chain_context.transition_kind が不正",
@@ -226,7 +241,21 @@ export function checkFutureChainSavePreconditions(params: {
     };
   }
 
-  if (transitionKind === "same_level") {
+  const confirmedTransitionKind = resolveTransitionKindFromStateLevels({
+    fromStateLevel,
+    toStateLevel,
+  });
+
+  if (contextTransitionKind !== confirmedTransitionKind) {
+    return {
+      decision: "skip",
+      reason:
+        "confirmed state の前後関係と future_chain_context.transition_kind が一致しない",
+      status: "none",
+    };
+  }
+
+  if (confirmedTransitionKind === "same_level") {
     return {
       decision: "skip",
       reason: "same_level は保存候補にしない",
@@ -249,7 +278,7 @@ export function checkFutureChainSavePreconditions(params: {
     status: "none",
     fromStateLevel,
     toStateLevel,
-    transitionKind,
+    transitionKind: confirmedTransitionKind,
   };
 }
 
@@ -265,10 +294,10 @@ state_changed再判定、state_level再判定、current_phase再判定、
 Compass再判定、HOPY回答○再判定を担当しない。
 
 【今回このファイルで修正したこと】
-- 旧v3の owner_handoff.insight / hint / flow / reason 必須チェックを削除しました。
-- owner_handoff 保存前チェックを、support_shape_key / transition_meaning / handoff_message_snapshot 必須へ変更しました。
-- major_category / minor_category / change_trigger_key は v3.1 candidate側で最小分類値を補うため、保存前チェックでは必須にしない形へ変更しました。
-- delivery_mode owner_handoff、transition_kind、same_level除外、state_changed確認、状態値1..5確認は維持しました。
+- confirmed state の prev_state_level / state_level から transition_kind を導出する処理を追加しました。
+- future_chain_context.transition_kind と confirmed state 由来の transition_kind が一致しない場合は skip するようにしました。
+- 保存前チェックの continue 結果では、future_chain_context の値ではなく confirmed state 由来の transition_kind を返すようにしました。
+- delivery_mode owner_handoff、same_level除外、state_changed確認、状態値1..5確認、support_shape_key / transition_meaning / handoff_message_snapshot 必須チェックは維持しました。
 - candidate生成、DB insert、UI判定、recipient_support検索、delivery_event保存には触れていません。
 
 /app/api/chat/_lib/hopy/future-chain/futureChainCheck.ts
