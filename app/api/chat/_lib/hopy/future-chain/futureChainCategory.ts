@@ -71,6 +71,17 @@ export type FutureChainCategoryMinor =
   | "planning";
 
 export type FutureChainCategoryChangeTriggerKey =
+  | "verbalized"
+  | "narrowed_to_one"
+  | "noticed_true_feeling"
+  | "stated_action"
+  | "accepted_discomfort"
+  | "found_priority"
+  | "found_purpose"
+  | "noticed_fear_source"
+  | "allowed_to_release"
+  | "rested_before_action"
+  | "reset_premise"
   | "write_down_one_concern"
   | "name_current_feeling"
   | "notice_inner_reaction"
@@ -734,6 +745,105 @@ function resolveCategoryConfidence(
 function resolveChangeTriggerKey(
   sourceText: string,
 ): FutureChainCategoryChangeTriggerKey {
+  if (includesAnyKeyword(sourceText, ["話せた", "言えた", "言葉にでき", "表に出"])) {
+    return "verbalized";
+  }
+
+  if (
+    includesAnyKeyword(sourceText, [
+      "一つに絞",
+      "ひとつに絞",
+      "絞れ",
+      "絞りました",
+      "選べた",
+    ])
+  ) {
+    return "narrowed_to_one";
+  }
+
+  if (includesAnyKeyword(sourceText, ["本音", "本当は", "本当の気持ち"])) {
+    return "noticed_true_feeling";
+  }
+
+  if (
+    includesAnyKeyword(sourceText, [
+      "やります",
+      "始めます",
+      "進めます",
+      "実行します",
+      "取り組みます",
+    ])
+  ) {
+    return "stated_action";
+  }
+
+  if (
+    includesAnyKeyword(sourceText, [
+      "不安でも",
+      "怖いけど",
+      "苦しいけど",
+      "違和感を受け入",
+      "受け止め",
+    ])
+  ) {
+    return "accepted_discomfort";
+  }
+
+  if (
+    includesAnyKeyword(sourceText, [
+      "優先が見え",
+      "優先順位が見え",
+      "大事なのは",
+      "まずこれ",
+    ])
+  ) {
+    return "found_priority";
+  }
+
+  if (includesAnyKeyword(sourceText, ["目的", "意味", "何のため", "理由が見え"])) {
+    return "found_purpose";
+  }
+
+  if (
+    includesAnyKeyword(sourceText, [
+      "怖さの原因",
+      "不安の原因",
+      "恐れて",
+      "怖がって",
+      "原因が見え",
+    ])
+  ) {
+    return "noticed_fear_source";
+  }
+
+  if (
+    includesAnyKeyword(sourceText, [
+      "手放して",
+      "離れて",
+      "やめてもいい",
+      "しなくていい",
+      "許可",
+    ])
+  ) {
+    return "allowed_to_release";
+  }
+
+  if (includesAnyKeyword(sourceText, ["休んでから", "休む", "眠ってから", "寝てから"])) {
+    return "rested_before_action";
+  }
+
+  if (
+    includesAnyKeyword(sourceText, [
+      "前提を見直",
+      "前提を戻",
+      "考え直",
+      "立て直",
+      "リセット",
+    ])
+  ) {
+    return "reset_premise";
+  }
+
   if (
     includesAnyKeyword(sourceText, [
       "箇条書き",
@@ -855,15 +965,11 @@ current_phase再判定、Compass表示可否判定、HOPY回答○判定、
 recipient_support検索、delivery_event保存、UI表示を担当しない。
 
 【今回このファイルで修正したこと】
-- major_category を「支援領域」ではなく「何の会話か」に寄せた。
-- weather / fashion / romance / parenting / caregiving / menopause / pain / beauty など、現実の会話場面を分類できるようにした。
-- minor_category を「どんな悩み方・詰まり方か」に寄せた。
-- practical_choice / guilt / repair / pain / sleep_issue / risk_awareness / information_search など、HOPY回答の方向に関わる詰まり方を分類できるようにした。
-- userMessage / recentUserText を受け取れるようにした。
-- fallback の major_category を other にし、軽い挨拶などを支援領域に寄せすぎないようにした。
-- 「おはようございます」のような軽い入力を action_execution + first_step に寄せる旧構造をやめた。
-- HOPY回答やCompassをAIで再要約する処理は入れていない。
-- OpenAI JSON契約にカテゴリを増やす処理は入れていない。
+- FutureChainCategoryChangeTriggerKey を Future Chain v3.1 / DB制約側の許可キーへそろえました。
+- resolveChangeTriggerKey(...) で verbalized / narrowed_to_one / noticed_true_feeling / stated_action / accepted_discomfort / found_priority / found_purpose / noticed_fear_source / allowed_to_release / rested_before_action / reset_premise を返せるようにしました。
+- 既存の write_down_one_concern / name_current_feeling / notice_inner_reaction / choose_one_next_step / narrow_priority / accept_incomplete_state / pause_before_action / break_down_task / compare_options / define_success_condition / ask_one_question / reconnect_with_reason / notice_pattern / continue_small / handoff_message_snapshot は維持しました。
+- major_category / minor_category の分類、DB保存、保存前チェック、UI表示、recipient_support検索、delivery_event保存には触れていません。
+- state_changed、state_level、current_phase、prev系、Compass表示可否、HOPY回答○表示可否は再判定していません。
 
 /app/api/chat/_lib/hopy/future-chain/futureChainCategory.ts
 */
