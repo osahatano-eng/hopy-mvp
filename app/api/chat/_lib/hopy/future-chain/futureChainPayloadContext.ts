@@ -168,21 +168,6 @@ const CHANGE_TRIGGER_KEYS = new Set<string>([
   "allowed_to_release",
   "rested_before_action",
   "reset_premise",
-  "write_down_one_concern",
-  "name_current_feeling",
-  "notice_inner_reaction",
-  "choose_one_next_step",
-  "narrow_priority",
-  "accept_incomplete_state",
-  "pause_before_action",
-  "break_down_task",
-  "compare_options",
-  "define_success_condition",
-  "ask_one_question",
-  "reconnect_with_reason",
-  "notice_pattern",
-  "continue_small",
-  "handoff_message_snapshot",
 ]);
 
 const DISPLAY_MODES = new Set<HopyFutureChainDisplayMode>([
@@ -496,6 +481,13 @@ export function resolveFutureChainContextForConfirmedPayload(
     return null;
   }
 
+  if (
+    context.deliveryMode === "owner_handoff" &&
+    !hasFutureChainOwnerHandoffContext(context)
+  ) {
+    return null;
+  }
+
   if (context.deliveryMode === "recipient_support" && params.stateChanged) {
     return null;
   }
@@ -508,6 +500,9 @@ export function hasFutureChainOwnerHandoffContext(
 ): boolean {
   return (
     context.deliveryMode === "owner_handoff" &&
+    context.majorCategory !== null &&
+    context.minorCategory !== null &&
+    context.changeTriggerKey !== null &&
     context.transitionKind !== null &&
     context.transitionKind !== "same_level" &&
     context.transitionMeaning !== null &&
@@ -543,11 +538,12 @@ Compass再判定、UI表示判定、HOPY回答再要約、Compass再要約、
 ユーザー発話読み取りを担当しない。
 
 【今回このファイルで修正したこと】
-- major_category / minor_category / change_trigger_key の許可キーを、HOPY会話カテゴリ認識 v1 / Future Chain v3.1 の新カテゴリへ更新しました。
-- normalizeMajorCategory / normalizeMinorCategory / normalizeChangeTriggerKey が新カテゴリを null に戻さないようにしました。
-- HOPY回答確定時に受け取った rawContext のカテゴリ値を、confirmed payload の future_chain_context へ通せるようにしました。
+- change_trigger_key の許可キーを、DB制約と同じ基本11キーにそろえました。
+- narrow_priority や handoff_message_snapshot など、DB制約外になった旧・拡張キーを confirmed payload へ通さないようにしました。
+- owner_handoff は major_category / minor_category / change_trigger_key / transition_kind / transition_meaning / support_shape_key / handoff_message_snapshot がそろう場合だけ confirmed payload へ通すようにしました。
+- DBへ保存できない owner_handoff が画面にだけ表示され、復元できず消える状態を防ぐため、rawContext 正規化時点で不足contextを通さないようにしました。
 - HOPY回答、Compass、ユーザー発話生文、DB保存、recipient_support検索、delivery_event保存、UI表示には触れていません。
 - state_changed、state_level、current_phase、prev系、Compass表示可否、HOPY回答○表示可否は再判定していません。
 
-/app/api/chat/_lib/hopy/future-chain/futureChainPayloadContext.ts
+ /app/api/chat/_lib/hopy/future-chain/futureChainPayloadContext.ts
 */
