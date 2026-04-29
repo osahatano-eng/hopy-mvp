@@ -579,12 +579,11 @@ state_level再判定、current_phase再判定、Compass再判定、
 HOPY回答再要約、Compass再要約、ユーザー発話読み取りを担当しない。
 
 【今回このファイルで修正したこと】
-- major_category / minor_category の旧カテゴリfallbackを削除した。
-- change_trigger_key / support_shape_key のfallbackも削除した。
-- hopy_confirmed_payload.future_chain_context の major_category / minor_category / change_trigger_key / support_shape_key が不足している場合は、旧値で補完せず保存候補生成をskipするようにした。
-- Future Chain保存層がカテゴリを作り直さず、hopy_confirmed_payload.future_chain_context の確定値だけをDB保存候補へ渡す形に戻した。
-- HOPY回答やCompassをFuture Chain側で再要約していない。
-- 保存前チェック、DB insert、DB制約、UI、HOPY回答○、Compass表示、MEMORIES、DASHBOARDには触れていない。
+- build error の直接原因だった bridge_event candidate の型不一致を解消するため、owner_user_id / delivery_eligible を bridge_event candidate に戻しました。
+- owner_user_id / delivery_eligible は candidate 型との整合用に保持し、現行の futureChainPersist.ts ではDBへinsertしない方針を維持します。
+- major_category / minor_category / change_trigger_key / support_shape_key は hopy_confirmed_payload.future_chain_context の確定値だけを受け取り、不足時は旧値で補完せず保存候補生成をskipする方針を維持しました。
+- HOPY回答やCompassをFuture Chain側で再要約していません。
+- 保存前チェック、DB insert、DB制約、UI、HOPY回答○、Compass表示、MEMORIES、DASHBOARDには触れていません。
 
 /app/api/chat/_lib/hopy/future-chain/futureChainCandidate.ts
 */
