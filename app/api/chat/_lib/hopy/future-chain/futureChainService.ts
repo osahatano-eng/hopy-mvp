@@ -88,7 +88,7 @@ export async function saveFutureChainFromConfirmedPayload(params: {
 【このファイルの正式役割】
 HOPY Future Chain DB の入口関数だけを担当する。
 hopy_confirmed_payload 起点の sourceContext を受け取り、
-Future Chain v3 の保存フロー executeFutureChainSaveFlow(...) へ渡し、
+Future Chain v3.1 の保存フロー executeFutureChainSaveFlow(...) へ渡し、
 呼び出し元へ保存結果を返す。
 
 このファイルは保存前チェックの中身、candidate生成の中身、DB insert の中身、
@@ -96,11 +96,11 @@ HOPY回答再要約、Compass再要約、Future Chain意味生成、state_change
 state_level再判定、current_phase再判定、Compass再判定、HOPY回答○再判定を担当しない。
 
 【今回このファイルで修正したこと】
-- checkFutureChainSavePreconditions(...) / buildFutureChainCandidate(...) / insertFutureChainPattern(...) の直呼びを削除しました。
-- Future Chain v3 の保存入口を executeFutureChainSaveFlow(...) へ接続しました。
-- authenticatedTurnDeps.ts 側の saveFutureChainFromConfirmedPayload(...) 呼び出し口は維持しました。
-- check / insert 互換名は、呼び出し元が結果を参照しやすいように saveCheck / persist の中継として残しました。
-- 保存前チェック、candidate生成、DB保存、UI、状態判定、Compass、HOPY回答○には触れていません。
+- 削除済みの旧Repositoryルートに関する insertFutureChainPattern(...) 表記をコメントから削除しました。
+- Future Chain v3.1 の保存入口が executeFutureChainSaveFlow(...) であることが分かるコメントへ整理しました。
+- authenticatedTurnDeps.ts 側の saveFutureChainFromConfirmedPayload(...) 呼び出し口は維持しています。
+- check / insert 互換名は、呼び出し元が結果を参照しやすいように saveCheck / persist の中継として残しています。
+- 実行コード、保存前チェック、candidate生成、DB保存、UI、状態判定、Compass、HOPY回答○には触れていません。
 
 /app/api/chat/_lib/hopy/future-chain/futureChainService.ts
 */
