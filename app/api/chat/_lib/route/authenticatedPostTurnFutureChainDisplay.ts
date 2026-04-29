@@ -218,14 +218,21 @@ export async function attachFutureChainDisplayToPayload(params: {
     return params.payload;
   }
 
+  const recipientMajorCategory = normalizeText(context.major_category);
+  const recipientMinorCategory = normalizeText(context.minor_category);
+
+  if (!recipientMajorCategory || !recipientMinorCategory) {
+    return params.payload;
+  }
+
   const selectedRecipientSupport = await selectFutureChainRecipientSupport({
     supabase: params.supabase,
     language: resolvePayloadLanguage(payloadRecord),
     excludeSourceAssistantMessageId: assistantMessageId,
     recipientThreadId: params.recipientThreadId,
     recipientStateLevel: resolveRecipientStateLevel(hopyConfirmedPayload),
-    recipientMajorCategory: normalizeText(context.major_category),
-    recipientMinorCategory: normalizeText(context.minor_category),
+    recipientMajorCategory,
+    recipientMinorCategory,
     recipientChangeTriggerKey: normalizeText(context.change_trigger_key),
     limit: 20,
   });
@@ -259,22 +266,21 @@ export async function attachFutureChainDisplayToPayload(params: {
 【このファイルの正式役割】
 authenticated postTurn の最終 payload に、Future Chain v3.1 の表示payloadだけを安全に付与する。
 payload.hopy_confirmed_payload.future_chain_context を読み、owner_handoff または recipient_support の表示payloadを作れる場合だけ payload.future_chain_display に載せる。
-recipient_support の場合は plan gate をこのファイル内で行い、Free では表示せず、Plus ではたまに、Pro では support_needed=true の場面で候補選択へ進む。
+recipient_support の場合は、delivery_mode="recipient_support"、support_needed=true、plan gate、検索に必要なカテゴリ値がそろっている場合だけ候補選択へ進む。
 候補選択では、保存済み hopy_future_chain_bridge_events から handoff_message_snapshot を1件だけ選び、buildFutureChainDisplayPayload(...) に渡す。
 
 このファイルは HOPY回答再要約、Compass再要約、Future Chain意味生成、state_changed再判定、state_level再判定、current_phase再判定、Compass表示可否判定、HOPY回答○判定、owner_handoff保存、delivery_event保存、UI本体表示、Future Chainページ集計を担当しない。
 
 【今回このファイルで修正したこと】
-- context が null の場合は recipient_support 選択へ進まないよう、分岐条件を TypeScript が安全に判定できる形へ修正した。
-- hopy_confirmed_payload.state から recipientStateLevel を読み取る処理は維持した。
-- future_chain_context から recipientMajorCategory / recipientMinorCategory / recipientChangeTriggerKey を読み取る処理は維持した。
-- selectFutureChainRecipientSupport(...) へ recipientStateLevel / recipientMajorCategory / recipientMinorCategory / recipientChangeTriggerKey を渡す処理は維持した。
-- recipientThreadId の受け渡しは維持した。
+- 表示側に残っていた旧カテゴリゲートを削除した。
+- self_understanding / emotional_regulation / work_career / life_direction / action_execution / recovery_resilience / learning_creation など、旧カテゴリ前提の判定を削除した。
+- recipient_support の必要性は、hopy_confirmed_payload.future_chain_context.delivery_mode と support_needed を正として扱う形に戻した。
+- major_category + minor_category の組み合わせ判定は、futureChainContextFromFinalizedTurn.ts 側で確定した future_chain_context に任せ、このファイルでは再判定しないようにした。
+- このファイルでは plan gate と DB検索に必要な category 値の存在確認だけを行うようにした。
 - Free では recipient_support を表示しない方針を維持した。
 - Plus では assistantMessageId を使った安定的な分岐で「たまに届く」挙動を維持した。
-- Pro では support_needed=true の場合に候補選択へ進む方針を維持した。
-- owner_handoff 側は DB検索せず、既存の hopy_confirmed_payload.future_chain_context から表示payloadを作るだけにした。
-- delivery_event保存、UI本体、owner_handoff保存導線、本番gitには触れていない。
+- Pro でも delivery_mode="recipient_support" かつ support_needed=true の時だけ候補選択へ進むようにした。
+- hopy_confirmed_payload / state_changed / state_level / current_phase / Compass / HOPY回答○ / owner_handoff / DB保存 / DB復元 / UI本体には触れていない。
 
 /app/api/chat/_lib/route/authenticatedPostTurnFutureChainDisplay.ts
 */

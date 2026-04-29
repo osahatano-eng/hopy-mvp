@@ -287,42 +287,26 @@ function resolveTransitionMeaning(
 
 function resolveMajorCategory(
   context: HopyFutureChainPayloadContext,
-): NonNullable<HopyFutureChainPayloadContext["majorCategory"]> {
-  return (
-    context.majorCategory ||
-    ("self_understanding" as NonNullable<
-      HopyFutureChainPayloadContext["majorCategory"]
-    >)
-  );
+): NonNullable<HopyFutureChainPayloadContext["majorCategory"]> | null {
+  return context.majorCategory || null;
 }
 
 function resolveMinorCategory(
   context: HopyFutureChainPayloadContext,
-): NonNullable<HopyFutureChainPayloadContext["minorCategory"]> {
-  return (
-    context.minorCategory ||
-    ("unclear_thoughts" as NonNullable<
-      HopyFutureChainPayloadContext["minorCategory"]
-    >)
-  );
+): NonNullable<HopyFutureChainPayloadContext["minorCategory"]> | null {
+  return context.minorCategory || null;
 }
 
 function resolveChangeTriggerKey(
   context: HopyFutureChainPayloadContext,
-): HopyFutureChainChangeTriggerKey {
-  return (
-    context.changeTriggerKey ||
-    ("handoff_message_snapshot" as HopyFutureChainChangeTriggerKey)
-  );
+): HopyFutureChainChangeTriggerKey | null {
+  return context.changeTriggerKey || null;
 }
 
 function resolveSupportShapeKey(
   context: HopyFutureChainPayloadContext,
-): HopyFutureChainSupportShapeKey {
-  return (
-    context.supportShapeKey ||
-    ("handoff_message_snapshot" as HopyFutureChainSupportShapeKey)
-  );
+): HopyFutureChainSupportShapeKey | null {
+  return context.supportShapeKey || null;
 }
 
 function resolveBridgeSummaryFromSnapshot(
@@ -430,9 +414,48 @@ export function buildFutureChainCandidate(params: {
   }
 
   const majorCategory = resolveMajorCategory(context);
+
+  if (!majorCategory) {
+    return {
+      decision: "skip",
+      reason:
+        "hopy_confirmed_payload.future_chain_context.major_category が存在しないため保存候補を生成しない",
+      status: "none",
+    };
+  }
+
   const minorCategory = resolveMinorCategory(context);
+
+  if (!minorCategory) {
+    return {
+      decision: "skip",
+      reason:
+        "hopy_confirmed_payload.future_chain_context.minor_category が存在しないため保存候補を生成しない",
+      status: "none",
+    };
+  }
+
   const changeTriggerKey = resolveChangeTriggerKey(context);
+
+  if (!changeTriggerKey) {
+    return {
+      decision: "skip",
+      reason:
+        "hopy_confirmed_payload.future_chain_context.change_trigger_key が存在しないため保存候補を生成しない",
+      status: "none",
+    };
+  }
+
   const supportShapeKey = resolveSupportShapeKey(context);
+
+  if (!supportShapeKey) {
+    return {
+      decision: "skip",
+      reason:
+        "hopy_confirmed_payload.future_chain_context.support_shape_key が存在しないため保存候補を生成しない",
+      status: "none",
+    };
+  }
 
   const patternKey = buildPatternKey({
     fromStateLevel,
@@ -556,11 +579,10 @@ state_level再判定、current_phase再判定、Compass再判定、
 HOPY回答再要約、Compass再要約、ユーザー発話読み取りを担当しない。
 
 【今回このファイルで修正したこと】
-- major_category の fallback を旧 self から self_understanding に変更した。
-- minor_category の fallback を旧 action から unclear_thoughts に変更した。
-- change_trigger_key の fallback を旧 verbalized から handoff_message_snapshot に変更した。
-- support_shape_key の fallback を旧 verbalization から handoff_message_snapshot に変更した。
-- hopy_confirmed_payload.future_chain_context にカテゴリがある場合は、その値を優先して bridge_event / candidate へ渡す既存方針は維持した。
+- major_category / minor_category の旧カテゴリfallbackを削除した。
+- change_trigger_key / support_shape_key のfallbackも削除した。
+- hopy_confirmed_payload.future_chain_context の major_category / minor_category / change_trigger_key / support_shape_key が不足している場合は、旧値で補完せず保存候補生成をskipするようにした。
+- Future Chain保存層がカテゴリを作り直さず、hopy_confirmed_payload.future_chain_context の確定値だけをDB保存候補へ渡す形に戻した。
 - HOPY回答やCompassをFuture Chain側で再要約していない。
 - 保存前チェック、DB insert、DB制約、UI、HOPY回答○、Compass表示、MEMORIES、DASHBOARDには触れていない。
 
