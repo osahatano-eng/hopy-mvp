@@ -48,29 +48,74 @@ export type HopyFutureChainDeliveryUsage =
   | "both";
 
 export type HopyFutureChainMajorCategory =
-  | "work"
-  | "relationship"
-  | "money"
+  | "weather"
+  | "fashion"
+  | "daily_life"
+  | "romance"
+  | "relationships"
   | "family"
+  | "parenting"
+  | "caregiving"
+  | "health"
+  | "mental_health"
+  | "sleep"
+  | "menopause"
+  | "pain"
+  | "work"
+  | "career"
+  | "school"
   | "learning"
-  | "development"
   | "creation"
+  | "development"
+  | "business"
+  | "money"
+  | "housing"
+  | "legal"
+  | "shopping"
+  | "travel"
+  | "food"
+  | "beauty"
+  | "pets"
+  | "community"
+  | "sns"
   | "life"
-  | "future"
-  | "self";
+  | "hopy"
+  | "other";
 
 export type HopyFutureChainMinorCategory =
   | "anxiety"
   | "confusion"
+  | "overwhelm"
+  | "low_energy"
+  | "unclear_thoughts"
+  | "unclear_feelings"
   | "decision"
-  | "action"
+  | "practical_choice"
+  | "communication"
+  | "boundary"
+  | "guilt"
+  | "repair"
+  | "priority_confusion"
+  | "task_overload"
+  | "first_step"
   | "continuity"
-  | "relationship"
-  | "confidence"
-  | "priority"
-  | "letting_go"
-  | "retry"
-  | "visualization";
+  | "recovery_pause"
+  | "readjustment"
+  | "pain"
+  | "sleep_issue"
+  | "risk_awareness"
+  | "self_doubt"
+  | "future_uncertainty"
+  | "value_clarification"
+  | "meaning_loss"
+  | "comparison"
+  | "loneliness"
+  | "anger"
+  | "sadness"
+  | "trust_issue"
+  | "role_pressure"
+  | "information_search"
+  | "planning";
 
 export type HopyFutureChainChangeTriggerKey =
   | "verbalized"
@@ -83,7 +128,22 @@ export type HopyFutureChainChangeTriggerKey =
   | "noticed_fear_source"
   | "allowed_to_release"
   | "rested_before_action"
-  | "reset_premise";
+  | "reset_premise"
+  | "write_down_one_concern"
+  | "name_current_feeling"
+  | "notice_inner_reaction"
+  | "choose_one_next_step"
+  | "narrow_priority"
+  | "accept_incomplete_state"
+  | "pause_before_action"
+  | "break_down_task"
+  | "compare_options"
+  | "define_success_condition"
+  | "ask_one_question"
+  | "reconnect_with_reason"
+  | "notice_pattern"
+  | "continue_small"
+  | "handoff_message_snapshot";
 
 export type HopyFutureChainSupportShapeKey = string;
 
@@ -152,6 +212,10 @@ export type HopyFutureChainConfirmedFutureChainContext = {
   transition_meaning: HopyFutureChainTransitionMeaning | null;
 
   support_shape_key: HopyFutureChainSupportShapeKey | null;
+
+  handoff_message_snapshot: string | null;
+  handoff_snapshot_reason: string | null;
+  source_assistant_message_id: string | null;
 
   owner_handoff: HopyFutureChainOwnerHandoff | null;
 
@@ -407,15 +471,16 @@ export type HopyFutureChainInsertResult =
 
 /*
 【このファイルの正式役割】
-HOPY Future Chain v3 用の型定義だけを担当する。
+HOPY Future Chain v3.1 用の型定義だけを担当する。
 hopy_confirmed_payload.future_chain_context を唯一の起点として、payload読取、保存候補、保存前チェック、DB保存、owner_handoff表示、recipient_support表示で共通利用する型を定義する。
 このファイルは保存可否判定、candidate生成、DB insert、UI表示、state_changed再判定、state_level再判定、Compass再判定、HOPY回答再要約を担当しない。
 
 【今回このファイルで修正したこと】
-- hopy_future_chain_bridge_events のDB実態に合わせて、HopyFutureChainBridgeEventCandidate に user_signal_summary / hopy_support_summary / transition_reason / future_support_hint を追加した。
-- hopy_future_chain_bridge_events のDB実態に合わせて、HopyFutureChainBridgeEventCandidate に delivery_target_state_level / delivery_usage を任意項目として追加した。
-- futureChainRepository.ts が bridge_event 保存payloadを作るときに、DB実在カラムを型安全に参照できるようにした。
-- このファイルでは、保存可否判定、candidate生成、DB保存、UI表示、state_changed再判定、Compass再判定、HOPY回答再要約は触っていない。
+- HopyFutureChainMajorCategory を HOPY会話カテゴリ認識 v1 / Future Chain v3.1 の新カテゴリへ更新しました。
+- HopyFutureChainMinorCategory を HOPY会話カテゴリ認識 v1 / Future Chain v3.1 の新カテゴリへ更新しました。
+- HopyFutureChainChangeTriggerKey を既存互換を含む v3.1 の許可キーへ更新しました。
+- HopyFutureChainConfirmedFutureChainContext に handoff_message_snapshot / handoff_snapshot_reason / source_assistant_message_id を追加しました。
+- Future Chain の意味生成、保存可否判定、candidate生成、DB保存、UI表示、state_changed再判定、Compass再判定、HOPY回答再要約は触っていません。
 
 /app/api/chat/_lib/hopy/future-chain/futureChainTypes.ts
 */
