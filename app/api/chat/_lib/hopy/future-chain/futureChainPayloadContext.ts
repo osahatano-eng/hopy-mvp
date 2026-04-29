@@ -85,42 +85,89 @@ type ResolveFutureChainContextForConfirmedPayloadParams = {
 };
 
 const MAJOR_CATEGORY_KEYS = new Set<string>([
-  "self_understanding",
-  "emotional_regulation",
+  "weather",
+  "fashion",
+  "daily_life",
+  "romance",
   "relationships",
-  "work_career",
-  "learning_creation",
-  "life_direction",
-  "action_execution",
-  "recovery_resilience",
-  "hopy_usage",
+  "family",
+  "parenting",
+  "caregiving",
+  "health",
+  "mental_health",
+  "sleep",
+  "menopause",
+  "pain",
+  "work",
+  "career",
+  "school",
+  "learning",
+  "creation",
+  "development",
+  "business",
+  "money",
+  "housing",
+  "legal",
+  "shopping",
+  "travel",
+  "food",
+  "beauty",
+  "pets",
+  "community",
+  "sns",
+  "life",
+  "hopy",
+  "other",
 ]);
 
 const MINOR_CATEGORY_KEYS = new Set<string>([
+  "anxiety",
+  "confusion",
+  "overwhelm",
+  "low_energy",
   "unclear_thoughts",
   "unclear_feelings",
-  "overwhelm",
-  "anxiety",
-  "low_energy",
+  "decision",
+  "practical_choice",
   "communication",
   "boundary",
+  "guilt",
+  "repair",
   "priority_confusion",
-  "career_direction",
   "task_overload",
-  "skill_learning",
-  "creative_direction",
-  "project_building",
-  "life_choice",
-  "value_clarification",
   "first_step",
-  "habit_continuation",
+  "continuity",
   "recovery_pause",
   "readjustment",
-  "hopy_understanding",
-  "hopy_direction",
+  "pain",
+  "sleep_issue",
+  "risk_awareness",
+  "self_doubt",
+  "future_uncertainty",
+  "value_clarification",
+  "meaning_loss",
+  "comparison",
+  "loneliness",
+  "anger",
+  "sadness",
+  "trust_issue",
+  "role_pressure",
+  "information_search",
+  "planning",
 ]);
 
 const CHANGE_TRIGGER_KEYS = new Set<string>([
+  "verbalized",
+  "narrowed_to_one",
+  "noticed_true_feeling",
+  "stated_action",
+  "accepted_discomfort",
+  "found_priority",
+  "found_purpose",
+  "noticed_fear_source",
+  "allowed_to_release",
+  "rested_before_action",
+  "reset_premise",
   "write_down_one_concern",
   "name_current_feeling",
   "notice_inner_reaction",
@@ -496,11 +543,11 @@ Compass再判定、UI表示判定、HOPY回答再要約、Compass再要約、
 ユーザー発話読み取りを担当しない。
 
 【今回このファイルで修正したこと】
-- major_category / minor_category / change_trigger_key の許可キーを、Future Chain / World Learning 共通カテゴリ v1 に更新した。
-- normalizeMajorCategory / normalizeMinorCategory / normalizeChangeTriggerKey が新カテゴリを null に戻さないようにした。
-- HOPY回答確定時に受け取った rawContext のカテゴリ値を、confirmed payload の future_chain_context へ通せるようにした。
-- HOPY回答、Compass、ユーザー発話生文、DB保存、recipient_support検索、delivery_event保存、UI表示には触れていない。
-- state_changed、state_level、current_phase、prev系、Compass表示可否、HOPY回答○表示可否は再判定していない。
+- major_category / minor_category / change_trigger_key の許可キーを、HOPY会話カテゴリ認識 v1 / Future Chain v3.1 の新カテゴリへ更新しました。
+- normalizeMajorCategory / normalizeMinorCategory / normalizeChangeTriggerKey が新カテゴリを null に戻さないようにしました。
+- HOPY回答確定時に受け取った rawContext のカテゴリ値を、confirmed payload の future_chain_context へ通せるようにしました。
+- HOPY回答、Compass、ユーザー発話生文、DB保存、recipient_support検索、delivery_event保存、UI表示には触れていません。
+- state_changed、state_level、current_phase、prev系、Compass表示可否、HOPY回答○表示可否は再判定していません。
 
 /app/api/chat/_lib/hopy/future-chain/futureChainPayloadContext.ts
 */
