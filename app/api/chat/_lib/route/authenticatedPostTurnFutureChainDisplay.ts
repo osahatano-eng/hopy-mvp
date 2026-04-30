@@ -29,6 +29,10 @@ type FutureChainContextRecord = PayloadRecord & {
   change_trigger_key?: unknown;
 };
 
+type FutureChainPersistRecord = PayloadRecord & {
+  bridgeEventId?: unknown;
+};
+
 const PLUS_RECIPIENT_SUPPORT_BUCKET_COUNT = 4;
 
 function asRecord(value: unknown): PayloadRecord | null {
@@ -95,6 +99,24 @@ function resolveFutureChainContext(
   if (!context) return null;
 
   return context as FutureChainContextRecord;
+}
+
+function resolveFutureChainPersist(
+  payloadRecord: PayloadRecord,
+): FutureChainPersistRecord | null {
+  const persist = asRecord(payloadRecord.future_chain_persist);
+  if (!persist) return null;
+
+  return persist as FutureChainPersistRecord;
+}
+
+function resolvePersistBridgeEventId(
+  payloadRecord: PayloadRecord,
+): string | null {
+  const persist = resolveFutureChainPersist(payloadRecord);
+  if (!persist) return null;
+
+  return normalizeText(persist.bridgeEventId);
 }
 
 function shouldTryRecipientSupport(
@@ -171,6 +193,30 @@ function shouldAllowRecipientSupportByPlan(params: {
   return shouldShowOccasionalPlusRecipientSupport(params.assistantMessageId);
 }
 
+function attachOwnerHandoffPersistBridgeEventId(params: {
+  displayPayload: unknown;
+  payloadRecord: PayloadRecord;
+}): unknown {
+  const displayPayloadRecord = asRecord(params.displayPayload);
+  if (!displayPayloadRecord) {
+    return params.displayPayload;
+  }
+
+  if (displayPayloadRecord.kind !== "owner_handoff") {
+    return params.displayPayload;
+  }
+
+  const bridgeEventId = resolvePersistBridgeEventId(params.payloadRecord);
+  if (!bridgeEventId) {
+    return params.displayPayload;
+  }
+
+  return {
+    ...displayPayloadRecord,
+    bridgeEventId,
+  };
+}
+
 export async function attachFutureChainDisplayToPayload(params: {
   payload: unknown;
   supabase: SupabaseClient;
@@ -200,8 +246,16 @@ export async function attachFutureChainDisplayToPayload(params: {
       recipientSupport: null,
     });
 
-    if (displayPayload.shouldDisplay) {
-      payloadRecord.future_chain_display = displayPayload;
+    const displayPayloadWithBridgeEventId =
+      attachOwnerHandoffPersistBridgeEventId({
+        displayPayload,
+        payloadRecord,
+      });
+
+    const displayPayloadRecord = asRecord(displayPayloadWithBridgeEventId);
+
+    if (displayPayloadRecord?.shouldDisplay === true) {
+      payloadRecord.future_chain_display = displayPayloadWithBridgeEventId;
     }
 
     return params.payload;
@@ -272,15 +326,11 @@ recipient_support の場合は、delivery_mode="recipient_support"、support_nee
 このファイルは HOPY回答再要約、Compass再要約、Future Chain意味生成、state_changed再判定、state_level再判定、current_phase再判定、Compass表示可否判定、HOPY回答○判定、owner_handoff保存、delivery_event保存、UI本体表示、Future Chainページ集計を担当しない。
 
 【今回このファイルで修正したこと】
-- 表示側に残っていた旧カテゴリゲートを削除した。
-- self_understanding / emotional_regulation / work_career / life_direction / action_execution / recovery_resilience / learning_creation など、旧カテゴリ前提の判定を削除した。
-- recipient_support の必要性は、hopy_confirmed_payload.future_chain_context.delivery_mode と support_needed を正として扱う形に戻した。
-- major_category + minor_category の組み合わせ判定は、futureChainContextFromFinalizedTurn.ts 側で確定した future_chain_context に任せ、このファイルでは再判定しないようにした。
-- このファイルでは plan gate と DB検索に必要な category 値の存在確認だけを行うようにした。
-- Free では recipient_support を表示しない方針を維持した。
-- Plus では assistantMessageId を使った安定的な分岐で「たまに届く」挙動を維持した。
-- Pro でも delivery_mode="recipient_support" かつ support_needed=true の時だけ候補選択へ進むようにした。
-- hopy_confirmed_payload / state_changed / state_level / current_phase / Compass / HOPY回答○ / owner_handoff / DB保存 / DB復元 / UI本体には触れていない。
+- owner_handoff 表示payloadに、直前の保存結果 payload.future_chain_persist.bridgeEventId を反映する処理を追加した。
+- buildFutureChainDisplayPayload(...) 本体は変更せず、このファイルの表示payload付与責務の範囲で bridgeEventId を補完した。
+- recipient_support 側の bridgeEventId は、従来通り selectFutureChainRecipientSupport(...) の選択結果を使う形を維持した。
+- Future Chain の意味生成、保存判定、DB保存、候補選択、delivery_event保存、UI本体表示には触れていない。
+- hopy_confirmed_payload / state_changed / state_level / current_phase / Compass / HOPY回答○ は再判定していない。
 
 /app/api/chat/_lib/route/authenticatedPostTurnFutureChainDisplay.ts
 */

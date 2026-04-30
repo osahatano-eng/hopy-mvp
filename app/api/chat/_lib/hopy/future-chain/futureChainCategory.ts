@@ -81,22 +81,7 @@ export type FutureChainCategoryChangeTriggerKey =
   | "noticed_fear_source"
   | "allowed_to_release"
   | "rested_before_action"
-  | "reset_premise"
-  | "write_down_one_concern"
-  | "name_current_feeling"
-  | "notice_inner_reaction"
-  | "choose_one_next_step"
-  | "narrow_priority"
-  | "accept_incomplete_state"
-  | "pause_before_action"
-  | "break_down_task"
-  | "compare_options"
-  | "define_success_condition"
-  | "ask_one_question"
-  | "reconnect_with_reason"
-  | "notice_pattern"
-  | "continue_small"
-  | "handoff_message_snapshot";
+  | "reset_premise";
 
 export type FutureChainCategoryConfidence = "low" | "medium" | "high";
 
@@ -745,7 +730,23 @@ function resolveCategoryConfidence(
 function resolveChangeTriggerKey(
   sourceText: string,
 ): FutureChainCategoryChangeTriggerKey {
-  if (includesAnyKeyword(sourceText, ["話せた", "言えた", "言葉にでき", "表に出"])) {
+  if (
+    includesAnyKeyword(sourceText, [
+      "話せた",
+      "言えた",
+      "言葉にでき",
+      "表に出",
+      "箇条書き",
+      "書き出",
+      "メモ",
+      "一つだけ書",
+      "言葉にして",
+      "問い",
+      "質問",
+      "聞きたい",
+      "知りたい",
+    ])
+  ) {
     return "verbalized";
   }
 
@@ -756,12 +757,28 @@ function resolveChangeTriggerKey(
       "絞れ",
       "絞りました",
       "選べた",
+      "比較",
+      "選択肢",
     ])
   ) {
     return "narrowed_to_one";
   }
 
-  if (includesAnyKeyword(sourceText, ["本音", "本当は", "本当の気持ち"])) {
+  if (
+    includesAnyKeyword(sourceText, [
+      "本音",
+      "本当は",
+      "本当の気持ち",
+      "気持ち",
+      "感情",
+      "心",
+      "違和感",
+      "引っかか",
+      "反応",
+      "気になる",
+      "気になって",
+    ])
+  ) {
     return "noticed_true_feeling";
   }
 
@@ -772,6 +789,12 @@ function resolveChangeTriggerKey(
       "進めます",
       "実行します",
       "取り組みます",
+      "次の一歩",
+      "一歩",
+      "始め",
+      "続け",
+      "継続",
+      "積み重ね",
     ])
   ) {
     return "stated_action";
@@ -784,6 +807,12 @@ function resolveChangeTriggerKey(
       "苦しいけど",
       "違和感を受け入",
       "受け止め",
+      "途中",
+      "まとまらない",
+      "まとまらず",
+      "無理にまとめ",
+      "そのまま",
+      "大丈夫",
     ])
   ) {
     return "accepted_discomfort";
@@ -795,12 +824,35 @@ function resolveChangeTriggerKey(
       "優先順位が見え",
       "大事なのは",
       "まずこれ",
+      "優先",
+      "一番",
+      "分け",
+      "小さく",
+      "細かく",
+      "分解",
     ])
   ) {
     return "found_priority";
   }
 
-  if (includesAnyKeyword(sourceText, ["目的", "意味", "何のため", "理由が見え"])) {
+  if (
+    includesAnyKeyword(sourceText, [
+      "目的",
+      "意味",
+      "何のため",
+      "理由が見え",
+      "理由",
+      "なぜ",
+      "成功",
+      "条件",
+      "ゴール",
+      "基準",
+      "傾向",
+      "パターン",
+      "何度も",
+      "繰り返",
+    ])
+  ) {
     return "found_purpose";
   }
 
@@ -828,7 +880,19 @@ function resolveChangeTriggerKey(
     return "allowed_to_release";
   }
 
-  if (includesAnyKeyword(sourceText, ["休んでから", "休む", "眠ってから", "寝てから"])) {
+  if (
+    includesAnyKeyword(sourceText, [
+      "休んでから",
+      "休む",
+      "眠ってから",
+      "寝てから",
+      "休",
+      "止ま",
+      "焦らず",
+      "無理に",
+      "待つ",
+    ])
+  ) {
     return "rested_before_action";
   }
 
@@ -844,88 +908,7 @@ function resolveChangeTriggerKey(
     return "reset_premise";
   }
 
-  if (
-    includesAnyKeyword(sourceText, [
-      "箇条書き",
-      "書き出",
-      "メモ",
-      "一つだけ書",
-      "言葉にして",
-    ])
-  ) {
-    return "write_down_one_concern";
-  }
-
-  if (includesAnyKeyword(sourceText, ["気持ち", "感情", "名前", "心"])) {
-    return "name_current_feeling";
-  }
-
-  if (
-    includesAnyKeyword(sourceText, [
-      "違和感",
-      "引っかか",
-      "反応",
-      "気になる",
-      "気になって",
-    ])
-  ) {
-    return "notice_inner_reaction";
-  }
-
-  if (includesAnyKeyword(sourceText, ["次の一歩", "一歩", "始め"])) {
-    return "choose_one_next_step";
-  }
-
-  if (includesAnyKeyword(sourceText, ["優先", "絞", "一つに", "一番"])) {
-    return "narrow_priority";
-  }
-
-  if (
-    includesAnyKeyword(sourceText, [
-      "途中",
-      "まとまらない",
-      "まとまらず",
-      "無理にまとめ",
-      "そのまま",
-      "大丈夫",
-    ])
-  ) {
-    return "accept_incomplete_state";
-  }
-
-  if (includesAnyKeyword(sourceText, ["休", "止ま", "焦らず", "無理に", "待つ"])) {
-    return "pause_before_action";
-  }
-
-  if (includesAnyKeyword(sourceText, ["分け", "小さく", "細かく", "分解"])) {
-    return "break_down_task";
-  }
-
-  if (includesAnyKeyword(sourceText, ["比べ", "比較", "選択肢"])) {
-    return "compare_options";
-  }
-
-  if (includesAnyKeyword(sourceText, ["成功", "条件", "ゴール", "基準"])) {
-    return "define_success_condition";
-  }
-
-  if (includesAnyKeyword(sourceText, ["問い", "質問", "聞きたい", "知りたい"])) {
-    return "ask_one_question";
-  }
-
-  if (includesAnyKeyword(sourceText, ["理由", "なぜ", "目的", "意味"])) {
-    return "reconnect_with_reason";
-  }
-
-  if (includesAnyKeyword(sourceText, ["傾向", "パターン", "何度も", "繰り返"])) {
-    return "notice_pattern";
-  }
-
-  if (includesAnyKeyword(sourceText, ["続け", "継続", "積み重ね"])) {
-    return "continue_small";
-  }
-
-  return "handoff_message_snapshot";
+  return "verbalized";
 }
 
 export function resolveFutureChainCategory(
@@ -965,9 +948,9 @@ current_phase再判定、Compass表示可否判定、HOPY回答○判定、
 recipient_support検索、delivery_event保存、UI表示を担当しない。
 
 【今回このファイルで修正したこと】
-- FutureChainCategoryChangeTriggerKey を Future Chain v3.1 / DB制約側の許可キーへそろえました。
-- resolveChangeTriggerKey(...) で verbalized / narrowed_to_one / noticed_true_feeling / stated_action / accepted_discomfort / found_priority / found_purpose / noticed_fear_source / allowed_to_release / rested_before_action / reset_premise を返せるようにしました。
-- 既存の write_down_one_concern / name_current_feeling / notice_inner_reaction / choose_one_next_step / narrow_priority / accept_incomplete_state / pause_before_action / break_down_task / compare_options / define_success_condition / ask_one_question / reconnect_with_reason / notice_pattern / continue_small / handoff_message_snapshot は維持しました。
+- FutureChainCategoryChangeTriggerKey を、開発DB / 本番DBで揃えた基本11キーだけにそろえました。
+- resolveChangeTriggerKey(...) が、DB制約外の write_down_one_concern / name_current_feeling / notice_inner_reaction / choose_one_next_step / narrow_priority / accept_incomplete_state / pause_before_action / break_down_task / compare_options / define_success_condition / ask_one_question / reconnect_with_reason / notice_pattern / continue_small / handoff_message_snapshot を返さないようにしました。
+- 旧キーで拾っていた意味は、基本11キーの verbalized / narrowed_to_one / noticed_true_feeling / stated_action / accepted_discomfort / found_priority / found_purpose / rested_before_action などへ寄せました。
 - major_category / minor_category の分類、DB保存、保存前チェック、UI表示、recipient_support検索、delivery_event保存には触れていません。
 - state_changed、state_level、current_phase、prev系、Compass表示可否、HOPY回答○表示可否は再判定していません。
 
