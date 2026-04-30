@@ -1,0 +1,980 @@
+----HOPY Future Chain 一本道ファイルフロー定義 v1 ここから----
+
+【定義名】
+HOPY Future Chain 一本道ファイルフロー定義 v1
+
+【目的】
+Future Chain で不具合調査・機能追加・UI表示確認を行うときに、
+HOPY回答確定からDB保存、payload反映、UI表示まで、
+どのファイルをどの順番で通るかを一目で追えるようにする。
+
+この定義の目的は、
+原因調査時に横道へそれず、
+「今どこで止まっているか」
+「どのファイルの責務か」
+「どこを触ってはいけないか」
+を明確にすることである。
+
+【最重要原則】
+Future Chain の唯一の起点はこれ。
+
+hopy_confirmed_payload.future_chain_context
+
+Future Chain側で再判定してはいけないもの。
+
+state_changed
+state_level
+current_phase
+prev_state_level
+prev_phase
+Compass表示可否
+HOPY回答○表示可否
+
+Future Chain は、
+HOPY回答やCompassを後から読み直して意味を作り直す機能ではない。
+
+HOPY回答確定時に作られた future_chain_context を読み、
+保存・表示・配信履歴へ流す下流機能である。
+
+主役は常に HOPY回答。
+Future Chain は補助表示である。
+
+==================================================
+1. HTTP入口
+==================================================
+
+【ファイル】
+/app/api/chat/route.ts
+
+【役割】
+HTTP入口。
+request body を読み、guest / authenticated を分岐する。
+authenticated の場合は handleAuthenticatedChat(...) へ渡す。
+
+【このファイルが担当すること】
+- req / body を読む
+- userText / uiLang / accessToken を整える
+- authenticated client を作る
+- handleAuthenticatedChat(...) へ渡す
+
+【このファイルが担当しないこと】
+- HOPY回答生成
+- hopy_confirmed_payload生成
+- Future Chain context生成
+- Future Chain保存
+- Future Chain表示
+- UI表示
+
+【次へ渡す先】
+/app/api/chat/_lib/route/authenticated.ts
+
+==================================================
+2. authenticated 本体
+==================================================
+
+【ファイル】
+/app/api/chat/_lib/route/authenticated.ts
+
+【役割】
+authenticated ユーザー用チャット処理本体。
+スレッド解決、状態解決、memory / learning / context準備、user message保存、
+runHopyTurn実行、postTurn最終化までを束ねる。
+
+【このファイルが担当すること】
+- internalWriteSupabase を用意する
+- resolveAuthThread(...)
+- resolveConversationState(...)
+- promptBundle作成
+- user message保存
+- createAuthenticatedTurnDeps(...)
+- runHopyTurn(...)
+- finalizeAuthenticatedPostTurn(...)
+
+【重要】
+internalWriteSupabase は、SUPABASE_SERVICE_ROLE_KEY があれば service role client として作られる。
+なければ通常 supabase に fallback する。
+
+Future Chain owner_handoff 保存は internalWriteSupabase 側を通る。
+
+【このファイルが担当しないこと】
+- Future Chain保存判定
+- Future Chain DB insert本体
+- Future Chain display payload本体
+- UI表示本体
+
+【次へ渡す先】
+/app/api/chat/_lib/route/authenticatedTurnDeps.ts
+/app/api/chat/_lib/route/authenticatedPostTurn.ts
+
+==================================================
+3. runHopyTurn deps
+==================================================
+
+【ファイル】
+/app/api/chat/_lib/route/authenticatedTurnDeps.ts
+
+【役割】
+runHopyTurn 用の deps 作成ファイル。
+loadContext、buildPromptInput、callModel、buildTurnResult、persistTurn を定義する。
+
+【Future Chain上の役割】
+assistant message 保存後に、
+保存済み assistantMessageId を使って future_chain_context を生成し、
+saveFutureChainFromConfirmedPayload(...) へ渡す。
+
+【重要な流れ】
+saveAssistantMessageOrError(...)
+↓
+buildFutureChainContextFromFinalizedTurn(...)
+↓
+confirmedPayloadForFutureChain に future_chain_context を載せる
+↓
+saveFutureChainFromConfirmedPayload(...)
+↓
+future_chain_persist を runTurnResult に載せる
+
+【保存に使うclient】
+params.internalWriteSupabase
+
+【このファイルが担当しないこと】
+- HOPY回答再要約
+- Compass再要約
+- 保存前チェックの中身
+- candidate生成の中身
+- DB insertの中身
+- UI表示
+
+【次へ渡す先】
+/app/api/chat/_lib/hopy/future-chain/futureChainContextFromFinalizedTurn.ts
+/app/api/chat/_lib/hopy/future-chain/futureChainService.ts
+
+==================================================
+4. Future Chain context生成
+==================================================
+
+【ファイル】
+/app/api/chat/_lib/hopy/future-chain/futureChainContextFromFinalizedTurn.ts
+
+【役割】
+HOPY Future Chain v3.1 の future_chain_context 生成だけを担当する。
+
+回答確定後の
+userMessage / recentUserText / reply / state / Compass / assistantMessageId
+を受け取り、Future Chain用の短い context を作る。
+
+【owner_handoff 条件】
+state_changed=true
+Compassあり
+assistantMessageIdあり
+handoff_message_snapshotあり
+
+この場合、
+delivery_mode="owner_handoff"
+の context を返す。
+
+【recipient_support 条件】
+state_changed=false
+Compassなし
+状態値1..5
+major_category + minor_category の許可ペアに一致
+
+この場合、
+delivery_mode="recipient_support"
+の context を返す。
+
+【このファイルが担当すること】
+- state_changed の受け取り
+- Compass有無の受け取り
+- state level 1..5 の正規化
+- transition_kind の算出
+- transition_meaning の算出
+- handoff_message_snapshot の取得
+- resolveFutureChainCategory(...) の呼び出し
+- future_chain_context の生成
+
+【このファイルが担当しないこと】
+- state_changed再判定
+- state_level再判定
+- HOPY回答再要約
+- Compass再要約
+- DB保存
+- 保存前チェック
+- candidate生成
+- recipient_support検索
+- delivery_event保存
+- UI表示
+
+【次へ渡す先】
+/app/api/chat/_lib/hopy/future-chain/futureChainCategory.ts
+/app/api/chat/_lib/hopy/future-chain/futureChainHandoffSnapshot.ts
+
+==================================================
+5. カテゴリ / change_trigger_key 軽量分類
+==================================================
+
+【ファイル】
+/app/api/chat/_lib/hopy/future-chain/futureChainCategory.ts
+
+【役割】
+Future Chain / World Learning 共通カテゴリの軽量分類だけを担当する。
+
+userMessage / recentUserText / handoff_message_snapshot / reply から、
+major_category / minor_category / change_trigger_key をルールベースで推定する。
+
+【今回の重要修正】
+FutureChainCategoryChangeTriggerKey を、
+開発DB / 本番DBで揃えた基本11キーだけにそろえた。
+
+許可キーはこれ。
+
+verbalized
+narrowed_to_one
+noticed_true_feeling
+stated_action
+accepted_discomfort
+found_priority
+found_purpose
+noticed_fear_source
+allowed_to_release
+rested_before_action
+reset_premise
+
+【このファイルが担当しないこと】
+- DB保存
+- 保存前チェック
+- UI表示
+- recipient_support検索
+- state_changed再判定
+- Compass再判定
+
+【今回直った症状】
+DB制約外の change_trigger_key が future_chain_context に入り、
+保存候補から落ちる問題を防いだ。
+
+==================================================
+6. handoff snapshot 切り出し
+==================================================
+
+【ファイル】
+/app/api/chat/_lib/hopy/future-chain/futureChainHandoffSnapshot.ts
+
+【役割】
+HOPY回答本文から、未来へ渡せる短い文言を handoff_message_snapshot として切り出す。
+
+【重要】
+HOPY回答全文をFuture Chain DBへ保存しない。
+Future Chain v3.1では、未来へ渡す1〜2文だけを扱う。
+
+【このファイルが担当しないこと】
+- DB保存
+- state判定
+- Compass生成
+- UI表示
+
+==================================================
+7. Future Chain保存入口
+==================================================
+
+【ファイル】
+/app/api/chat/_lib/hopy/future-chain/futureChainService.ts
+
+【役割】
+HOPY Future Chain DB の入口関数だけを担当する。
+
+hopy_confirmed_payload 起点の sourceContext を受け取り、
+executeFutureChainSaveFlow(...) へ渡し、
+保存結果を呼び出し元へ返す。
+
+【このファイルが担当すること】
+- saveFutureChainFromConfirmedPayload(...)
+- executeFutureChainSaveFlow(...) への中継
+- 保存結果の整形
+
+【このファイルが担当しないこと】
+- 保存前チェックの中身
+- candidate生成の中身
+- DB insertの中身
+- Supabase client生成
+- UI表示
+
+【次へ渡す先】
+/app/api/chat/_lib/hopy/future-chain/futureChainSaveFlow.ts
+
+==================================================
+8. 保存フロー接続
+==================================================
+
+【ファイル】
+/app/api/chat/_lib/hopy/future-chain/futureChainSaveFlow.ts
+
+【役割】
+Future Chain v3 の保存フロー接続だけを担当する。
+
+【一本道】
+checkFutureChainSavePreconditions(...)
+↓
+buildFutureChainCandidate(...)
+↓
+persistFutureChainCandidate(...)
+
+【このファイルが担当すること】
+- 保存前チェックへ進む
+- candidate生成へ進む
+- DB保存へ進む
+- 各stageの結果をまとめて返す
+
+【このファイルが担当しないこと】
+- 保存前チェックの判定中身
+- candidate生成の中身
+- DB insertの中身
+- UI表示
+- recipient_support検索
+
+【次へ渡す先】
+/app/api/chat/_lib/hopy/future-chain/futureChainCheck.ts
+/app/api/chat/_lib/hopy/future-chain/futureChainCandidate.ts
+/app/api/chat/_lib/hopy/future-chain/futureChainPersist.ts
+
+==================================================
+9. 保存前チェック
+==================================================
+
+【ファイル】
+/app/api/chat/_lib/hopy/future-chain/futureChainCheck.ts
+
+【役割】
+Future Chainとして保存してよいかを判定する。
+
+【見るもの】
+hopy_confirmed_payload
+future_chain_context
+state_changed
+state_level 1..5
+new thread first messageか
+development testか
+handoff_message_snapshotがあるか
+安全に保存できるか
+
+【守ること】
+Future Chain側で state_changed を作り直さない。
+state_level を再判定しない。
+current_phase を再判定しない。
+Compass可否を再判定しない。
+
+【出力】
+continue
+skip
+
+【次へ渡す先】
+/app/api/chat/_lib/hopy/future-chain/futureChainCandidate.ts
+
+==================================================
+10. 保存candidate生成
+==================================================
+
+【ファイル】
+/app/api/chat/_lib/hopy/future-chain/futureChainCandidate.ts
+
+【役割】
+保存前チェックを通過した future_chain_context を、
+DB保存用 candidate へ整える。
+
+【作るもの】
+pattern candidate
+bridge_event candidate
+pattern_key
+owner_visible_summary
+future_visible_summary
+bridge_insight
+bridge_hint
+bridge_flow
+bridge_reason
+handoff_message_snapshot
+
+【重要】
+このファイルは、保存できる形へ整えるだけ。
+HOPY回答やCompassを読み直して意味を作り直さない。
+
+【このファイルが担当しないこと】
+- DB insert
+- UI表示
+- recipient_support検索
+- delivery_event保存
+- state再判定
+
+【次へ渡す先】
+/app/api/chat/_lib/hopy/future-chain/futureChainPersist.ts
+
+==================================================
+11. DB保存
+==================================================
+
+【ファイル】
+/app/api/chat/_lib/hopy/future-chain/futureChainPersist.ts
+
+【役割】
+HOPY Future Chain v3.1 のDB保存だけを担当する。
+
+【保存順】
+hopy_future_chain_patterns lookup
+↓
+なければ hopy_future_chain_patterns insert
+↓
+hopy_future_chain_bridge_events insert
+↓
+保存結果を返す
+
+【保存先】
+public.hopy_future_chain_patterns
+public.hopy_future_chain_bridge_events
+
+【今回確認できた正常保存】
+pattern 保存成功
+bridge_event 保存成功
+source_assistant_message_id で messages.id と接続成功
+
+【このファイルが担当しないこと】
+- candidate生成
+- 保存前チェック
+- UI表示
+- recipient_support検索
+- delivery_event保存
+
+【出力】
+patternId
+bridgeEventId
+reason
+ok
+decision
+
+==================================================
+12. postTurn 最終化
+==================================================
+
+【ファイル】
+/app/api/chat/_lib/route/authenticatedPostTurn.ts
+
+【役割】
+authenticated 経路の postTurn 最終化ファイル。
+
+memory書き込み、learning保存、audit保存、thread title解決、
+Compass付きconfirmedTurn整形、Future Chain context生成、
+最終payload作成フローへの中継を担当する。
+
+【Future Chain上の役割】
+buildFutureChainContextFromFinalizedTurn(...) を呼び、
+futureChainContext を finalizeAuthenticatedPostTurnPayloadFlow(...) へ渡す。
+
+【このファイルが担当しないこと】
+- Future Chain保存判定
+- DB保存本体
+- display payload本体
+- recipient_support検索本体
+- delivery_event保存本体
+- UI表示
+
+【次へ渡す先】
+/app/api/chat/_lib/route/authenticatedPostTurnPayloadFinalizeFlow.ts
+
+==================================================
+13. 最終payload組み立てフロー
+==================================================
+
+【ファイル】
+/app/api/chat/_lib/route/authenticatedPostTurnPayloadFinalizeFlow.ts
+
+【役割】
+postTurn の最終payload組み立てフロー。
+
+【一本道】
+buildFinalizedTurnArtifacts(...)
+↓
+buildAuthenticatedResponsePayload(...)
+↓
+attachFutureChainPersistToPayload(...)
+↓
+attachFutureChainDisplayToPayload(...)
+↓
+saveFutureChainDeliveryEventForPayload(...)
+↓
+attachThreadSummarySaveDebugToPayload(...)
+
+【重要】
+future_chain_persist を payload に付けてから、
+future_chain_display を作る。
+
+今回の修正では、この順序が正しく働いていた。
+
+【このファイルが担当しないこと】
+- Future Chain意味生成
+- 保存判定
+- DB insert本体
+- UI本体表示
+
+【次へ渡す先】
+/app/api/chat/_lib/route/authenticatedPostTurnFutureChainPayload.ts
+/app/api/chat/_lib/route/authenticatedPostTurnFutureChainDisplay.ts
+/app/api/chat/_lib/hopy/future-chain/futureChainDeliveryEvent.ts
+
+==================================================
+14. future_chain_persist payload反映
+==================================================
+
+【ファイル】
+/app/api/chat/_lib/route/authenticatedPostTurnFutureChainPayload.ts
+
+【役割】
+runTurnResult.future_chain_persist を、
+最終レスポンス payload.future_chain_persist へ反映する。
+
+【今回の確認点】
+future_chain_persist.bridgeEventId は正常に payload に載った。
+
+【このファイルが担当しないこと】
+- DB保存
+- display payload生成
+- UI表示
+
+==================================================
+15. future_chain_display payload付与
+==================================================
+
+【ファイル】
+/app/api/chat/_lib/route/authenticatedPostTurnFutureChainDisplay.ts
+
+【役割】
+authenticated postTurn の最終payloadに、
+Future Chain v3.1 の表示payloadだけを安全に付与する。
+
+【owner_handoffの場合】
+payload.hopy_confirmed_payload.future_chain_context を読む
+↓
+buildFutureChainDisplayPayload(...)
+↓
+payload.future_chain_persist.bridgeEventId を表示payloadへ反映
+↓
+payload.future_chain_display に載せる
+
+【recipient_supportの場合】
+delivery_mode="recipient_support"
+support_needed=true
+plan gate通過
+major_category / minor_categoryあり
+↓
+selectFutureChainRecipientSupport(...)
+↓
+buildFutureChainDisplayPayload(...)
+↓
+payload.future_chain_display に載せる
+
+【今回の重要修正】
+owner_handoff 表示payloadに、
+payload.future_chain_persist.bridgeEventId を反映する処理を追加した。
+
+これにより、
+future_chain_persist.bridgeEventId
+と
+future_chain_display.bridgeEventId
+が一致するようになった。
+
+【このファイルが担当しないこと】
+- Future Chain意味生成
+- DB保存
+- 保存判定
+- delivery_event保存
+- UI本体表示
+- HOPY回答再要約
+- Compass再要約
+
+【次へ渡す先】
+/app/api/chat/_lib/hopy/future-chain/futureChainDisplayPayload.ts
+/app/api/chat/_lib/hopy/future-chain/futureChainRecipientSupport.ts
+/app/api/chat/_lib/hopy/future-chain/futureChainRecipientSupportSelect.ts
+
+==================================================
+16. display payload生成
+==================================================
+
+【ファイル】
+/app/api/chat/_lib/hopy/future-chain/futureChainDisplayPayload.ts
+
+【役割】
+Future Chain表示用payloadを作る。
+
+【作るもの】
+kind
+shouldDisplay
+plan
+placement
+detailLevel
+title
+description
+handoffMessageSnapshot
+bridgeEventId
+deliveryEventId
+
+【owner_handoff 表示】
+Compass下に表示する。
+Plus / Pro は詳細表示。
+Free は最小表示。
+
+【recipient_support 表示】
+HOPY回答下に表示する。
+過去から届く支えとして表示する。
+
+【このファイルが担当しないこと】
+- DB保存
+- recipient_support検索
+- delivery_event保存
+- UI本体表示
+- state再判定
+
+==================================================
+17. recipient_support 検索
+==================================================
+
+【ファイル】
+/app/api/chat/_lib/hopy/future-chain/futureChainRecipientSupport.ts
+/app/api/chat/_lib/hopy/future-chain/futureChainRecipientSupportSelect.ts
+
+【役割】
+状態変化がない回で、必要に応じて過去から届く支えを探す。
+
+【検索条件】
+recipientStateLevel
+major_category
+minor_category
+change_trigger_key
+support_shape_key
+language
+delivery_eligible
+recent delivery history
+同一assistant message除外
+同一thread表示済み除外
+
+【このファイルが担当しないこと】
+- owner_handoff保存
+- state再判定
+- HOPY回答再要約
+- UI本体表示
+
+【次へ渡す先】
+/app/api/chat/_lib/hopy/future-chain/futureChainDeliveryEvent.ts
+/app/api/chat/_lib/hopy/future-chain/futureChainDisplayPayload.ts
+
+==================================================
+18. delivery_event 保存
+==================================================
+
+【ファイル】
+/app/api/chat/_lib/hopy/future-chain/futureChainDeliveryEvent.ts
+
+【役割】
+recipient_support が表示された履歴を保存する。
+
+【保存先】
+public.hopy_future_chain_delivery_events
+
+【保存するもの】
+bridge_event_id
+pattern_id
+recipient_user_id
+recipient_thread_id
+recipient_assistant_message_id
+recipient_state_level
+display_title
+display_insight
+display_hint
+display_flow
+delivery_reason
+owner_notified=false
+
+【重要】
+owner_handoff のときは delivery_event を作らない。
+今回の owner_handoff で delivery_events が0件だったのは正常。
+
+【このファイルが担当しないこと】
+- owner_handoff保存
+- Future Chain意味生成
+- UI本体表示
+
+==================================================
+19. Chat UI表示入口
+==================================================
+
+【対象】
+Chat UI側の Future Chain表示コンポーネント群
+
+【現時点の確認対象候補】
+/components/chat/view/ChatStreamFutureChain.tsx
+/components/chat/view/chatStreamFutureChainItem.ts
+ChatMessagePane
+ChatAssistantMessage
+FutureChainCard
+
+【役割】
+payload.future_chain_display を受け取り、
+HOPY回答下またはCompass下にFuture Chainカードを表示する。
+
+【owner_handoff UI】
+表示位置：
+HOPY回答
+↓
+Compass
+↓
+Future Chain
+
+表示条件：
+future_chain_display.kind = "owner_handoff"
+future_chain_display.shouldDisplay = true
+
+表示項目：
+title
+description
+handoffMessageSnapshot
+bridgeEventId
+
+【recipient_support UI】
+表示位置：
+HOPY回答
+↓
+Future Chain
+
+表示条件：
+future_chain_display.kind = "recipient_support"
+future_chain_display.shouldDisplay = true
+
+表示項目：
+title
+description
+handoffMessageSnapshot
+bridgeEventId
+deliveryEventId
+
+【この層が担当しないこと】
+- state_changed判定
+- Compass判定
+- DB保存
+- Future Chain意味生成
+- recipient_support検索
+- delivery_event保存
+
+UIは、payload.future_chain_display を描画するだけ。
+
+==================================================
+20. Future Chainページ
+==================================================
+
+【対象】
+Future Chainページ側のファイル群
+
+【役割】
+将来的に、
+未来へ渡した支え
+過去から受け取った支え
+を表示する。
+
+【見るDB】
+hopy_future_chain_bridge_events
+hopy_future_chain_delivery_events
+hopy_future_chain_patterns
+
+【注意】
+Future Chainページは、HOPY回答直後の表示とは別。
+初期実装では後回しでよい。
+
+==================================================
+21. owner_handoff の正常フロー
+==================================================
+
+HOPY回答確定
+↓
+hopy_confirmed_payload 確定
+↓
+state_changed=true
+↓
+Compassあり
+↓
+futureChainContextFromFinalizedTurn.ts
+↓
+future_chain_context.delivery_mode="owner_handoff"
+↓
+futureChainCategory.ts
+↓
+change_trigger_key 基本11キー
+↓
+futureChainHandoffSnapshot.ts
+↓
+handoff_message_snapshot生成
+↓
+futureChainCheck.ts
+↓
+保存前チェック通過
+↓
+futureChainCandidate.ts
+↓
+pattern / bridge_event candidate生成
+↓
+futureChainPersist.ts
+↓
+patterns保存
+↓
+bridge_events保存
+↓
+authenticatedPostTurnFutureChainPayload.ts
+↓
+payload.future_chain_persist に保存結果反映
+↓
+authenticatedPostTurnFutureChainDisplay.ts
+↓
+payload.future_chain_display 生成
+↓
+future_chain_display.bridgeEventId に保存済みID反映
+↓
+Chat UI
+↓
+Compass下に Future Chain 表示
+
+==================================================
+22. recipient_support の正常フロー
+==================================================
+
+HOPY回答確定
+↓
+hopy_confirmed_payload 確定
+↓
+state_changed=false
+↓
+Compassなし
+↓
+futureChainContextFromFinalizedTurn.ts
+↓
+future_chain_context.delivery_mode="recipient_support"
+↓
+support_needed=true
+↓
+authenticatedPostTurnFutureChainDisplay.ts
+↓
+plan gate
+↓
+selectFutureChainRecipientSupport(...)
+↓
+過去の bridge_event を1件選択
+↓
+futureChainDisplayPayload.ts
+↓
+payload.future_chain_display 生成
+↓
+saveFutureChainDeliveryEventForPayload(...)
+↓
+delivery_event 保存
+↓
+Chat UI
+↓
+HOPY回答下に Future Chain 表示
+
+==================================================
+23. 今回の不具合で確認した切り分け
+==================================================
+
+【症状1】
+Future Chainが出ない / 保存されない
+
+【原因】
+futureChainCategory.ts がDB制約外の旧 change_trigger_key を返せる状態だった。
+
+【修正】
+FutureChainCategoryChangeTriggerKey を基本11キーに統一。
+resolveChangeTriggerKey(...) が旧キーを返さないようにした。
+
+【結果】
+future_chain_persist が save になり、
+bridge_event がDB保存された。
+
+----------------------------------------
+
+【症状2】
+DB保存は成功しているのに、
+future_chain_display.bridgeEventId が null
+
+【原因】
+authenticatedPostTurnFutureChainDisplay.ts が、
+payload.future_chain_persist.bridgeEventId を owner_handoff 表示payloadへ反映していなかった。
+
+【修正】
+owner_handoff 表示payloadに、
+payload.future_chain_persist.bridgeEventId を反映した。
+
+【結果】
+future_chain_persist.bridgeEventId
+と
+future_chain_display.bridgeEventId
+が一致した。
+
+==================================================
+24. 不具合調査時の見る順番
+==================================================
+
+【Future Chainが出ない場合】
+
+1. レスポンスJSONを見る
+   - hopy_confirmed_payload.future_chain_context
+   - future_chain_persist
+   - future_chain_display
+
+2. state_changed を見る
+   - falseなら owner_handoff保存なしで正常
+   - trueなら次へ
+
+3. Compass有無を見る
+   - Plus / Proで state_changed=true なら Compass必須
+
+4. future_chain_context を見る
+   - delivery_mode
+   - change_trigger_key
+   - handoff_message_snapshot
+   - source_assistant_message_id
+
+5. future_chain_persist を見る
+   - decision
+   - reason
+   - stage
+   - error
+   - patternId
+   - bridgeEventId
+
+6. DBを見る
+   - hopy_future_chain_patterns
+   - hopy_future_chain_bridge_events
+   - messages接続
+
+7. future_chain_display を見る
+   - shouldDisplay
+   - kind
+   - placement
+   - bridgeEventId
+
+8. UIを見る
+   - payload.future_chain_display を描画しているか
+
+==================================================
+25. この定義で絶対に守ること
+==================================================
+
+Future Chain側で state_changed を再判定しない。
+Future Chain側で state_level を再判定しない。
+Future Chain側で current_phase を再判定しない。
+Future Chain側で Compass表示可否を再判定しない。
+Future Chain側で HOPY回答○表示可否を再判定しない。
+
+HOPY回答全文をFuture Chain DBへ複製しない。
+Compass全文をFuture Chain DBへ複製しない。
+ユーザー発話生文をFuture Chain DBへ保存しない。
+他ユーザー情報を表示しない。
+保存されたら必ず届くと表現しない。
+
+Future Chain は、
+HOPY回答確定時に作られた future_chain_context を起点に、
+保存・表示・配信履歴へ流す補助機能である。
+
+----HOPY Future Chain 一本道ファイルフロー定義 v1 ここまで----
