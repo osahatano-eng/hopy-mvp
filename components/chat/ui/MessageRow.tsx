@@ -94,14 +94,30 @@ function isPendingMessage(role: "user" | "assistant", text: string, uiLang: Lang
       "organizing thoughts...",
       "centering",
       "centering...",
+      "hopy is thinking",
+      "hopy is thinking...",
+      "hopy is organizing thoughts",
+      "hopy is organizing thoughts...",
+      "hopy is centering",
+      "hopy is centering...",
+      "hopy's thinking",
+      "hopy's thinking...",
+      "hopy's organizing thoughts",
+      "hopy's organizing thoughts...",
+      "hopy's centering",
+      "hopy's centering...",
     ] as const;
 
     const prefixPatterns = [
       "thinking ",
       "organizing thoughts ",
       "centering ",
-      "hopy is ",
-      "hopy's ",
+      "hopy is thinking ",
+      "hopy is organizing thoughts ",
+      "hopy is centering ",
+      "hopy's thinking ",
+      "hopy's organizing thoughts ",
+      "hopy's centering ",
     ] as const;
 
     return (
@@ -117,13 +133,21 @@ function isPendingMessage(role: "user" | "assistant", text: string, uiLang: Lang
     "思考を整理しています...",
     "心を整えています",
     "心を整えています...",
+    "hopyが考えています",
+    "hopyが考えています...",
+    "hopyが思考を整理しています",
+    "hopyが思考を整理しています...",
+    "hopyが心を整えています",
+    "hopyが心を整えています...",
   ] as const;
 
   const prefixPatterns = [
     "考えています ",
     "思考を整理しています ",
     "心を整えています ",
-    "hopyが",
+    "hopyが考えています",
+    "hopyが思考を整理しています",
+    "hopyが心を整えています",
   ] as const;
 
   return (
@@ -337,18 +361,16 @@ const MessageRow = React.memo(
 export default MessageRow;
 
 /*
-このファイルの正式役割
+【このファイルの正式役割】
 メッセージ1行分の表示責務だけを持ち、user / assistant の本文表示、段落分割、pending表示、assistant横の状態丸表示を描画するファイル。
 状態の唯一の正は作らず、受け取った props をそのまま表示するだけに限定する。
-*/
 
-/*
 【今回このファイルで修正したこと】
-1. pending のときだけ、待機文の下に 5段階○アニメーション用の最小マークアップを追加しました。
-2. PENDING_PHASE_DOTS をこのファイル内に定義し、表示責務だけで 5個の丸を描画するようにしました。
-3. pending判定、assistantStateDot、tone判定、本文表示の既存構造は壊していません。
-*/
+- pending判定の日本語 prefixPatterns から広すぎる "hopyが" を削除した。
+- "HOPYが目指すのは..." のような確定済み回答本文を pending 扱いしないようにした。
+- HOPY待機文として使う可能性がある "HOPYが考えています" / "HOPYが思考を整理しています" / "HOPYが心を整えています" は、具体的なpending文言として残した。
+- 英語側も "hopy is " / "hopy's " の広すぎるprefixをやめ、具体的なpending文言だけに限定した。
+- pendingドット表示、assistantStateDot、tone判定、本文表示、state、Compass、Future Chain、MEMORIES、DBには触れていない。
 
-/*
-// /components/chat/ui/MessageRow.tsx
+/components/chat/ui/MessageRow.tsx
 */
