@@ -1,0 +1,1081 @@
+----HOPY回答生成 一本道ファイルフロー定義 v1 ここから----
+
+【定義名】
+HOPY回答生成 一本道ファイルフロー定義 v1
+
+【目的】
+HOPY回答生成で不具合調査・機能追加・推論エンジン接続を行うときに、
+ユーザー入力からHOPY回答、assistant message保存、hopy_confirmed_payload、Future Chain、Learning、MEMORIES、最終payloadまで、
+どのファイルをどの順番で通るかを一目で追えるようにする。
+
+この定義の目的は、
+原因調査時に横道へそれず、
+「今どこで止まっているか」
+「どのファイルの責務か」
+「どこを触ってはいけないか」
+を明確にすることである。
+
+【最重要原則】
+HOPY回答確定後の唯一の正はこれ。
+
+hopy_confirmed_payload
+
+HOPY回答生成後の下流で再判定してはいけないもの。
+
+state_changed
+state_level
+current_phase
+prev_state_level
+prev_phase
+Compass表示可否
+HOPY回答○表示可否
+Future Chain delivery_mode
+owner_handoff / recipient_support の発生理由
+HOPY回答本文の意味
+Compass本文の意味
+
+回答前は HOPY DB Brain / Learning / MEMORIES / prompt materials を読む。
+回答後は hopy_confirmed_payload が唯一の正になる。
+
+回答後の下流機能は、
+hopy_confirmed_payload と確定済み confirmedTurn を受け取り、
+保存・表示・中継・履歴化するだけであり、
+意味を作り直してはいけない。
+
+【大前提】
+状態値は必ず 1..5。
+
+1 = 混線
+2 = 模索
+3 = 整理
+4 = 収束
+5 = 決定
+
+0..4 へ戻してはいけない。
+
+【全体フロー】
+HOPY回答生成の大きな一本道はこれ。
+
+route.ts
+↓
+authenticated.ts
+↓
+authenticatedTurnDeps.ts
+↓
+loadContext()
+↓
+buildPromptInput()
+↓
+authenticatedLearning.ts
+↓
+loadLearningPromptContext()
+↓
+listLearningRecordsForPrompt.ts
+↓
+buildLearningPromptContext.ts
+↓
+buildLearningInjectionBlock.ts
+↓
+callModel()
+↓
+generateAssistantReply()
+↓
+authenticatedTurnResult.ts
+↓
+buildAuthenticatedTurnResult()
+↓
+authenticatedState.ts
+↓
+buildConfirmedAssistantTurn()
+↓
+authenticatedMemoryCandidates.ts
+↓
+resolveFinalConfirmedMemoryCandidates()
+↓
+persistTurn()
+↓
+authenticatedWrite.ts
+↓
+saveUserMessageOrError()
+↓
+saveAssistantMessageOrError()
+↓
+messages.ts
+↓
+saveMessageCore.ts
+↓
+assistantMessageId 確定
+↓
+futureChainContextFromFinalizedTurn.ts
+↓
+saveFutureChainFromConfirmedPayload()
+↓
+futureChainService.ts
+↓
+futureChainSaveFlow.ts
+↓
+futureChainCheck.ts
+↓
+futureChainCandidate.ts
+↓
+futureChainPersist.ts
+↓
+authenticatedLearning.ts
+↓
+saveAssistantLearningLogs()
+↓
+saveResponseGenerationLog.ts
+↓
+saveStateTransitionSignal.ts
+↓
+stateTransitionSignals.ts
+↓
+saveUserPhraseLearning()
+↓
+extractPhraseObservations.ts
+↓
+phraseObservations.ts
+↓
+upsertPhrasePattern.ts
+↓
+authenticatedPostTurn.ts
+↓
+authenticatedPostTurnPayloadFinalizeFlow.ts
+↓
+authenticatedFinalize.ts
+↓
+buildConfirmedMeaningPayload.ts
+↓
+hopy_confirmed_payload
+↓
+authenticatedPostTurnFutureChainPayload.ts
+↓
+payload.future_chain_persist
+↓
+authenticatedPostTurnFutureChainDisplay.ts
+↓
+payload.future_chain_display
+↓
+futureChainDeliveryEvent.ts
+↓
+payload.future_chain_display.deliveryEventId
+↓
+final payload
+
+【Phase 1：回答前 context / prompt 準備】
+役割：
+ユーザー入力、履歴、MEMORIES、Learning prompt材料を読み、HOPY回答生成に必要な prompt input を作る。
+
+中心ファイル：
+
+authenticatedTurnDeps.ts
+loadContext()
+buildPromptInput()
+authenticatedLearning.ts
+loadLearningPromptContext()
+listLearningRecordsForPrompt.ts
+buildLearningPromptContext.ts
+buildLearningInjectionBlock.ts
+
+責務：
+- conversation history を読む
+- prompt input を作る
+- Learning DB から回答前材料を取得する
+- LearningPromptContext を作る
+- Learning injection block を作る
+
+やらないこと：
+- hopy_confirmed_payload を作らない
+- state_changed を確定しない
+- Compassを生成しない
+- Future Chainを保存しない
+- MEMORIESを保存しない
+- UI表示をしない
+
+【Phase 2：model呼び出し / HOPY回答生成】
+役割：
+prompt input から model を呼び、assistant reply と model output を得る。
+
+中心ファイル：
+
+callModel()
+generateAssistantReply()
+authenticatedTurnResult.ts
+buildAuthenticatedTurnResult()
+
+責務：
+- HOPY回答本文を受け取る
+- model output を route用 result に整える
+- confirmedTurn へ渡す材料を作る
+
+やらないこと：
+- DB保存しない
+- UI表示しない
+- Future Chain保存しない
+- Learning保存しない
+
+【Phase 3：confirmedTurn 確定】
+役割：
+HOPY回答と状態値を confirmedTurn として扱える形へ整える。
+
+中心ファイル：
+
+authenticatedState.ts
+buildConfirmedAssistantTurn()
+
+責務：
+- assistantText を必須確認する
+- currentPhase / currentStateLevel / prevPhase / prevStateLevel を 1..5 として扱う
+- stateChanged を boolean として扱う
+- canonicalAssistantState を作る
+- Compassがある場合は confirmedTurn.compass の正式shapeへ整える
+
+やらないこと：
+- 状態の意味を作り直さない
+- state_changed を再判定しない
+- Compassを新規生成しない
+- Future Chain context を作らない
+
+【Phase 4：memory candidate 解決】
+役割：
+confirmed memory candidates を確定し、postTurn / payload / memory write へ渡す。
+
+中心ファイル：
+
+authenticatedMemoryCandidates.ts
+resolveFinalConfirmedMemoryCandidates()
+
+責務：
+- runTurnResult や confirmed memory candidates を確認する
+- timeout付きで memory candidates を解決する
+- heuristic 使用有無を返す
+
+やらないこと：
+- DB保存本体をしない
+- hopy_confirmed_payload を作らない
+- state_changed を再判定しない
+
+【Phase 5：user / assistant message 保存】
+役割：
+user message と assistant message を DBへ保存し、assistantMessageId を確定する。
+
+中心ファイル：
+
+authenticatedWrite.ts
+saveUserMessageOrError()
+saveAssistantMessageOrError()
+messages.ts
+saveMessage()
+saveMessageMaybeReturning()
+saveMessageCore.ts
+
+責務：
+- user message を messages へ保存する
+- assistant message を messages へ保存する
+- assistant本文、状態値、Compass値を保存層へ渡す
+- saveMessageCore(mode:"returning") により messages.id を取得する
+- 取得した id を assistantMessageId として後段へ渡す
+
+重要：
+assistantMessageId の正は、messages insert returning id。
+
+messages.assistant_message_id 列は optional 保存項目であり、
+assistantMessageId確定そのものではない。
+
+やらないこと：
+- assistantMessageId を自前生成しない
+- state_changed を再判定しない
+- Compassを生成しない
+- HOPY回答を再生成しない
+- Future Chainを生成しない
+
+【Phase 6：Future Chain context 生成】
+役割：
+confirmedTurnWithCompass / Compass / assistantMessageId から、Future Chain context を作る。
+
+中心ファイル：
+
+authenticatedPostTurn.ts
+buildFutureChainContextFromFinalizedTurn()
+futureChainContextFromFinalizedTurn.ts
+futureChainCategory.ts
+futureChainHandoffSnapshot.ts
+
+責務：
+- HOPY回答確定後の reply / state / Compass / assistantMessageId を受ける
+- Future Chain v3.1 context を作る
+- delivery_mode を決める
+- owner_handoff / recipient_support に必要な context を作る
+- handoff_message_snapshot を作る
+- source_assistant_message_id を入れる
+
+やらないこと：
+- Future Chain DB保存をしない
+- UI表示payloadを作らない
+- delivery_eventを保存しない
+- hopy_confirmed_payload を作らない
+- HOPY回答やCompassを下流で再要約しない
+
+【Phase 7：Future Chain 保存】
+役割：
+hopy_confirmed_payload 起点の sourceContext から、Future Chain bridge event / pattern を保存する。
+
+中心ファイル：
+
+saveFutureChainFromConfirmedPayload()
+futureChainService.ts
+futureChainSaveFlow.ts
+futureChainCheck.ts
+futureChainCandidate.ts
+futureChainPersist.ts
+
+責務：
+- 保存前チェックをする
+- candidate を作る
+- DB保存する
+- save / skip / error 結果を返す
+- patternId / bridgeEventId を返す
+
+やらないこと：
+- UI表示payloadを作らない
+- delivery_eventを保存しない
+- state_changed を再判定しない
+- HOPY回答やCompassを再要約しない
+
+【Phase 8：Learning logs 保存】
+役割：
+回答生成ログ・状態遷移ログ・phrase learning を保存する。
+
+中心ファイル：
+
+authenticatedLearning.ts
+saveAssistantLearningLogs()
+saveResponseGenerationLog.ts
+saveStateTransitionSignal.ts
+stateTransitionSignals.ts
+saveUserPhraseLearning()
+extractPhraseObservations.ts
+phraseObservations.ts
+upsertPhrasePattern.ts
+
+責務：
+- response_generation_logs を保存する
+- state_transition_signals を保存する
+- user phrase observation を抽出する
+- phrase_observations へ保存する
+- phrase_patterns へ upsert する
+
+やらないこと：
+- hopy_confirmed_payload を作らない
+- Future Chainを作らない
+- MEMORIESを保存しない
+- state_changed を再判定しない
+- HOPY回答を再生成しない
+
+【Phase 9：postTurn 最終化】
+役割：
+runTurnResult と confirmedTurn を受け取り、Memory / Learning / audit / thread title / Compass / Future Chain context / payload finalize を接続する。
+
+中心ファイル：
+
+authenticatedPostTurn.ts
+
+接続順：
+
+resolveAuthenticatedPostTurnFailure()
+↓
+resolveAuthenticatedPostTurnConfirmedTurn()
+↓
+resolveConfirmedCompassArtifacts()
+↓
+resolveAuthenticatedPostTurnStateCompassInvariant()
+↓
+resolveAuthenticatedPostTurnThreadSummary()
+↓
+executeAuthenticatedPostTurnThreadSummarySaveFlow()
+↓
+resolveConfirmedMemoryCandidatesWithTimeout()
+↓
+startAuthenticatedPostTurnLearningSave()
+↓
+executeAuthenticatedPostTurnMemoryWrite()
+↓
+resolveAuthenticatedPostTurnLearningSave()
+↓
+saveAuthenticatedPostTurnAudit()
+↓
+resolveAuthenticatedPostTurnThreadTitle()
+↓
+resolveAuthenticatedPostTurnConfirmedTurnWithCompass()
+↓
+buildFutureChainContextFromFinalizedTurn()
+↓
+finalizeAuthenticatedPostTurnPayloadFlow()
+
+責務：
+- postTurn最終化の親として各責務ファイルを呼ぶ
+- state_changed / Compass 整合だけを検証する
+- Plus / Pro で state_changed=true かつ Compassなしを止める
+- state_changed=false かつ Compassありを止める
+- Future Chain context を最終payload組み立てへ渡す
+
+やらないこと：
+- Future Chain保存本体を持たない
+- Future Chain display本体を持たない
+- delivery_event保存本体を持たない
+- Memory書き込み本体を持たない
+- Learning保存本体を持たない
+- audit保存本体を持たない
+- HOPY回答やCompassを再要約しない
+
+【Phase 10：thread_summary 解決・保存】
+役割：
+thread_summary を解決し、必要ならDBへ保存する。
+
+中心ファイル：
+
+authenticatedPostTurnThreadSummaryResolve.ts
+authenticatedPostTurnThreadSummarySaveFlow.ts
+authenticatedPostTurnThreadSummarySave.ts
+
+責務：
+- confirmedTurn.threadSummary を優先する
+- hopy_confirmed_payload.thread_summary を次に見る
+- 最後に canonical thread summary record を作る
+- thread_summary 保存debugを作る
+- 保存失敗時の failure payload を作る
+
+やらないこと：
+- state_changed を再判定しない
+- Compassを生成しない
+- Future Chainを生成しない
+
+【Phase 11：Memory write】
+役割：
+confirmed memory candidates を受け取り、MEMORIES保存を実行する。
+
+中心ファイル：
+
+authenticatedPostTurnMemoryWrite.ts
+shouldSaveMemoryCandidate.ts
+findDuplicateMemory.ts
+memoriesQueries.ts
+memories/types.ts
+
+責務：
+- confirmed memory candidates を保存候補として扱う
+- save_hint / confidence / type / source_type を確認する
+- duplicate を確認する
+- memories へ保存またはtouchする
+- memoryWrite debug を返す
+
+やらないこと：
+- HOPY回答を生成しない
+- hopy_confirmed_payload を作らない
+- state_changed を再判定しない
+- Future Chainを作らない
+
+注意：
+buildMemoryCandidates.ts は保存判定ではなく、payload用 memory_candidates 復元地点。
+MEMORIES残り問題を直す場合は、buildMemoryCandidates.ts ではなく、まず authenticatedMemoryCandidates.ts / authenticatedPostTurnMemoryWrite.ts / shouldSaveMemoryCandidate.ts を見る。
+
+【Phase 12：confirmed Learning 保存】
+役割：
+confirmedTurn から抽象化Learning候補を作り、hopy_response_learning へ保存する。
+
+中心ファイル：
+
+authenticatedPostTurnLearningSave.ts
+authenticatedHelpers.ts
+authenticatedLearning.ts
+saveConfirmedAssistantLearningEntry()
+extractLearningCandidates.ts
+shouldPersistLearning.ts
+upsertLearningRecord.ts
+
+責務：
+- Learning保存Promiseを開始する
+- Learning保存結果を回収する
+- LearningCandidate を抽出する
+- 保存前チェックをする
+- hopy_response_learning に insert / update する
+
+やらないこと：
+- HOPY回答を作らない
+- hopy_confirmed_payload を作らない
+- MEMORIES保存をしない
+- Future Chain保存をしない
+- state_changed を再判定しない
+
+【Phase 13：audit 保存】
+役割：
+intervention audit を保存する。
+
+中心ファイル：
+
+authenticatedPostTurnAuditSave.ts
+
+責務：
+- insertInterventionLog() を呼ぶ
+- user_input / hopy_output / phase_before / phase_after / score_before / score_after を保存する
+- audit_ok / audit_error を返す
+
+やらないこと：
+- HOPY回答を作らない
+- state_changed を再判定しない
+- Compassを生成しない
+- Future Chainを生成しない
+
+【Phase 14：thread title 解決】
+役割：
+最終payload用 thread title を解決する。
+
+中心ファイル：
+
+authenticatedPostTurnThreadTitle.ts
+
+責務：
+- auto title を優先する
+- reused thread title を次に使う
+- created thread title を次に使う
+- 最後に New chat / 新規チャットを使う
+- resolveThreadTitleForPayload() でDB titleを解決する
+
+やらないこと：
+- HOPY回答を作らない
+- state_changed を再判定しない
+- hopy_confirmed_payload を作らない
+
+【Phase 15：payload土台作成】
+役割：
+最終payloadの共通土台を作る。
+
+中心ファイル：
+
+authenticatedPayload.ts
+authenticatedTypes.ts
+
+責務：
+- notification を載せる
+- thread.id / title / state投影を載せる
+- state_update_ok / state_update_error を載せる
+- debug用 client_request_id を必要時だけ載せる
+- memory_clean を必要時だけ載せる
+
+やらないこと：
+- reply を top-level に載せない
+- state を top-level に載せない
+- assistant_state を top-level に載せない
+- compass を top-level に載せない
+- hopy_confirmed_payload をここで作らない
+
+重要：
+HOPY唯一の正は payload.hopy_confirmed_payload に寄せる。
+thread.state_level / current_phase / state_changed は thread表示用の投影。
+
+【Phase 16：hopy_confirmed_payload 組み立て】
+役割：
+HOPY回答確定後の唯一の正を組み立てる。
+
+中心ファイル：
+
+authenticatedFinalize.ts
+buildConfirmedMeaningPayload.ts
+buildReplyState.ts
+futureChainPayloadContext.ts
+buildThreadSummary.ts
+buildMemoryCandidates.ts
+buildDashboardSignals.ts
+buildNotificationSignal.ts
+buildUiEffects.ts
+dashboardSignal.ts
+
+出力：
+
+hopy_confirmed_payload.reply
+hopy_confirmed_payload.state
+hopy_confirmed_payload.compass
+hopy_confirmed_payload.future_chain_context
+hopy_confirmed_payload.thread_summary
+hopy_confirmed_payload.memory_candidates
+hopy_confirmed_payload.dashboard_signals
+hopy_confirmed_payload.notification_signal
+hopy_confirmed_payload.ui_effects
+
+責務：
+- confirmedTurn から reply/state を作る
+- Future Chain context を confirmed payload に載せられる形へ正規化する
+- thread_summary を作る
+- memory_candidates を載せる
+- dashboard_signals を載せる
+- notification_signal を載せる
+- ui_effects を載せる
+- Compassは state_changed=true かつ Compass textありの場合だけ載せる
+
+やらないこと：
+- HOPY回答を再生成しない
+- state_changed を再判定しない
+- Compassを新規生成しない
+- Future Chain意味を新規生成しない
+- Future Chain DB保存しない
+- UI表示しない
+
+【Phase 17：future_chain_context confirmed payload 正規化】
+役割：
+raw futureChainContext を hopy_confirmed_payload.future_chain_context に載せてよい形へ正規化する。
+
+中心ファイル：
+
+futureChainPayloadContext.ts
+
+責務：
+- delivery_mode を owner_handoff / recipient_support / none に正規化する
+- major_category / minor_category を許可カテゴリだけ通す
+- change_trigger_key を基本11キーだけ通す
+- transition_kind / transition_meaning を許可値だけ通す
+- owner_handoff は context不足なら通さない
+- recipient_support は state_changed=true の場合通さない
+
+owner_handoff 通過条件：
+
+deliveryMode = owner_handoff
+majorCategory != null
+minorCategory != null
+changeTriggerKey != null
+transitionKind != null
+transitionKind != same_level
+transitionMeaning != null
+supportShapeKey != null
+handoffMessageSnapshot != null
+stateChanged = true
+
+recipient_support 通過条件：
+
+deliveryMode = recipient_support
+stateChanged = false
+
+やらないこと：
+- Future Chain意味生成をしない
+- DB保存しない
+- UI表示判定をしない
+- HOPY回答やCompassを再要約しない
+
+【Phase 18：future_chain_persist payload中継】
+役割：
+runTurnResult.future_chain_persist を final payload へ載せる。
+
+中心ファイル：
+
+authenticatedPostTurnFutureChainPayload.ts
+futureChainTurnPersistResult.ts
+
+責務：
+- runTurnResult.future_chain_persist を読む
+- save / skip / reason / patternId / bridgeEventId / deliveryEventId / ok を正規化する
+- payload.future_chain_persist に載せる
+
+やらないこと：
+- 保存判定しない
+- DB保存しない
+- UI表示しない
+- state_changed を再判定しない
+
+【Phase 19：future_chain_display 付与】
+役割：
+hopy_confirmed_payload.future_chain_context を読み、表示payloadを作れる場合だけ payload.future_chain_display を載せる。
+
+中心ファイル：
+
+authenticatedPostTurnFutureChainDisplay.ts
+futureChainDisplayPayload.ts
+
+owner_handoff flow：
+
+payload.hopy_confirmed_payload.future_chain_context
+↓
+buildFutureChainDisplayPayload()
+↓
+owner_handoff display payload
+↓
+payload.future_chain_persist.bridgeEventId があれば補完
+↓
+shouldDisplay=true の場合だけ payload.future_chain_display
+
+recipient_support flow：
+
+payload.hopy_confirmed_payload.future_chain_context
+↓
+delivery_mode=recipient_support / support_needed=true
+↓
+plan gate
+↓
+category確認
+↓
+selectFutureChainRecipientSupport()
+↓
+buildFutureChainDisplayPayload()
+↓
+shouldDisplay=true の場合だけ payload.future_chain_display
+
+plan gate：
+
+Free:
+recipient_support なし
+
+Plus:
+recipient_support は assistantMessageId hash により 4分の1
+
+Pro:
+recipient_support 許可
+
+owner_handoff 表示：
+
+Free:
+placement = below_reply
+detailLevel = minimal
+handoffMessageSnapshot は表示payloadに載せない
+
+Plus / Pro:
+placement = below_compass
+detailLevel = full
+handoffMessageSnapshot を表示payloadに載せる
+
+recipient_support 表示：
+
+Plus / Pro:
+placement = below_reply
+detailLevel = full
+handoffMessageSnapshot 必須
+
+やらないこと：
+- Future Chain保存しない
+- delivery_event保存しない
+- HOPY回答やCompassを再要約しない
+- state_changed を再判定しない
+- UI本体表示しない
+
+【Phase 20：recipient_support 候補選択】
+役割：
+保存済み hopy_future_chain_bridge_events から、現在ユーザーへ届けてよい handoff_message_snapshot を1件だけ選ぶ。
+
+中心ファイル：
+
+futureChainRecipientSupportSelect.ts
+
+責務：
+- hopy_future_chain_bridge_events を検索する
+- active / deleted_at null / handoff_message_snapshotありだけ対象にする
+- 同一assistant message由来を除外する
+- 同一threadで表示済み bridge_event を除外する
+- 言語で絞る
+- 状態値・カテゴリ・change_trigger_key の近さで scoring する
+- 安全な handoff_message_snapshot を持つ1件を選ぶ
+
+安全除外：
+- URLを含む snapshot
+- メールを含む snapshot
+- 10桁以上の番号列を含む snapshot
+- 12文字未満
+- 480文字超
+
+やらないこと：
+- delivery_event保存しない
+- display payloadを作らない
+- HOPY回答を読まない
+- Compassを読まない
+- ユーザー発話生文を読まない
+- state_changed を再判定しない
+
+【Phase 21：future_chain_delivery_event 保存】
+役割：
+recipient_support が payload.future_chain_display に載った場合だけ、表示履歴を保存する。
+
+中心ファイル：
+
+futureChainDeliveryEvent.ts
+
+保存条件：
+
+payload.future_chain_display.kind = recipient_support
+payload.future_chain_display.shouldDisplay = true
+bridgeEventId あり
+handoffMessageSnapshot あり
+recipientUserId あり
+recipientAssistantMessageId あり
+recipientPlan が free / plus / pro
+recipientStateLevel が 1..5
+
+保存先：
+
+hopy_future_chain_delivery_events
+
+保存内容：
+- recipient_user_id
+- recipient_thread_id
+- recipient_assistant_message_id
+- bridge_event_id
+- pattern_id
+- recipient_plan
+- display_mode = recipient_support
+- recipient_state_level
+- major_category
+- minor_category
+- change_trigger_key
+- display_title
+- display_hint = handoffMessageSnapshot
+- delivery_reason
+- status = shown
+- metadata
+
+重複防止：
+bridge_event_id + recipient_assistant_message_id + deleted_at null で既存確認する。
+
+保存後：
+payload.future_chain_display.deliveryEventId
+payload.future_chain_display.delivery_event_id
+に保存IDを反映する。
+
+やらないこと：
+- owner_handoff delivery_event は保存しない
+- recipient_support検索しない
+- display payloadを作らない
+- HOPY回答やCompassを再要約しない
+- state_changed を再判定しない
+
+【最終payloadの形】
+最終payloadの中心はこれ。
+
+payload.ok
+payload.notification
+payload.thread
+payload.state_update_ok
+payload.state_update_error
+payload.hopy_confirmed_payload
+payload.future_chain_persist
+payload.future_chain_display
+payload.future_chain_delivery_event
+payload.debug
+payload.memory_clean
+
+HOPY唯一の正はこれ。
+
+payload.hopy_confirmed_payload
+
+top-level に戻してはいけないもの。
+
+payload.reply
+payload.state
+payload.assistant_state
+payload.compass
+payload.state_level
+payload.current_phase
+payload.state_changed
+payload.prev_phase
+payload.prev_state_level
+
+ただし thread 内の state は、左カラム・thread表示用の確定状態投影として維持する。
+
+【不具合調査時の確認順】
+HOPY回答生成で不具合が出た場合は、この順に見る。
+
+1. runTurnResult があるか
+2. confirmedTurn が正しく同期されているか
+3. state_changed / Compass invariant で止まっていないか
+4. assistantMessageId が messages insert returning id として取れているか
+5. buildFutureChainContextFromFinalizedTurn() が context を作っているか
+6. saveFutureChainFromConfirmedPayload() が save / skip / error のどれを返したか
+7. payload.hopy_confirmed_payload が載っているか
+8. payload.hopy_confirmed_payload.state が 1..5 か
+9. payload.hopy_confirmed_payload.future_chain_context が載っているか
+10. payload.future_chain_persist が載っているか
+11. payload.future_chain_display が載っているか
+12. recipient_support の場合、selectFutureChainRecipientSupport() が selected を返したか
+13. recipient_support の場合、futureChainDeliveryEvent.ts が deliveryEventId を返したか
+14. UI側が payload.future_chain_display を描画しているか
+
+【触ってはいけない方針】
+不具合が出ても、以下はしない。
+
+- state_changed を下流で作り直す
+- state_level を 0..4 に戻す
+- Compassがないから補う
+- Future Chainが出ないからUI側で無理やり表示する
+- hopy_confirmed_payload 以外から表示正を作る
+- HOPY回答本文をFuture Chain側で再要約する
+- Compass本文をFuture Chain側で再要約する
+- memory candidates をpayload復元地点で意味判定する
+- authenticatedPostTurn.ts に分離済み処理を戻す
+- authenticatedPayload.ts に top-level reply/state/compass を戻す
+- futureChainDisplayPayload.ts に recipient_support検索を入れる
+- futureChainDeliveryEvent.ts に表示候補選択を入れる
+
+【ファイル責務まとめ】
+route.ts:
+API入口。
+
+authenticated.ts:
+authenticated経路の大枠。
+
+authenticatedTurnDeps.ts:
+回答生成前後の依存処理、context、prompt、model、persist、Future Chain保存、Learning log接続。
+
+authenticatedLearning.ts:
+Learning prompt読み込み、回答後Learning log、confirmed Learning保存、phrase learning 接続。
+
+authenticatedTurnResult.ts:
+model output から authenticated turn result を組み立てる。
+
+authenticatedState.ts:
+confirmedTurn / canonicalAssistantState を作る。
+
+authenticatedMemoryCandidates.ts:
+confirmed memory candidates を解決する。
+
+authenticatedWrite.ts:
+user / assistant message 保存を呼ぶ。
+
+messages.ts:
+messages保存の公開窓口。
+
+saveMessageCore.ts:
+messages insert 本体。returning id を返す。
+
+authenticatedPostTurn.ts:
+postTurn最終化の親接続ファイル。
+
+authenticatedPostTurnFailure.ts:
+postTurn失敗判定。
+
+authenticatedPostTurnFailureResult.ts:
+postTurn失敗結果作成。
+
+authenticatedPostTurnConfirmedTurn.ts:
+runTurnResult と confirmedTurn の同期。
+
+authenticatedPostTurnCompass.ts:
+Compass artifacts 解決。
+
+authenticatedPostTurnStateCompassInvariant.ts:
+state_changed / Compass 整合検証。
+
+authenticatedPostTurnThreadSummaryResolve.ts:
+thread_summary 解決。
+
+authenticatedPostTurnThreadSummarySaveFlow.ts:
+thread_summary 保存フロー。
+
+authenticatedPostTurnThreadSummarySave.ts:
+thread_summary 保存とdebug付与。
+
+authenticatedPostTurnMemoryCandidates.ts:
+postTurn confirmed memory candidates 解決。
+
+authenticatedPostTurnMemoryWrite.ts:
+Memory 書き込み実行。
+
+authenticatedPostTurnLearningSave.ts:
+Learning 保存開始・結果解決。
+
+authenticatedPostTurnAuditSave.ts:
+audit 保存。
+
+authenticatedPostTurnThreadTitle.ts:
+thread title 解決。
+
+authenticatedPostTurnConfirmedTurnWithCompass.ts:
+Compass付き confirmedTurn 整形。
+
+authenticatedPayload.ts:
+最終payload共通土台。
+
+authenticatedTypes.ts:
+authenticated系共通型。
+
+authenticatedPostTurnPayloadFinalizeFlow.ts:
+最終payload組み立てフロー。
+
+authenticatedFinalize.ts:
+finalized artifacts と response payload 組み立て。
+
+buildConfirmedMeaningPayload.ts:
+hopy_confirmed_payload 本体組み立て。
+
+buildReplyState.ts:
+hopy_confirmed_payload.reply/state 組み立て。
+
+buildThreadSummary.ts:
+hopy_confirmed_payload.thread_summary 組み立て。
+
+buildMemoryCandidates.ts:
+mem_extract_preview から payload用 memory_candidates を復元。
+
+buildDashboardSignals.ts:
+dashboard signals を payload用配列へ整形。
+
+buildNotificationSignal.ts:
+notification_signal を整形。
+
+buildUiEffects.ts:
+ui_effects を整形。
+
+dashboardSignal.ts:
+Dashboard用 state snapshot / transition / support focus signal の元データ作成。
+
+futureChainContextFromFinalizedTurn.ts:
+Future Chain context 生成。
+
+futureChainCategory.ts:
+Future Chain カテゴリ決定補助。
+
+futureChainHandoffSnapshot.ts:
+handoff_message_snapshot 抽出補助。
+
+futureChainPayloadContext.ts:
+hopy_confirmed_payload.future_chain_context の正規化・安全門。
+
+futureChainService.ts:
+Future Chain保存入口。
+
+futureChainSaveFlow.ts:
+precheck → candidate → persist の保存フロー。
+
+futureChainCheck.ts:
+Future Chain保存前チェック。
+
+futureChainCandidate.ts:
+Future Chain保存候補生成。
+
+futureChainPersist.ts:
+Future Chain DB保存。
+
+authenticatedPostTurnFutureChainPayload.ts:
+future_chain_persist を payload へ中継。
+
+futureChainTurnPersistResult.ts:
+future_chain_persist のshape正規化。
+
+authenticatedPostTurnFutureChainDisplay.ts:
+future_chain_display を payload へ付与するroute側ゲート。
+
+futureChainDisplayPayload.ts:
+future_chain_display payload 本体作成。
+
+futureChainRecipientSupportSelect.ts:
+recipient_support 用 bridge event 候補選択。
+
+futureChainDeliveryEvent.ts:
+recipient_support 表示履歴保存。
+
+【現在の到達点】
+この定義により、HOPY回答生成から最終payloadまでの主要な一本道は確認済み。
+
+次に進む場合は、以下のどちらか。
+
+1. この定義を future-chain フォルダまたは docs フォルダに .txt として保存する
+2. HOPY Inference Engine / DB Brain / World Learning 実装順ロードマップ v1 仮の Phase 1 棚卸し完了として、Phase 2 以降へ進む
+
+ただし、実装修正はまだ行わない。
+ここまでは棚卸し・定義作成である。
+
+----HOPY回答生成 一本道ファイルフロー定義 v1 ここまで----
+

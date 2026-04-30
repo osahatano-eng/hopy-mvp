@@ -324,36 +324,6 @@ export async function resolveHeuristicConfirmedMemoryCandidatesForTurn(params: {
   }
 }
 
-function buildInterpretedFallbackConfirmedMemoryCandidates(params: {
-  userText: string;
-  resolvedConversationId: string;
-  assistantMessageId: string;
-  uiLang: Lang;
-}): ConfirmedMemoryCandidate[] {
-  const normalized = String(params.userText ?? "").replace(/\s+/g, " ").trim();
-
-  if (!normalized) return [];
-
-  const truncated =
-    normalized.length > 120 ? `${normalized.slice(0, 120).trim()}…` : normalized;
-
-  const body =
-    params.uiLang === "ja"
-      ? `ユーザーは「${truncated}」について整理や確認を求めている`
-      : `The user is seeking help organizing or clarifying: "${truncated}"`;
-
-  return [
-    {
-      source_type: "auto",
-      memory_type: "support_context",
-      body,
-      savable: true,
-      thread_id: params.resolvedConversationId,
-      source_message_id: params.assistantMessageId,
-    },
-  ];
-}
-
 function applyConfirmedMemoryCandidateFallback(params: {
   candidates: ConfirmedMemoryCandidate[];
   threadId?: string;
@@ -514,31 +484,23 @@ export async function resolveFinalConfirmedMemoryCandidates(params: {
   }
 
   return {
-    confirmedMemoryCandidates: buildInterpretedFallbackConfirmedMemoryCandidates(
-      {
-        userText: params.userText,
-        resolvedConversationId: params.resolvedConversationId,
-        assistantMessageId: params.assistantMessageId,
-        uiLang: params.uiLang,
-      },
-    ),
+    confirmedMemoryCandidates: [],
     usedHeuristicConfirmedMemoryCandidates: false,
   };
 }
 
 /*
-このファイルの正式役割
+【このファイルの正式役割】
 authenticated の memory candidates 解決ファイル。
 runTurnResult / modelOutput / body から confirmed memory candidates を正規化し、
-必要時のみ heuristic fallback を使って、最終 candidates を返す。
-*/
+built result を最優先、空の場合のみ heuristic fallback を確認して、
+最終 confirmedMemoryCandidates を返す。
 
-/*
 【今回このファイルで修正したこと】
-- free だけに限定されていた heuristic / interpreted fallback を、Plus / Pro を含む authenticated 全体で使えるようにしました。
-- まず builtResultCandidates を最優先で採用し、空のときだけ heuristic、さらに空のときだけ interpreted fallback に進む順序へ整理しました。
-- state_changed の再判定や Compass 条件には触っていません。
-*/
+- 候補がない場合に、ユーザー入力から汎用 support_context を自動生成する interpreted fallback を削除しました。
+- builtResultCandidates が空で、heuristic candidates も空の場合は、confirmedMemoryCandidates: [] を返すようにしました。
+- MEMORIES候補がない会話で、低価値な「整理や確認を求めている」系の savable: true 候補が作られないようにしました。
+- state_changed / state_level / current_phase / prev系 / Compass表示可否 / HOPY回答○表示可否は再判定していません。
 
-/* /app/api/chat/_lib/route/authenticatedMemoryCandidates.ts */
-// このファイルの正式役割: authenticated の memory candidates 解決ファイル
+/app/api/chat/_lib/route/authenticatedMemoryCandidates.ts
+*/
