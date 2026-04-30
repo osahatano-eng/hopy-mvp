@@ -56,26 +56,29 @@ export type AuthenticatedThreadPayload = {
   client_request_id?: string;
 };
 
-export type AuthenticatedChatPayload = {
-  ok: true;
+export type AuthenticatedHopyConfirmedPayload = {
   reply: string;
   state: CanonicalAssistantState;
+  compass?: ConfirmedAssistantCompass;
+  future_chain_context?: Record<string, unknown> | null;
+  thread_summary?: unknown;
+  memory_candidates?: unknown;
+  dashboard_signals?: unknown;
+  notification_signal?: unknown;
+  ui_effects?: unknown;
+};
+
+export type AuthenticatedChatPayload = {
+  ok: true;
   notification: NotificationState;
   thread: AuthenticatedThreadPayload;
   state_update_ok: boolean;
   state_update_error: string | null;
-  state_level: 1 | 2 | 3 | 4 | 5;
-  current_phase: 1 | 2 | 3 | 4 | 5;
-  state_changed: boolean;
-  prev_phase: 1 | 2 | 3 | 4 | 5;
-  prev_state_level: 1 | 2 | 3 | 4 | 5;
-  assistant_state: CanonicalAssistantState;
-  compass?: ConfirmedAssistantCompass;
-  hopy_confirmed_payload?: {
-    reply: string;
-    state: CanonicalAssistantState;
-    compass?: ConfirmedAssistantCompass;
-  };
+  hopy_confirmed_payload?: AuthenticatedHopyConfirmedPayload;
+  future_chain_persist?: unknown;
+  future_chain_display?: unknown;
+  future_chain_delivery_event?: unknown;
+  debug?: Record<string, unknown>;
   memory_clean?: any;
 };
 
@@ -121,26 +124,19 @@ export type AuthenticatedModelOutput = {
 };
 
 /*
+【このファイルの正式役割】
+authenticated 系で使う共通型定義ファイル。
+authenticated 経路の user / assistant 保存結果、確定済み assistant turn、payload土台、prompt input、model output の型を定義する。
+このファイルは型定義だけを担当し、DB取得、DB保存、state_changed生成、Compass生成、HOPY回答○表示、Future Chain保存、MEMORIES保存、Learning保存、UI表示は担当しない。
+
 【今回このファイルで修正したこと】
-- 旧 CompassPayload を削除し、現在の正式shapeである ConfirmedAssistantCompass を追加した。
-- AuthenticatedChatPayload.compass を必須ではなく optional に修正した。
-- AuthenticatedChatPayload.hopy_confirmed_payload の正式受け口を型へ追加した。
-- ConfirmedAssistantTurn に compass を追加し、text / prompt の正式shapeを型でも保持できるようにした。
-- AuthenticatedModelOutput.compass も ConfirmedAssistantCompass | null にそろえた。
+- AuthenticatedChatPayload から、現在の実装では返していない old top-level reply / state / state_level / current_phase / state_changed / prev_phase / prev_state_level / assistant_state / compass を削除した。
+- HOPY唯一の正を payload.hopy_confirmed_payload に寄せるため、AuthenticatedHopyConfirmedPayload を追加した。
+- thread.state_level / thread.current_phase / thread.state_changed / thread.prev系 は、thread 表示用の確定状態投影として維持した。
+- future_chain_persist / future_chain_display / future_chain_delivery_event / debug は、postTurn finalize 後に付与される中継値として optional にした。
+- ConfirmedAssistantTurn / CanonicalAssistantState / ConfirmedAssistantCompass / AuthenticatedModelOutput の既存shapeは維持した。
+- state値は 1..5 のまま維持し、0..4 前提にはしていない。
+- HOPY唯一の正、Compass生成、Future Chain保存、MEMORIES保存、Learning保存、DB保存、UI表示には触れていない。
 
-このファイルの正式役割
-authenticated 系で使う共通型定義ファイル
+/app/api/chat/_lib/route/authenticatedTypes.ts
 */
-
-/*
-このファイルの正式役割
-authenticated 系で使う共通型定義ファイル
-*/
-
-/*
-【今回このファイルで修正したこと】
-- Compass の型定義を旧shapeから正式shapeへ統一した。
-- payload.compass / hopy_confirmed_payload.compass / confirmedTurn.compass の型ずれを解消した。
-- Compass が optional である現在の実装に合わせて AuthenticatedChatPayload を修正した。
-*/
-// このファイルの正式役割: authenticated 系で使う共通型定義ファイル
