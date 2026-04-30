@@ -62,6 +62,50 @@ function clipLines(lines: string[], maxItems: number): string[] {
   return lines.filter(Boolean).slice(0, maxItems);
 }
 
+function compactSignalText(value: unknown): string {
+  return normalizeText(value).replace(/\s+/g, "").toLowerCase();
+}
+
+function includesAny(value: string, patterns: readonly string[]): boolean {
+  return patterns.some((pattern) => value.includes(pattern));
+}
+
+function isHopySelfDefinitionQuestion(userInput: string): boolean {
+  const compact = compactSignalText(userInput);
+  if (!compact) return false;
+
+  const hopySignals = ["hopy", "ホピー", "ほぴー"];
+  if (!includesAny(compact, hopySignals)) return false;
+
+  const definitionSignals = [
+    "目指すもの",
+    "目指している",
+    "目指してる",
+    "何を目指",
+    "なにを目指",
+    "何が目標",
+    "目標は",
+    "何者",
+    "なにもの",
+    "何をする",
+    "なにをする",
+    "役割",
+    "存在",
+    "どんなai",
+    "どんな存在",
+    "コンセプト",
+    "思想",
+    "大切にしている",
+    "大切にする",
+    "hopyとは",
+    "hopyって",
+    "ホピーとは",
+    "ホピーって",
+  ];
+
+  return includesAny(compact, definitionSignals);
+}
+
 function buildHopyCurrentLocationPromptSection(): string {
   return [
     "【現在地 prompt】",
@@ -132,6 +176,29 @@ function buildHopyAlignmentPromptSection(): string {
     "- 禁止: HOPYが人生や選択を決め切ること。",
     "- 禁止: 『あとはあなた次第です』だけで終わること。",
     "- 禁止: 雰囲気だけの締めにすること。",
+  ].join("\n");
+}
+
+function buildHopySelfDefinitionQuestionSection(): string {
+  return [
+    "【HOPY自己説明質問 prompt】",
+    "- 今回の入力は、通常相談ではなく、HOPY自身の定義・目指すもの・役割を聞く質問です。",
+    "- 通常相談のように、ユーザーの現在地を深く見立てる返し方へ寄せすぎないでください。",
+    "- HOPYが何を目指す存在なのかを、HOPY自身の言葉として直接答えてください。",
+    "- 必ず次の4点を本文に含めてください。",
+    "  1. HOPYが目指すもの",
+    "  2. HOPYがしないこと",
+    "  3. HOPYがどう支えるか",
+    "  4. ユーザーに最後に残したい感覚",
+    "- HOPYが目指すものは、ユーザーの代わりに答えを決めることではなく、ユーザー本人が自分の力で選べるように支えることです。",
+    "- HOPYがしないことは、ただ慰めるだけ、一般論で流すこと、どちらでもいいで逃げること、ユーザーの主役を奪うことです。",
+    "- HOPYがすることは、ユーザーの言葉から現在地・詰まりの中心・外してはいけないリスクを読み、HOPYならどう見るかを理由つきで置くことです。",
+    "- 最後に残したい感覚は、『HOPYに決められた』ではなく、『HOPYが読んでくれたから自分で決められた』です。",
+    "- 返答は自己紹介文ではなく、HOPYの思想が伝わる説明にしてください。",
+    "- 『静かに支える』『足場を置く』だけで終わらず、主役を奪わず方向から逃げない伴走者であることを明確に書いてください。",
+    "- 禁止: HOPYを一般的な相談AIとしてだけ説明すること。",
+    "- 禁止: 『あなたの考えを整理します』だけで終わること。",
+    "- 禁止: HOPYの判断や存在意義を曖昧にすること。",
   ].join("\n");
 }
 
@@ -492,8 +559,23 @@ export function buildHopyLengthControlSection(): string {
 }
 
 export function buildHopyUserInputSection(userInput: string): string {
+  const selfDefinitionQuestion = isHopySelfDefinitionQuestion(userInput);
   const explicitForwardCommitment =
     hasHopyExplicitForwardCommitment(userInput);
+
+  if (selfDefinitionQuestion) {
+    return [
+      "今回のユーザー入力:",
+      userInput || "(空入力)",
+      "",
+      buildHopySelfDefinitionQuestionSection(),
+      "",
+      "この入力では、通常相談のようにユーザーの悩みを深掘りするより、HOPY自身の定義を直接答えてください。",
+      "回答本文では、HOPYが目指すもの、HOPYがしないこと、HOPYがどう支えるか、ユーザーに最後に残したい感覚を明確にしてください。",
+      "HOPYは、ユーザーの代わりに決めるAIではなく、主役を奪わず方向から逃げない伴走者であることを、本文に残してください。",
+      "ただし、state_level / current_phase / state_changed は本文側で作らず、必ず同じ messages 内の状態材料に一致させてください。",
+    ].join("\n");
+  }
 
   if (explicitForwardCommitment) {
     return [
@@ -588,13 +670,10 @@ HOPY回答生成に使う system / developer / user prompt の各セクション
 DB取得、DB保存、state_changed生成、Compass生成、○表示、messages取得、回答保存処理は担当しない。
 
 【今回このファイルで修正したこと】
-- HOPY回答の中核5要素を、それぞれ独立した prompt section として分離した。
-- buildHopyCurrentLocationPromptSection(...) で「現在地」の役割と禁止事項を定義した。
-- buildHopyAssessmentPromptSection(...) で「見立て」の役割と禁止事項を定義した。
-- buildHopyJudgmentPromptSection(...) で「HOPYの判断」の役割と禁止事項を定義した。
-- buildHopyReasonPromptSection(...) で「理由」の役割と禁止事項を定義した。
-- buildHopyAlignmentPromptSection(...) で「すり合わせ」の役割と禁止事項を定義した。
-- buildHopyCoreAnswerSection(...) を、5つの小sectionを組み立てる形へ変更した。
+- HOPY自己説明系の入力を検出する isHopySelfDefinitionQuestion(...) を追加した。
+- HOPY自己説明系の回答ルールを返す buildHopySelfDefinitionQuestionSection(...) を追加した。
+- buildHopyUserInputSection(...) で、HOPY自己説明系入力を通常相談ルールから分岐させた。
+- 「HOPYが目指すものはなに？」のような入力では、HOPYが目指すもの、HOPYがしないこと、HOPYがどう支えるか、ユーザーに最後に残したい感覚を直接答えるようにした。
 - hopy_confirmed_payload.state、state_changed、Compass、Future Chain、MEMORIES、Learning、Dashboard、UI、DB schema には触れていない。
 
 /app/api/chat/_lib/hopy/prompt/hopyPromptSections.ts
