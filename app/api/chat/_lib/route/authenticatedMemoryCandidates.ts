@@ -26,6 +26,12 @@ export type ConfirmedMemoryCandidate = {
 const PENDING_ASSISTANT_SOURCE_MESSAGE_ID =
   "__pending_assistant_message_id__";
 
+function isUuidLike(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value,
+  );
+}
+
 function normalizeConfirmedMemorySourceType(
   value: unknown,
 ): "auto" | "manual" {
@@ -96,7 +102,12 @@ function normalizeConfirmedMemorySavable(value: unknown): boolean {
 
 function normalizeConfirmedMemoryId(value: unknown): string | null {
   const s = String(value ?? "").trim();
-  return s ? s : null;
+
+  if (!s) return null;
+  if (s === PENDING_ASSISTANT_SOURCE_MESSAGE_ID) return null;
+  if (!isUuidLike(s)) return null;
+
+  return s;
 }
 
 function readConfirmedMemoryBody(raw: any): string {
@@ -238,17 +249,16 @@ function coerceHeuristicCandidate(
   const sourceType =
     String(raw.source_type ?? raw.sourceType ?? "auto").trim() || "auto";
 
-  const sourceMessageId = String(
+  const sourceMessageId = normalizeConfirmedMemoryId(
     raw.source_message_id ??
       raw.sourceMessageId ??
       raw.latest_reply_id ??
-      raw.latestReplyId ??
-      PENDING_ASSISTANT_SOURCE_MESSAGE_ID,
-  ).trim();
+      raw.latestReplyId,
+  );
 
-  const threadId = String(
-    raw.thread_id ?? raw.threadId ?? fallbackThreadId,
-  ).trim();
+  const threadId =
+    normalizeConfirmedMemoryId(raw.thread_id ?? raw.threadId) ??
+    normalizeConfirmedMemoryId(fallbackThreadId);
 
   const savableRaw = raw.savable ?? raw.save_hint ?? raw.saveHint;
   const savable =
@@ -260,8 +270,8 @@ function coerceHeuristicCandidate(
     memory_type: memoryType,
     body,
     source_type: sourceType === "manual" ? "manual" : "auto",
-    thread_id: threadId || fallbackThreadId,
-    source_message_id: sourceMessageId || PENDING_ASSISTANT_SOURCE_MESSAGE_ID,
+    thread_id: threadId,
+    source_message_id: sourceMessageId,
     savable,
   };
 }
@@ -329,37 +339,36 @@ function applyConfirmedMemoryCandidateFallback(params: {
   threadId?: string;
   sourceMessageId?: string;
 }): ConfirmedMemoryCandidate[] {
-  if (!params.threadId && !params.sourceMessageId) {
-    return params.candidates;
+  const fallbackThreadId = normalizeConfirmedMemoryId(params.threadId);
+  const fallbackSourceMessageId = normalizeConfirmedMemoryId(
+    params.sourceMessageId,
+  );
+
+  if (!fallbackThreadId && !fallbackSourceMessageId) {
+    return params.candidates.map((candidate) => ({
+      ...candidate,
+      thread_id: normalizeConfirmedMemoryId((candidate as any)?.thread_id),
+      source_message_id: normalizeConfirmedMemoryId(
+        (candidate as any)?.source_message_id,
+      ),
+    }));
   }
 
   return params.candidates.map((candidate) => {
     const rawCandidate = candidate as any;
 
-    const resolvedThreadId = String(
-      rawCandidate?.thread_id ?? params.threadId ?? "",
-    ).trim();
-
-    const rawSourceMessageId = String(
-      rawCandidate?.source_message_id ??
-        rawCandidate?.latest_reply_id ??
-        params.sourceMessageId ??
-        "",
-    ).trim();
+    const resolvedThreadId =
+      normalizeConfirmedMemoryId(rawCandidate?.thread_id) ?? fallbackThreadId;
 
     const resolvedSourceMessageId =
-      !rawSourceMessageId ||
-      rawSourceMessageId === PENDING_ASSISTANT_SOURCE_MESSAGE_ID
-        ? String(params.sourceMessageId ?? "").trim()
-        : rawSourceMessageId;
+      normalizeConfirmedMemoryId(
+        rawCandidate?.source_message_id ?? rawCandidate?.latest_reply_id,
+      ) ?? fallbackSourceMessageId;
 
     return {
       ...candidate,
-      thread_id: resolvedThreadId || rawCandidate?.thread_id,
-      source_message_id:
-        resolvedSourceMessageId ||
-        rawCandidate?.source_message_id ||
-        params.sourceMessageId,
+      thread_id: resolvedThreadId,
+      source_message_id: resolvedSourceMessageId,
     };
   });
 }
@@ -497,9 +506,10 @@ built result を最優先、空の場合のみ heuristic fallback を確認し�
 最終 confirmedMemoryCandidates を返す。
 
 【今回このファイルで修正したこと】
-- 候補がない場合に、ユーザー入力から汎用 support_context を自動生成する interpreted fallback を削除しました。
-- builtResultCandidates が空で、heuristic candidates も空の場合は、confirmedMemoryCandidates: [] を返すようにしました。
-- MEMORIES候補がない会話で、低価値な「整理や確認を求めている」系の savable: true 候補が作られないようにしました。
+- heuristic 由来の source_message_id に __pending_assistant_message_id__ を入れないようにしました。
+- memory candidate の thread_id / source_message_id は、DB実態に合わせて UUID 形式または null に正規化するようにしました。
+- fallback の assistantMessageId が pending placeholder の場合も、DB保存へ placeholder が流れないようにしました。
+- trait / theme として作られた重要なMEMORIES候補が、placeholder UUIDエラーで保存失敗しにくいようにしました。
 - state_changed / state_level / current_phase / prev系 / Compass表示可否 / HOPY回答○表示可否は再判定していません。
 
 /app/api/chat/_lib/route/authenticatedMemoryCandidates.ts
