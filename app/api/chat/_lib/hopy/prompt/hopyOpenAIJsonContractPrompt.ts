@@ -47,10 +47,12 @@ export function buildStateStructureSystem(args: { uiLang: Lang }): string {
       "0..4 は禁止。",
       "hopy_confirmed_payload.state.state_changed は boolean 必須。",
       "state_changed は shape の飾りではない。",
-      "state_changed は、その回に HOPY が確定した状態変化の正をそのまま返すこと。",
+      "hopy_confirmed_payload.state は、同じ messages 内で渡されるサーバ計算済み状態材料と一致させること。",
+      "current_phase / state_level / prev_phase / prev_state_level / state_changed を、ユーザー入力・回答本文・雰囲気から再判定してはならない。",
       "state_changed を false に固定したり、無難だから false にしたりしてはならない。",
+      "state_changed は、サーバ計算済み状態材料の state_changed と一致させること。",
       "下の JSON は出力形を守るための構造例であり、state の数値や boolean は固定値ではない。",
-      "この例の current_phase / state_level / prev_phase / prev_state_level / state_changed は、今回ターンの意味で必ず決め直すこと。",
+      "実際の current_phase / state_level / prev_phase / prev_state_level / state_changed は、同じ messages 内の状態材料プロンプトで指定された値に一致させること。",
       '"confirmed_memory_candidates" は必須で、配列にすること。',
       ...buildFutureChainContractLines({ uiLang: args.uiLang }),
       "正式JSON構造例:",
@@ -67,7 +69,7 @@ export function buildStateStructureSystem(args: { uiLang: Lang }): string {
       "  },",
       '  "confirmed_memory_candidates": []',
       "}",
-      "重要: 上の 3 / 2 / true は固定コピー禁止。今回ターンに合わない場合は必ず変更すること。",
+      "重要: 上の 3 / 2 / true は固定コピー禁止。実際の値は、同じ messages 内の状態材料プロンプトに一致させること。",
       "重要: Future Chain v3.1 の handoff_message_snapshot は、このJSONで生成せず、回答確定後の専用処理で作る。",
     ].join("\n");
   }
@@ -85,10 +87,12 @@ export function buildStateStructureSystem(args: { uiLang: Lang }): string {
     "Never use 0..4.",
     "hopy_confirmed_payload.state.state_changed must be a boolean.",
     "state_changed is not decorative shape data.",
-    "state_changed must reflect HOPY's confirmed transition truth for this turn.",
+    "hopy_confirmed_payload.state must match the server-computed state material provided in the same messages.",
+    "Do not re-judge current_phase, state_level, prev_phase, prev_state_level, or state_changed from the user input, reply wording, or atmosphere.",
     "Do not default state_changed to false just because it looks safer.",
+    "state_changed must match the server-computed state_changed value from the state material.",
     "The JSON below is a structure example for valid output. The state numbers and boolean are not fixed values.",
-    "You must decide current_phase, state_level, prev_phase, prev_state_level, and state_changed from this turn's meaning.",
+    "The actual current_phase, state_level, prev_phase, prev_state_level, and state_changed must match the state material prompt provided in the same messages.",
     '"confirmed_memory_candidates" is required and must be an array.',
     ...buildFutureChainContractLines({ uiLang: args.uiLang }),
     "Official JSON structure example:",
@@ -105,7 +109,7 @@ export function buildStateStructureSystem(args: { uiLang: Lang }): string {
     "  },",
     '  "confirmed_memory_candidates": []',
     "}",
-    "Important: the 3 / 2 / true values must not be copied blindly. Change them whenever they do not match this turn.",
+    "Important: the 3 / 2 / true values must not be copied blindly. The actual values must match the state material prompt provided in the same messages.",
     "Important: Future Chain v3.1 handoff_message_snapshot must not be generated as JSON here; it is created by the post-confirmation dedicated flow.",
   ].join("\n");
 }
@@ -113,34 +117,30 @@ export function buildStateStructureSystem(args: { uiLang: Lang }): string {
 export function buildStateMeaningSystem(args: { uiLang: Lang }): string {
   if (args.uiLang === "ja") {
     return [
-      "状態確定ルール:",
-      "hopy_confirmed_payload.state は、この回のユーザー入力と、この回に自分が確定した最終返答の意味から決めること。",
-      "prev_phase / prev_state_level は入力前の参考状態である。",
-      "current_phase / state_level は今回ターン後の確定状態である。",
-      "入力前状態をそのまま current に持ち込んではならない。",
-      "current と prev の意味が異なるなら state_changed=true にすること。",
-      "current と prev の意味が同じときだけ state_changed=false にしてよい。",
-      "HOPYが候補から一つを提案しただけでは、ユーザーの状態が整理へ確定したとは限らない。",
-      "ユーザーがまだ『どれを選ぶべきか』をHOPYに委ねている場合は、候補があっても混線または模索のままでよい。",
-      "ユーザー自身が『これに決めました』『この順番で進めます』『理由はこうです』のように選択・理由・採用を明示した場合は、整理または収束へ進みやすい。",
-      "『整理できた』『やることが見えてきた』『次の一歩が見えた』『方向が定まった』など前進意味なのに、固定値コピーで逃げてはならない。",
-      "下流は再判定しないため、このターンで自分が確定した真値をそのまま返すこと。",
+      "状態反映ルール:",
+      "hopy_confirmed_payload.state は、同じ messages 内で渡されるサーバ計算済み状態材料に一致させること。",
+      "prev_phase / prev_state_level は、状態材料で指定された直前確定状態をそのまま使うこと。",
+      "current_phase / state_level は、状態材料で指定された今回ターンの状態をそのまま使うこと。",
+      "state_changed は、状態材料で指定された boolean 値をそのまま使うこと。",
+      "ユーザー入力や最終返答の意味から current_phase / state_level / state_changed を再判定してはならない。",
+      "HOPYが候補から一つを提案しただけで、ユーザーの状態変化を作ってはならない。",
+      "current と prev の差分から state_changed を自作してはならない。",
+      "固定値コピーで逃げるのではなく、同じ messages 内の状態材料プロンプトに一致させること。",
+      "下流は再判定しないため、この契約で状態材料と異なる値を返してはならない。",
     ].join("\n");
   }
 
   return [
-    "State decision rule:",
-    "Decide hopy_confirmed_payload.state from the meaning of this turn's user input and this turn's final reply that you have confirmed.",
-    "prev_phase and prev_state_level are the reference state before this turn.",
-    "current_phase and state_level are the confirmed state after this turn.",
-    "Do not carry the pre-turn state into current unchanged by default.",
-    "If current and prev differ in meaning, set state_changed=true.",
-    "Set state_changed=false only when current and prev truly mean the same state.",
-    "When HOPY merely chooses one option for the user, the user's state is not necessarily confirmed as organized.",
-    "If the user is still asking HOPY to choose what to pick, the state may remain mixed or exploring even when options exist.",
-    'If the user explicitly says something like "I decided", "I will proceed in this order", or gives their own reason for adopting an option, the state is more likely to move into organized or converging.',
-    'Do not escape with fixed copied values when the turn clearly means progress such as "things became clearer", "the next step became visible", or "direction was found".',
-    "Downstream will not re-judge this, so return the truth you confirmed in this turn.",
+    "State reflection rule:",
+    "hopy_confirmed_payload.state must match the server-computed state material provided in the same messages.",
+    "prev_phase and prev_state_level must use the pre-turn confirmed state specified by the state material.",
+    "current_phase and state_level must use the current turn state specified by the state material.",
+    "state_changed must use the boolean value specified by the state material.",
+    "Do not re-judge current_phase, state_level, or state_changed from the meaning of the user input or final reply.",
+    "Do not create a user state transition merely because HOPY suggested one option.",
+    "Do not calculate state_changed yourself from the difference between current and prev.",
+    "Do not escape by copying example values; match the state material prompt provided in the same messages.",
+    "Downstream will not re-judge this, so this contract must not return state values that differ from the state material.",
   ].join("\n");
 }
 
@@ -211,6 +211,7 @@ export function buildEmptyJsonRetrySystem(args: { uiLang: Lang }): string {
       "top-level の reply / state / compassText / compassPrompt / future_chain_context は禁止です。",
       "hopy_confirmed_payload.future_chain_context も返してはなりません。",
       "state_changed を false に固定して逃げてはいけません。",
+      "hopy_confirmed_payload.state は、同じ messages 内の状態材料プロンプトに一致させてください。",
       "JSON object の外に説明文を出してはいけません。",
       ...buildFutureChainContractLines({ uiLang: args.uiLang }),
     ].join("\n");
@@ -228,6 +229,7 @@ export function buildEmptyJsonRetrySystem(args: { uiLang: Lang }): string {
     "Top-level reply, state, compassText, compassPrompt, and future_chain_context are forbidden.",
     'Do not return "hopy_confirmed_payload.future_chain_context" either.',
     "Do not escape by defaulting state_changed to false.",
+    "hopy_confirmed_payload.state must match the state material prompt provided in the same messages.",
     "Do not output any explanation outside the JSON object.",
     ...buildFutureChainContractLines({ uiLang: args.uiLang }),
   ].join("\n");
@@ -245,6 +247,7 @@ export function buildContractRetrySystem(args: { uiLang: Lang }): string {
       "hopy_confirmed_payload.state.current_phase / state_level / prev_phase / prev_state_level は 1|2|3|4|5 の整数必須です。",
       "hopy_confirmed_payload.state.state_changed は boolean 必須です。",
       "state_changed を false に固定してはなりません。",
+      "hopy_confirmed_payload.state は、同じ messages 内の状態材料プロンプトに一致させてください。",
       "Free では hopy_confirmed_payload.compass を付けてはなりません。",
       "Plus / Pro では state_changed=true の回に hopy_confirmed_payload.compass.text を必ず非空で返してください。",
       "Plus / Pro では state_changed=true の回に hopy_confirmed_payload.compass.prompt も必ず非空で返してください。",
@@ -267,7 +270,7 @@ export function buildContractRetrySystem(args: { uiLang: Lang }): string {
       "  },",
       '  "confirmed_memory_candidates": []',
       "}",
-      "重要: 上の 3 / 2 / true は固定コピー禁止。今回ターンに合わない場合は必ず変更すること。",
+      "重要: 上の 3 / 2 / true は固定コピー禁止。実際の値は、同じ messages 内の状態材料プロンプトに一致させること。",
     ].join("\n");
   }
 
@@ -281,6 +284,7 @@ export function buildContractRetrySystem(args: { uiLang: Lang }): string {
     "hopy_confirmed_payload.state.current_phase, state_level, prev_phase, and prev_state_level must be integers in 1|2|3|4|5.",
     "hopy_confirmed_payload.state.state_changed must be a boolean.",
     "Do not hard-code state_changed to false.",
+    "hopy_confirmed_payload.state must match the state material prompt provided in the same messages.",
     'On Free, do not return "hopy_confirmed_payload.compass".',
     'On Plus / Pro, when state_changed=true, "hopy_confirmed_payload.compass.text" must be non-empty.',
     'On Plus / Pro, when state_changed=true, "hopy_confirmed_payload.compass.prompt" must also be non-empty.',
@@ -303,7 +307,7 @@ export function buildContractRetrySystem(args: { uiLang: Lang }): string {
     "  },",
     '  "confirmed_memory_candidates": []',
     "}",
-    "Important: the 3 / 2 / true values must not be copied blindly. Change them whenever they do not match this turn.",
+    "Important: the 3 / 2 / true values must not be copied blindly. The actual values must match the state material prompt provided in the same messages.",
   ].join("\n");
 }
 
@@ -315,13 +319,13 @@ Future Chain v3.1 の future_chain_context / handoff_message_snapshot 生成、F
 OpenAI completion 実行、timeout / retry 実行、JSON parse、契約検証、DB保存復元、HOPY唯一の正の再判定、Future Chain の意味生成・保存・表示は担当しない。
 
 【今回このファイルで修正したこと】
-- OpenAI JSON契約内で future_chain_context を任意返却できる余地を削除しました。
-- hopy_confirmed_payload.future_chain_context も返さない境界ルールへ変更しました。
-- owner_handoff / recipient_support / recipient_support_query / handoff_message_snapshot を OpenAI JSON内で生成しない指示へ統一しました。
-- Future Chain v3.1 の future_chain_context / handoff_message_snapshot は回答確定後の専用処理で作る方針へそろえました。
-- top-level future_chain_context 禁止は維持しました。
-- state 1..5、state_changed、Compass、confirmed_memory_candidates の契約は維持しました。
-- DB、UI、Future Chain 保存処理、表示処理、plan gate、HOPY唯一の正の再判定はこのファイルでは触っていません。
+- OpenAI JSON契約内の「今回ターンの意味でstateを決め直す」「ユーザー入力と最終返答の意味からstateを決める」文言を削除しました。
+- hopy_confirmed_payload.state は、同じ messages 内で渡されるサーバ計算済み状態材料に一致させる契約へ変更しました。
+- current_phase / state_level / prev_phase / prev_state_level / state_changed を、ユーザー入力・回答本文・雰囲気から再判定しない文言へ統一しました。
+- JSON構造例の数値は固定コピーせず、状態材料プロンプトに一致させる文言へ変更しました。
+- Future Chain v3.1 の future_chain_context / handoff_message_snapshot は、引き続き回答確定後の専用処理で作る方針を維持しました。
+- state 1..5、Compass、confirmed_memory_candidates、Future Chain境界ルールは維持しました。
+- DB、UI、Future Chain保存処理、表示処理、plan gate、HOPY回答○表示処理には触れていません。
 
 /app/api/chat/_lib/hopy/prompt/hopyOpenAIJsonContractPrompt.ts
 */
