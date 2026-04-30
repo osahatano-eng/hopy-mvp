@@ -48,11 +48,11 @@ export function buildHopyExplicitBackwardSignalSection(
   return [
     "下降シグナルの解釈ルール:",
     "- 今回の入力には、再迷い・判断軸の揺らぎ・いったん定めた方向への不安の戻りが含まれる可能性があります。",
-    "- 『決めたつもりだったがまた迷っている』『やっぱり自信がなくなった』『方向が揺らいだ』のような入力は、整理や収束の同値維持と混同しないこと。",
-    "- このような入力は、失敗断定ではなく、再調整が必要になった状態変化候補として扱ってよいこと。",
-    "- 再迷い・再拡散・判断軸の揺らぎが意味上明確なら、prev と current を同値固定しないこと。",
-    "- その場合は、current_phase / state_level を下げる判断を許容し、state_changed=true を正として返してよいこと。",
-    "- Plus / Pro でその結果 state_changed=true なら Compass を必ず返すこと。",
+    "- 『決めたつもりだったがまた迷っている』『やっぱり自信がなくなった』『方向が揺らいだ』のような入力は、整理や収束の同値維持のような本文にしないこと。",
+    "- このような入力は、失敗断定ではなく、回答本文では再調整が必要になった流れとして扱ってよいこと。",
+    "- 再迷い・再拡散・判断軸の揺らぎが意味上明確なら、本文では再確認すべき軸や戻るべき基準を見えやすくすること。",
+    "- ただし、state_changed / current_phase / state_level は本文側で作らず、同じ messages 内の状態材料に一致させること。",
+    "- Plus / Pro の Compass 有無は、hopy_confirmed_payload.state.state_changed の値に従うこと。",
     "- 下降Compassは装飾ではなく、なぜ戻ったのかを説明する根拠として扱うこと。",
   ].join("\n");
 }
@@ -65,16 +65,16 @@ export function buildHopyRegressionTransitionSection(args: {
   if (!hasHopyExplicitBackwardSignal(args.userInput)) return "";
 
   return [
-    "下降時の状態遷移方針:",
+    "下降時の状態参考方針:",
     `- 入力前の参考状態: ${args.currentStateLevel}/5`,
     `- 参考上限目安: ${args.transitionTargetLevel}/5`,
     "- 上の2値は今回ターンの確定結果ではありません。",
     "- 今回の入力に、再迷い・判断軸の揺らぎ・いったん定めた方向への不安の戻りが含まれる場合があります。",
-    "- このような入力は、前進失敗ではなく、再調整が必要になった状態変化候補として扱ってよいこと。",
-    "- 『決めたつもりだったがまた迷っている』『やっぱり自信がなくなった』『方向が揺らいだ』の意味なら、prev と current を同値固定しないこと。",
-    "- その場合は、current_phase / state_level を下げる判断を許容すること。",
-    "- 再迷い・再拡散・判断軸の揺らぎが意味上明確なら、state_changed=true を正として返してよいこと。",
-    "- Plus / Pro でその結果 state_changed=true なら Compass を必ず返すこと。",
+    "- このような入力は、前進失敗ではなく、回答本文では再調整が必要になった流れとして扱ってよいこと。",
+    "- 『決めたつもりだったがまた迷っている』『やっぱり自信がなくなった』『方向が揺らいだ』の意味なら、本文では同値維持のように流さないこと。",
+    "- 再迷い・再拡散・判断軸の揺らぎが意味上明確なら、本文では再確認すべき判断軸や戻るべき基準を1本で示すこと。",
+    "- ただし、state_changed / current_phase / state_level は本文側で作らず、同じ messages 内の状態材料に一致させること。",
+    "- Plus / Pro の Compass 有無は、hopy_confirmed_payload.state.state_changed の値に従うこと。",
     "- 下降は装飾ではなく、なぜ戻ったのかを説明する重要な変化として扱うこと。",
   ].join("\n");
 }
@@ -104,8 +104,9 @@ export function buildHopyRegressionStateDensitySection(
   return [
     "下降時の参考状態別本文密度:",
     "- 今回の入力には、再迷い・方向の揺らぎ・判断軸への自信低下が含まれる可能性があります。",
-    "- 入力前参考状態が整理や収束でも、今回ターンの確定状態まで同値固定しないでください。",
-    "- いったん見えた方向が揺らいだ、判断軸に自信が持てなくなった、また迷いが出たなら、下降方向の変化候補として扱ってよいです。",
+    "- 入力前参考状態が整理や収束でも、回答本文を同値維持のように固定しないでください。",
+    "- いったん見えた方向が揺らいだ、判断軸に自信が持てなくなった、また迷いが出た場合は、本文では再調整の流れとして扱ってよいです。",
+    "- ただし、state_changed / current_phase / state_level は本文側で作らず、同じ messages 内の状態材料に一致させること。",
     "- 下降回でも本文を弱くしすぎず、再確認すべき軸を見えやすくしてください。",
   ].join("\n");
 }
@@ -132,14 +133,13 @@ export function buildHopyRegressionGenerationRulesSection(args: {
   return [
     "下降時の回答生成ルール:",
     "- 今回の入力には、再迷い・判断軸の揺らぎ・いったん定めた方向への不安の戻りが含まれる可能性があります。",
-    "- このファイルで扱う下降ルールは補助であり、その回の確定 state は今回のユーザー入力と今回生成した最終返答の意味から決めること。",
-    "- prev_phase / prev_state_level には入力前参考状態を入れ、current_phase / state_level には今回ターン後の確定状態を入れること。",
-    "- 『決めたつもりだったがまた迷っている』『やっぱり自信がなくなった』『方向が揺らいだ』の意味なら、prev と current を同値固定しないこと。",
-    "- そのような回は、再調整が必要になった下降候補として扱い、current_phase / state_level を下げる判断を許容すること。",
-    "- 再迷い・再拡散・判断軸の揺らぎが意味上明確なら、state_changed=true を正として返してよいこと。",
+    "- このファイルで扱う下降ルールは補助であり、その回の確定 state を意味しないこと。",
+    "- state_changed / current_phase / state_level は本文側で作らず、同じ messages 内の状態材料に一致させること。",
+    "- 『決めたつもりだったがまた迷っている』『やっぱり自信がなくなった』『方向が揺らいだ』の意味なら、本文では再調整が必要になった流れとして扱ってよいこと。",
+    "- 再迷い・再拡散・判断軸の揺らぎが意味上明確なら、本文では再確認すべき判断軸や戻るべき基準を1本で示すこと。",
     "- 下降回でも、本文は 理解 → 気づき → 方向 → なぜならば の順を基本に組み立てること。",
     "- 方向では広げ直しすぎず、再確認すべき判断軸や戻るべき基準を1本で示すこと。",
-    "- Plus / Pro でその結果 state_changed=true なら Compass を必ず返すこと。",
+    "- Plus / Pro の Compass 有無は、hopy_confirmed_payload.state.state_changed の値に従うこと。",
     "- 下降Compassは、なぜ戻ったのかを説明する根拠として扱い、装飾にしないこと。",
     "- 最終 reply が、安心だけ・言い換えだけ・一般論だけで終わっていないか確認すること。",
     "- 必要な回では、HOPYとしての見立て、方向、理由が入っていること。",
@@ -155,14 +155,12 @@ HOPYの下降専用の状態依存 prompt section 群をまとめる専用ファ
 DB取得、DB保存、state_changed生成、Compass生成、○表示、messages取得、回答保存処理、最終組み立て順の決定は担当しない。
 
 【今回このファイルで修正したこと】
-- 下降シグナル最小判定用の hasHopyExplicitBackwardSignal(...) を追加した。
-- buildHopyExplicitBackwardSignalSection(...) をこのファイル内へ持たせた。
-- buildHopyRegressionTransitionSection(...) を追加した。
-- buildHopyRegressionAnswerStructureSection(...) を追加した。
-- buildHopyRegressionStateDensitySection(...) を追加した。
-- buildHopyRegressionGenerationRulesSection(...) を追加した。
-- 下降で state_changed=true になった Plus / Pro 回では Compass を必ず返す文言を、このファイルの責務内で明示した。
-- 他ファイル、DB、UI、Compass表示処理、Future Chain保存処理には触れていない。
+- 下降専用promptから、モデル自身に state_changed / current_phase / state_level を確定させる文言を削除しました。
+- 本文では再迷い・判断軸の揺らぎ・再調整として扱う余地を残しつつ、state_changed / current_phase / state_level は同じ messages 内の状態材料へ一致させる境界に変更しました。
+- prev と current の差分から state_changed を作る文言を削除しました。
+- current_phase / state_level を下げる判断をモデルに許容する文言を削除しました。
+- Plus / Pro の Compass 有無は、hopy_confirmed_payload.state.state_changed に従う文言へ変更しました。
+- DB、UI、Compass表示処理、Future Chain保存処理、他ファイルには触れていません。
 
 /app/api/chat/_lib/hopy/prompt/hopyStateRegressionDrivenPromptSections.ts
 */
